@@ -1,0 +1,107 @@
+/* The window is a text surface and a status line, and nothing else at v0.1. */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #fdfcfa;
+  --text: #24211e;
+  --heading: #16130f;
+  --muted: #8a8279;
+  --accent: #d9704a;
+  --code: #a8452a;
+  --code-bg: #f0ebe5;
+  --active-line: #f5f1ec;
+  --selection: #f6d6c9;
+  --border: #e5ded6;
+  --status-bg: #f5f1ec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17161a;
+    --text: #ddd8d2;
+    --heading: #f2eee9;
+    --muted: #837c74;
+    --accent: #e08a68;
+    --code: #7fd3b4;
+    --code-bg: #23222a;
+    --active-line: #1e1d23;
+    --selection: #3d2f2c;
+    --border: #2a2830;
+    --status-bg: #1c1b21;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+/* The reading column. Constraining the scroller rather than the content keeps
+   CodeMirror measuring line wrapping against the width the text is actually
+   laid out in; putting a max-width on .cm-content instead leaves lines
+   wrapping against the full window and hugging one edge. */
+.editor-host .cm-scroller {
+  max-width: 46rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.status {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.3rem 0.9rem;
+  border-top: 1px solid var(--border);
+  background: var(--status-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.status-name {
+  color: var(--text);
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.status-warning {
+  color: var(--accent);
+}
+
+/* A failure the user would otherwise never see. A released build has no
+   console, so a broken shell has to say so on screen. */
+.failure {
+  flex: 0 0 auto;
+  padding: 0.5rem 0.9rem;
+  border-top: 1px solid var(--accent);
+  background: var(--status-bg);
+  color: var(--accent);
+  font-size: 12px;
+}

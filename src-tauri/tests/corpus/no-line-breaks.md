@@ -1,0 +1,1 @@
+This is a single line of markdown with **bold** and *italic* and no newline at all.

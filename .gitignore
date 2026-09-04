@@ -31,3 +31,7 @@ Thumbs.db
 .idea/
 .vscode/
 !.vscode/extensions.json
+
+# Astro generates these on every docs build
+docs/.astro/
+docs/dist/

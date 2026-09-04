@@ -1,0 +1,37 @@
+[package]
+name = "scheda"
+version = "0.1.0"
+description = "A markdown notepad that turns into a vault when there is a folder around it."
+authors = ["Kirill Lakhtachev <lahtachev@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/lacodda/scheda"
+edition = "2024"
+rust-version = "1.85"
+
+[lib]
+name = "scheda_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tauri-plugin-dialog = "2.7.3"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+
+# Line-table debug info keeps backtraces readable while cutting the .pdb weight
+# that dominates target/debug. Full debug info is a one-line revert when needed.
+[profile.dev]
+debug = 1
