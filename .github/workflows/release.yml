@@ -1,0 +1,106 @@
+name: Release
+
+# A tag builds the bundles and leaves the release as a DRAFT. Publishing is a
+# separate, human act: the owner installs the drafted build on a real machine,
+# opens real files with it, and only then runs `gh release edit --draft=false`.
+# An editor that can corrupt a file has no business auto-publishing.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Drafted first so every platform job has somewhere to upload to.
+  draft:
+    name: draft
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # git-cliff reads the whole history to write the changelog section.
+          fetch-depth: 0
+
+      # The manifests agreeing with each other is `release_consistency`, which
+      # already ran in CI. What only a tag can check is that they agree with
+      # the tag.
+      - name: Verify the tag matches the manifest
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(cargo metadata --no-deps --format-version 1             | jq -r '.packages[0].version')
+          if [ "$tag" != "$manifest" ]; then
+            echo "tag $tag does not match Cargo.toml $manifest" >&2
+            exit 1
+          fi
+
+      - name: Write the release notes
+        uses: orhun/git-cliff-action@v4
+        id: notes
+        with:
+          args: --latest --strip header
+
+      - uses: actions/github-script@v9
+        id: create
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '')
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `scheda ${tag}`,
+              body: process.env.NOTES || 'See CHANGELOG.md for what changed.',
+              draft: true,
+              prerelease: false,
+            })
+            return data.id
+        env:
+          NOTES: ${{ steps.notes.outputs.content }}
+
+  bundle:
+    name: ${{ matrix.target }}
+    needs: draft
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux build deps (webkit2gtk for Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.draft.outputs.release_id }}
+          args: --target ${{ matrix.target }}
