@@ -12,6 +12,17 @@ import './styles.css'
 
 const root = document.getElementById('root')!
 
+// A released build has no console. An error in the shell would otherwise show
+// up only as something quietly missing from the window — which is exactly how
+// the recent list went unnoticed — so failures are reported on screen and, when
+// the startup log is on, to its file.
+window.addEventListener('error', (event) => {
+  reportFailure('something went wrong', event.error ?? event.message)
+})
+window.addEventListener('unhandledrejection', (event) => {
+  reportFailure('something went wrong', event.reason)
+})
+
 async function start() {
   let file: OpenFile | null = null
   try {

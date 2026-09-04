@@ -1,7 +1,16 @@
-/* The window is a text surface and a status line, and nothing else at v0.1. */
+/* The window is a text surface, a tab strip and a status line.
+ *
+ * The theme has three states, and all three are handled here: an explicit
+ * choice stamps `data-theme` on the root element, and the absence of it means
+ * "follow the system", which is what the media query is for. Every colour is
+ * defined on bare `:root` first, so nothing depends on a query matching. */
 
 :root {
   color-scheme: light dark;
+
+  /* Overridden by the settings once they load, a frame after the first paint. */
+  --editor-font-size: 15px;
+  --column-width: 46rem;
 
   --bg: #fdfcfa;
   --text: #24211e;
@@ -14,22 +23,45 @@
   --selection: #f6d6c9;
   --border: #e5ded6;
   --status-bg: #f5f1ec;
+  --match: #f6e0b8;
+  --match-active: #f3c98d;
 }
 
+/* Following the system, unless the user has explicitly chosen light. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17161a;
-    --text: #ddd8d2;
-    --heading: #f2eee9;
-    --muted: #837c74;
-    --accent: #e08a68;
-    --code: #7fd3b4;
-    --code-bg: #23222a;
-    --active-line: #1e1d23;
-    --selection: #3d2f2c;
-    --border: #2a2830;
-    --status-bg: #1c1b21;
+  :root:not([data-theme="light"]) {
+  --bg: #17161a;
+  --text: #ddd8d2;
+  --heading: #f2eee9;
+  --muted: #837c74;
+  --accent: #e08a68;
+  --code: #7fd3b4;
+  --code-bg: #23222a;
+  --active-line: #1e1d23;
+  --selection: #3d2f2c;
+  --border: #2a2830;
+  --status-bg: #1c1b21;
+  --match: #3d3524;
+  --match-active: #5c4a24;
   }
+}
+
+/* An explicit choice wins in both directions, including a dark window on a
+   light system. */
+:root[data-theme="dark"] {
+  --bg: #17161a;
+  --text: #ddd8d2;
+  --heading: #f2eee9;
+  --muted: #837c74;
+  --accent: #e08a68;
+  --code: #7fd3b4;
+  --code-bg: #23222a;
+  --active-line: #1e1d23;
+  --selection: #3d2f2c;
+  --border: #2a2830;
+  --status-bg: #1c1b21;
+  --match: #3d3524;
+  --match-active: #5c4a24;
 }
 
 html,
@@ -65,9 +97,13 @@ body {
    laid out in; putting a max-width on .cm-content instead leaves lines
    wrapping against the full window and hugging one edge. */
 .editor-host .cm-scroller {
-  max-width: 46rem;
+  max-width: var(--column-width);
   margin: 0 auto;
   width: 100%;
+}
+
+.editor-host .cm-editor {
+  font-size: var(--editor-font-size);
 }
 
 .status {
@@ -170,4 +206,92 @@ body {
 .tab-close:hover {
   background: var(--active-line);
   opacity: 1;
+}
+
+/* The recent list, shown over an empty window. Positioned rather than placed in
+   the flow: it belongs to the empty page, and appearing must not push the
+   editor around. */
+.recent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+  pointer-events: none;
+  /* The editor paints its own background and comes later in the document, so
+     without a stacking order the list is drawn behind it — visible in a plain
+     browser, invisible in the WebView the application actually runs in. */
+  z-index: 1;
+}
+
+.recent > * {
+  pointer-events: auto;
+}
+
+.recent-title {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recent-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: default;
+}
+
+.recent-item:hover {
+  background: var(--active-line);
+}
+
+.recent-path {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.recent-hint {
+  margin: 1.2rem 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recent-hint kbd {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--status-bg);
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+/* The overlay is positioned against the window, so the column it sits in has to
+   be the positioning context. */
+#root {
+  position: relative;
 }

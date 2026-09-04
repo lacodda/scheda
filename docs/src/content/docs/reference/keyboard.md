@@ -17,6 +17,17 @@ description: Every shortcut scheda responds to.
 Dropping files on the window opens them, and launching scheda again with a file
 adds it to the window you already have rather than opening a second one.
 
+## Finding
+
+| Keys | What it does |
+| --- | --- |
+| `Ctrl+F` | Find, with replace in the same panel |
+| `Enter` / `Shift+Enter` | Next or previous match |
+| `Escape` | Close the panel |
+
+Matches are highlighted as you type, and the one you are on stands apart from
+the rest.
+
 ## Editing
 
 | Keys | What it does |
@@ -33,5 +44,5 @@ Text editing beyond this is CodeMirror's default keymap: word-wise movement
 with `Ctrl+←` and `Ctrl+→`, line deletion with `Ctrl+Shift+K`, and the usual
 selection modifiers.
 
-Find and replace and a command palette arrive in later versions; see the
-[roadmap](https://github.com/lacodda/scheda#roadmap).
+A command palette and search across a whole folder arrive in later versions;
+see the [roadmap](https://github.com/lacodda/scheda#roadmap).

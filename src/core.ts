@@ -45,6 +45,36 @@ export function reportFirstPaint(): Promise<void> {
   return invoke<void>('report_first_paint')
 }
 
+export type Theme = 'system' | 'light' | 'dark'
+
+/** Everything scheda remembers between runs. Kept in the application's own data
+ *  directory — never in the folder the user opened (ADR 0003). */
+export interface Settings {
+  theme: Theme
+  font_size: number
+  column_width: number
+  recent: string[]
+}
+
+export function loadSettings(): Promise<Settings> {
+  return invoke<Settings>('load_settings')
+}
+
+export function saveSettings(settings: Settings): Promise<void> {
+  return invoke<void>('save_settings', { settings })
+}
+
+/** Records a file as most recently opened and returns the new list. The core
+ *  owns the read-modify-write so two tabs opening at once cannot each write
+ *  back a list that does not know about the other. */
+export function rememberRecent(path: string): Promise<string[]> {
+  return invoke<string[]>('remember_recent', { path })
+}
+
+export function forgetRecent(path: string): Promise<string[]> {
+  return invoke<string[]>('forget_recent', { path })
+}
+
 /** A second launch handed the running window a file. The core has already read
  *  it, so what arrives is text, not a path to go and open. */
 export function onFileHandedOver(handler: (file: OpenFile) => void): Promise<UnlistenFn> {

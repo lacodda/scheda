@@ -8,7 +8,15 @@ import { createRoot } from 'react-dom/client'
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { onFileHandedOver, onHandoverFailed } from './core'
+import {
+  forgetRecent,
+  loadSettings,
+  onFileHandedOver,
+  onHandoverFailed,
+  rememberRecent,
+} from './core'
+import { apply as applyAppearance } from './appearance'
+import { RecentFiles } from './recent'
 import type { EditorHandle, Tab } from './editor/mount'
 
 const LINE_ENDING_LABEL = { lf: 'LF', crlf: 'CRLF', mixed: 'mixed' } as const
@@ -138,6 +146,26 @@ function countWords(text: string): number {
 }
 
 function Shell({ editor }: { editor: EditorHandle }) {
+  /** Opens a path and records it as recent. A file that has gone is dropped
+   *  from the list rather than reported: the list is a convenience, and an
+   *  error dialog for a stale entry is not what the user asked for. */
+  const openPath = useCallback(
+    async (path: string) => {
+      try {
+        await editor.open(path)
+        void rememberRecent(path)
+      } catch (error) {
+        void forgetRecent(path)
+        void ask(error instanceof Error ? error.message : String(error), {
+          title: 'Cannot open that file',
+          kind: 'error',
+          okLabel: 'OK',
+        })
+      }
+    },
+    [editor],
+  )
+
   const saveAs = useCallback(async () => {
     const path = await saveDialog({ filters: MARKDOWN_FILTER })
     if (!path) return
@@ -152,6 +180,15 @@ function Shell({ editor }: { editor: EditorHandle }) {
   const closeTab = useCloseTab(editor)
 
   useEffect(() => {
+    // The file the window opened with counts as recently opened; the core read
+    // it before this module existed, so nothing recorded it then. Once, on
+    // mount: every later open records itself.
+    const path = editor.active().path
+    if (path) void rememberRecent(path)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (!event.ctrlKey && !event.metaKey) return
       const key = event.key.toLowerCase()
@@ -163,7 +200,7 @@ function Shell({ editor }: { editor: EditorHandle }) {
       } else if (key === 'o') {
         event.preventDefault()
         void openDialog({ multiple: false, filters: MARKDOWN_FILTER }).then((path) => {
-          if (typeof path === 'string') void editor.open(path)
+          if (typeof path === 'string') void openPath(path)
         })
       } else if (key === 'n') {
         event.preventDefault()
@@ -184,24 +221,27 @@ function Shell({ editor }: { editor: EditorHandle }) {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editor, saveActive, saveAs, closeTab])
+  }, [editor, saveActive, saveAs, closeTab, openPath])
 
   useEffect(() => {
     // Dropping files on the window opens them. The webview reports paths; the
     // core is still the only thing that reads them.
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type !== 'drop') return
-      for (const path of event.payload.paths) void editor.open(path)
+      for (const path of event.payload.paths) void openPath(path)
     })
     return () => {
       void unlisten.then((stop) => stop())
     }
-  }, [editor])
+  }, [editor, openPath])
 
   useEffect(() => {
     // A second launch hands its file to this window rather than opening one of
     // its own; the core has already read it.
-    const opened = onFileHandedOver((file) => editor.adopt(file))
+    const opened = onFileHandedOver((file) => {
+      editor.adopt(file)
+      void rememberRecent(file.path)
+    })
     const failed = onHandoverFailed((message) => {
       void ask(message, { title: 'Cannot open that file', kind: 'error', okLabel: 'OK' })
     })
@@ -210,6 +250,18 @@ function Shell({ editor }: { editor: EditorHandle }) {
       void failed.then((stop) => stop())
     }
   }, [editor])
+
+  useEffect(() => {
+    // The look the user chose. Read here rather than before the first frame:
+    // the window appearing in the system theme and correcting itself a frame
+    // later is cheaper than a blank window waiting on a file read.
+    void loadSettings()
+      .then(applyAppearance)
+      .catch(() => {
+        // Unreadable settings are not worth a dialog on startup; the defaults
+        // are already on screen.
+      })
+  }, [])
 
   useEffect(() => {
     // Closing the window with unsaved work asks first. Tauri lets us take the
@@ -262,13 +314,41 @@ export function mountShell(editor: EditorHandle) {
   )
   createRoot(stripHost).render(
     <StrictMode>
-      <TabStripHost editor={editor} />
+      <TabStripHost
+        editor={editor}
+        onOpen={(path) => {
+          void editor.open(path).then(
+            () => rememberRecent(path),
+            () => forgetRecent(path),
+          )
+        }}
+      />
     </StrictMode>,
   )
 }
 
-/** The strip, with the same close-confirmation the shortcuts use. */
-function TabStripHost({ editor }: { editor: EditorHandle }) {
+/** The strip, with the same close-confirmation the shortcuts use, plus the
+ *  recent list an empty window shows. */
+function TabStripHost({
+  editor,
+  onOpen,
+}: {
+  editor: EditorHandle
+  onOpen: (path: string) => void
+}) {
+  useEditor(editor)
   const closeTab = useCloseTab(editor)
-  return <TabStrip editor={editor} onClose={(id) => void closeTab(id)} />
+
+  // The list belongs to an empty, unnamed, untouched document and nothing else:
+  // one character typed and it would be in the way.
+  const tab = editor.active()
+  const empty =
+    tab.path === null && editor.view.state.doc.length === 0 && editor.tabs().length === 1
+
+  return (
+    <>
+      <TabStrip editor={editor} onClose={(id) => void closeTab(id)} />
+      <RecentFiles visible={empty} onOpen={onOpen} />
+    </>
+  )
 }

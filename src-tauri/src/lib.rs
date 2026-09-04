@@ -4,13 +4,14 @@
 #[cfg(windows)]
 pub mod associations;
 pub mod document;
+pub mod settings;
 pub mod startup;
 
 use document::{Document, DocumentShape};
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::{Emitter, Manager};
 use std::sync::Mutex;
+use tauri::{Emitter, Manager};
 
 /// A file the core has already read, waiting for the webview to ask for it.
 ///
@@ -92,6 +93,50 @@ fn report_first_paint() {
     startup::log("first paint", startup::elapsed_ms());
 }
 
+impl From<settings::SettingsError> for CommandError {
+    fn from(error: settings::SettingsError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
+/// Everything scheda remembers between runs.
+#[tauri::command]
+fn load_settings() -> Result<settings::Settings, CommandError> {
+    Ok(settings::load()?)
+}
+
+/// Replaces the stored settings wholesale.
+#[tauri::command]
+fn save_settings(settings: settings::Settings) -> Result<(), CommandError> {
+    settings::save(&settings)?;
+    Ok(())
+}
+
+/// Records a file as most recently opened.
+///
+/// Kept in the core rather than done by the frontend reading and writing the
+/// whole settings object: two tabs opening at once would otherwise each write
+/// back a list that does not know about the other.
+#[tauri::command]
+fn remember_recent(path: String) -> Result<Vec<String>, CommandError> {
+    let mut current = settings::load()?;
+    current.remember(&path);
+    settings::save(&current)?;
+    Ok(current.recent)
+}
+
+/// Drops a path from the recent list — for a file that has gone.
+#[tauri::command]
+fn forget_recent(path: String) -> Result<Vec<String>, CommandError> {
+    let mut current = settings::load()?;
+    current.forget(&path);
+    settings::save(&current)?;
+    Ok(current.recent)
+}
+
 pub fn run() {
     startup::mark_process_start();
 
@@ -151,7 +196,11 @@ pub fn run() {
             take_preloaded,
             open_file,
             save_file,
-            report_first_paint
+            report_first_paint,
+            load_settings,
+            save_settings,
+            remember_recent,
+            forget_recent
         ])
         .run(tauri::generate_context!())
         .expect("scheda failed to start");
