@@ -1,0 +1,80 @@
+---
+title: scheda
+description: A markdown notepad that turns into a vault when there is a folder around it.
+template: splash
+hero:
+  tagline: Double-click a markdown file and the text is on screen. The markup is drawn over it, never instead of it, and the file goes back to disk with the bytes it arrived with.
+  actions:
+    - text: Getting Started
+      link: /scheda/getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/lacodda/scheda
+      icon: external
+      variant: minimal
+---
+
+import { CardGrid, Card } from '@astrojs/starlight/components';
+
+<div class="sc-sheet">
+  <div class="sc-sheet__bar">
+    <span class="sc-sheet__dot" />
+    <span class="sc-sheet__dot" />
+    <span class="sc-sheet__dot" />
+    <span class="sc-sheet__label">notes.md</span>
+  </div>
+  <div class="sc-sheet__body">
+    <div class="sc-sheet__row">
+      <span class="sc-sheet__source"># Tuesday</span>
+      <span class="sc-sheet__drawn sc-sheet__drawn--h1">Tuesday</span>
+    </div>
+    <div class="sc-sheet__row">
+      <span class="sc-sheet__source">**the point**</span>
+      <span class="sc-sheet__drawn sc-sheet__drawn--strong">the point</span>
+    </div>
+    <div class="sc-sheet__row">
+      <span class="sc-sheet__source">*an aside*</span>
+      <span class="sc-sheet__drawn sc-sheet__drawn--em">an aside</span>
+    </div>
+    <div class="sc-sheet__row">
+      <span class="sc-sheet__source">`cargo test`</span>
+      <span class="sc-sheet__drawn sc-sheet__drawn--code">cargo test</span>
+    </div>
+    <div class="sc-sheet__row">
+      <span class="sc-sheet__source">[a link](/somewhere)</span>
+      <span class="sc-sheet__drawn sc-sheet__drawn--link">a link</span>
+    </div>
+  </div>
+</div>
+
+<h2 class="sc-section-title">Why another editor</h2>
+
+<p class="sc-lead">
+  Obsidian is built around a vault, and opening a stray file to read it is not
+  what it is for. VS Code is a code editor with markdown as an afterthought.
+  Notepad is instant and understands nothing. scheda is the notepad with a lean
+  towards markdown.
+</p>
+
+<CardGrid>
+  <Card title="Opens before you notice" icon="rocket">
+    The core reads the file before the window exists, and the shell around the
+    editor loads after the first character is painted. The budget is measured on
+    every run, not assumed.
+  </Card>
+  <Card title="Gives the file back unharmed" icon="approve-check">
+    Line endings, byte-order marks and trailing newlines survive a round trip —
+    including files that mix CRLF and LF line by line. A corpus of awkward files
+    proves it on every build.
+  </Card>
+  <Card title="Shows the markup without hiding it" icon="pencil">
+    Headings, emphasis, code and links are drawn over the source. The syntax
+    markers step back on lines you are not editing and return the moment your
+    cursor arrives.
+  </Card>
+  <Card title="Leaves your vault alone" icon="open-book">
+    The settings, and later the index and session, live in the application's own
+    data directory. scheda reads Obsidian's conventions and writes none of its
+    files.
+  </Card>
+</CardGrid>

@@ -28,3 +28,35 @@ Speed within the budget comes from ordering, not from optimisation: the file's b
 **Positive.** The editor is a proven engine rather than a project of its own. Decorations preserve the source by construction (see ADR 0002). Android is a build target, not a rewrite. The design system and tooling are shared with the rest of the line.
 
 **Negative.** Startup depends on the platform webview and will sit in the hundreds of milliseconds, not tens; the gate makes this explicit. The renderer is a browser, so memory is higher than a native widget's. Two languages live in one repository, with an IPC boundary that every file operation crosses.
+
+## Outcome of the gate (2026-09-04)
+
+Measured on the owner's machine (Windows 11, WebView2) with the release build,
+seven launches, each timed from the first line of `main` to the frame after the
+first character was painted:
+
+| Run | First paint |
+| --- | --- |
+| 1 | 454.7 ms |
+| 2 | 446.9 ms |
+| 3 | 441.7 ms |
+| 4 | 453.9 ms |
+| 5 | 444.4 ms |
+| 6 | 478.7 ms |
+| 7 (after an idle pause) | 440.4 ms |
+
+Median 448 ms, worst 478.7 ms — **under the 0.5 s threshold**. Reading the file
+itself takes 0.1–0.3 ms, which is the ordering working: by the time the window
+exists the bytes are already in hand.
+
+The margin is thin, and that is the useful part of the number. Roughly 440 ms of
+the budget is the webview coming up, and none of it is scheda's code; the
+remaining headroom is about 50 ms. So the rule that every later subsystem — the
+tree, the watcher, the index, backlinks — starts *after* the first frame is not
+a preference, it is the only place the budget can come from. Each of them is to
+be measured the same way rather than assumed to be free.
+
+The very first launch on a machine that has not run a WebView2 application
+recently costs roughly twice this (one such run measured 882.6 ms). That is the
+platform's cold cache, not the application's, and it is not what the threshold
+was set against.

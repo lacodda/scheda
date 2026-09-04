@@ -6,7 +6,9 @@
 
 Double-click a `.md` file and the text is on screen before you notice the window. Headings, emphasis, code and links are drawn over the source as you type; the source itself never changes shape. Open a folder — or a file inside an Obsidian vault — and the same window grows a file tree, `[[wikilinks]]`, backlinks and search. Close it and the folder is exactly as you found it.
 
-> **Status: founded, no release yet.** The plan is fixed and the first stage is a cold-start measurement with a hard threshold — see [Roadmap](#roadmap). Nothing to install until `v0.1.0`.
+> **Status: `v0.1.0` — a file on screen.** Open a markdown file, read it with the markup drawn over the source, edit it, save it back byte for byte. No tabs, no file tree and no installer yet; those are `v0.2.0`. See the [roadmap](#roadmap).
+
+<img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/screenshot.png" alt="scheda showing a markdown file with headings, emphasis and inline code drawn over the source" width="880">
 
 ## Why another editor
 
@@ -16,11 +18,15 @@ Double-click a `.md` file and the text is on screen before you notice the window
 
 scheda is the notepad with a lean towards markdown: the speed of the third, the reading comfort of the first, and no workspace to set up before the text appears.
 
+## What it does today
+
+- **Opens instantly.** A file from the command line, from `Ctrl+O`, from a drop on the window. The core reads it before the window exists, so the text is in hand by the time there is somewhere to put it — 440 ms from process start to the first character on screen, measured, against a 500 ms gate.
+- **Shows markdown without hiding the source.** Headings, emphasis, code and links are drawn over the text. Their syntax markers step back on lines you are not editing and return the moment the cursor arrives. Not WYSIWYG: the source is the document.
+- **Saves exactly what it opened.** Line endings — including a file that mixes CRLF and LF line by line — a byte-order mark, and a missing trailing newline all survive. A file that is not UTF-8 opens read-only rather than being guessed at. A corpus of deliberately awkward files proves it on every build.
+- **Says what it is holding.** The status bar reports the line endings and the encoding it will write, before you save.
+
 ## What it will do
 
-- **Open anything, instantly.** A file from the command line, from a dialog, from a drop. Bytes are on screen before anything else initialises.
-- **Show markdown without hiding the source.** Decorations over the text — markers appear on the active line and step back elsewhere. Not WYSIWYG: the source is the truth and round-trips byte for byte.
-- **Save exactly what you opened.** Line endings, BOM, trailing newline — preserved. Opening and saving without an edit is a no-op, and a test proves it on every build.
 - **Become a vault by walking up.** A file's folder is its root; an `.obsidian/` directory above it moves the root there; an explicitly opened folder is the root. Tree, quick switcher, `[[links]]`, backlinks and full-text search follow from the root.
 - **Leave the vault clean.** The index, the session and the settings live in the application's own data directory. scheda reads Obsidian's conventions and writes none of its files.
 - **Reach a second machine, then a phone.** Sync arrives after 1.0 through [efema](https://github.com/lacodda/efema), a relay that cannot read what it carries; the Android build is a replica of the vault, not a folder on the phone.
@@ -29,11 +35,22 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 
 | Version | Promise |
 | --- | --- |
-| 0.1 | A file on screen: open, decorate, save byte for byte. Cold start measured against a 0.5 s threshold — miss it and the stack is reconsidered before anything else is built. |
+| 0.1 | **Released.** A file on screen: open, decorate, save byte for byte. Cold start measured at 440 ms against the 0.5 s threshold. |
 | 0.2 | **The notepad.** Windows installer, file associations, tabs, recent files, find and replace, themes. This is the first version meant to replace Notepad. |
 | 0.3 – 0.7 | Full markup, reading mode, the vault root rule, links and backlinks, search and index, sessions and a command palette. |
 | 1.0 | Desktop complete; the index and settings formats are frozen. |
 | 1.x | Sync between desktops via efema, then the Android replica. |
+
+## Install
+
+Grab the build for your platform from the [releases page](https://github.com/lacodda/scheda/releases). Building from source needs Rust, Node 22 and pnpm:
+
+```sh
+pnpm install
+pnpm tauri build
+```
+
+Full documentation is at [lacodda.github.io/scheda](https://lacodda.github.io/scheda/).
 
 ## Built with
 

@@ -1,0 +1,148 @@
+/* Brand accent: the terracotta half of scheda's pair. The sea half belongs to
+   the mark itself, where the gradient runs; using both here would compete with
+   the tile in the header. */
+:root {
+	--sl-color-accent: #d9704a;
+	--sl-color-accent-high: #f0b099;
+	--sl-color-accent-low: #4a2418;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent: #b1512f;
+	--sl-color-accent-high: #75341d;
+	--sl-color-accent-low: #fbe4dc;
+}
+
+/* ---------------------------------------------------------------- header -- */
+
+/* The mark is a square hex tile: let it fill the bar height rather than the
+   2rem it was pinned to, and sit close to the wordmark it belongs with. */
+.site-title {
+	gap: 0.4rem;
+}
+
+.site-title img {
+	width: auto;
+	height: 2.5rem;
+}
+
+/* Push search away from the wordmark so the two stop reading as one group. */
+@media (min-width: 50rem) {
+	.header > .title-wrapper {
+		margin-inline-end: 1.5rem;
+	}
+}
+
+/* ------------------------------------------------------------------ hero -- */
+
+.hero h1 {
+	letter-spacing: -0.02em;
+}
+
+.hero .tagline {
+	max-width: 42ch;
+}
+
+/* A sheet of markdown in the hero: the source on the left of each row, what
+   scheda draws over it on the right. It fills the column Starlight leaves
+   empty without a hero image, and it says what the product does better than a
+   screenshot of an empty window would. */
+.sc-sheet {
+	width: 100%;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 0.75rem;
+	background: var(--sl-color-gray-6);
+	overflow: hidden;
+	text-align: start;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+
+.sc-sheet__bar {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.6rem 0.9rem;
+	border-bottom: 1px solid var(--sl-color-gray-5);
+	background: var(--sl-color-gray-6);
+}
+
+.sc-sheet__dot {
+	width: 0.6rem;
+	height: 0.6rem;
+	border-radius: 50%;
+	background: var(--sl-color-gray-4);
+}
+
+.sc-sheet__dot:first-child {
+	background: var(--sl-color-accent);
+}
+
+.sc-sheet__label {
+	margin-inline-start: auto;
+	font-size: var(--sl-text-xs);
+	color: var(--sl-color-gray-3);
+}
+
+.sc-sheet__body {
+	margin: 0;
+	padding: 1.1rem 0.9rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	font-family: var(--__sl-font-mono);
+	font-size: var(--sl-text-code-sm);
+	color: var(--sl-color-gray-1);
+}
+
+.sc-sheet__row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+}
+
+.sc-sheet__source {
+	color: var(--sl-color-gray-3);
+	min-width: 9.5rem;
+}
+
+.sc-sheet__drawn {
+	color: var(--sl-color-white);
+}
+
+.sc-sheet__drawn--h1 {
+	font-size: 1.3em;
+	font-weight: 700;
+}
+
+.sc-sheet__drawn--strong {
+	font-weight: 700;
+}
+
+.sc-sheet__drawn--em {
+	font-style: italic;
+}
+
+.sc-sheet__drawn--code {
+	padding: 0.1em 0.35em;
+	border-radius: 4px;
+	background: var(--sl-color-gray-5);
+	color: var(--sl-color-accent-high);
+}
+
+.sc-sheet__drawn--link {
+	color: var(--sl-color-accent-high);
+}
+
+/* ----------------------------------------------------------- splash body -- */
+
+/* The splash page centres its content in a narrow column; the hero above is
+   wider, which reads as a step. Match them. */
+.sc-section-title {
+	margin-block: 3rem 0.5rem;
+	font-size: var(--sl-text-3xl);
+}
+
+.sc-lead {
+	color: var(--sl-color-gray-2);
+	margin-block-end: 2rem;
+}
