@@ -2,10 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.1] - 2026-09-04
+
+### Bug Fixes
+- Close the window, and stop the scrollbar taking space
 ## [0.2.0] - 2026-09-04
 
 ### Documentation
 - Stop the home page repeating its own name in the title
+- Add the changelog for v0.2.0
 
 ### Features
 - Offer scheda for markdown instead of seizing the type
