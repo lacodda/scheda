@@ -1,35 +1,57 @@
-// The editor and the document it is showing.
+// The editor, and the documents it is holding.
 //
-// The shape of the file (BOM, line endings) travels with it untouched: the
-// editor edits characters, and only the core knows how those become bytes.
-import { EditorState } from '@codemirror/state'
+// One `EditorView` serves every tab: switching swaps the state into it rather
+// than building a second view. That keeps opening a tab cheap, keeps the first
+// frame exactly as expensive as it was when there was only one document, and
+// gives each tab its own undo history for free — the history lives in the
+// state, so it travels with the tab instead of being shared or thrown away.
+//
+// The shape of a file (BOM, line endings) travels with it untouched: the editor
+// edits characters, and only the core knows how those become bytes.
+import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { openFile, saveFile, type DocumentShape, type OpenFile } from '../core'
 import { schedaSetup } from './setup'
 
 /** A document with a filename, or an unnamed buffer that has never been saved. */
-export interface Session {
-  view: EditorView
+export interface Tab {
+  readonly id: number
   path: string | null
   shape: DocumentShape
   readOnly: boolean
   /** The text as it stands on disk. Anything else means unsaved changes. */
   saved: string
+  /** The tab's editor state, held while another tab is on screen. */
+  state: EditorState
 }
 
 /** The shape a brand new file is written with: no BOM, LF, nothing to replay. */
 const NEW_FILE_SHAPE: DocumentShape = { line_ending: 'lf', bom: false }
 
 export interface EditorHandle {
-  session: Session
-  /** Called whenever the document, the path or the dirty state changes. */
+  readonly view: EditorView
+  tabs: () => readonly Tab[]
+  active: () => Tab
+  /** Called whenever the document, the tab list or the active tab changes. */
   subscribe: (listener: () => void) => () => void
   /** Bumped on every such change. A stable snapshot for `useSyncExternalStore`,
    *  which loops forever on a value derived from mutable state. */
   revision: () => number
-  load: (path: string) => Promise<void>
-  save: () => Promise<void>
-  isDirty: () => boolean
+  /** Opens a path: focuses the tab already showing it, or adds one. */
+  open: (path: string) => Promise<void>
+  /** Adds a tab for a file the core has already read. */
+  adopt: (file: OpenFile) => void
+  /** Opens an empty, unnamed buffer. */
+  openBlank: () => void
+  select: (id: number) => void
+  /** Closes a tab. Returns false when it has unsaved changes and `force` was
+   *  not set — the caller is expected to ask before discarding work. */
+  close: (id: number, force?: boolean) => boolean
+  save: (id?: number) => Promise<void>
+  /** Saves the active tab to a new path, adopting it as the tab's own. */
+  saveAs: (path: string) => Promise<void>
+  isDirty: (id?: number) => boolean
+  anyDirty: () => boolean
 }
 
 export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHandle {
@@ -44,32 +66,72 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
     listeners.forEach((listener) => listener())
   }
 
-  const view = new EditorView({
-    state: EditorState.create({
-      doc: file?.text ?? '',
-      extensions: [
-        ...schedaSetup(),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged || update.selectionSet) notify()
-        }),
-        EditorState.readOnly.of(file?.readOnly ?? false),
-      ],
-    }),
-    parent: host,
-  })
+  let nextId = 1
+  const tabs: Tab[] = []
+  let activeId = 0
 
-  const session: Session = {
-    view,
-    path: file?.path ?? null,
-    shape: file?.shape ?? NEW_FILE_SHAPE,
-    readOnly: file?.readOnly ?? false,
-    saved: file?.text ?? '',
+  const baseExtensions: Extension[] = [
+    ...schedaSetup(),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged || update.selectionSet) notify()
+    }),
+  ]
+
+  function stateFor(text: string, readOnly: boolean): EditorState {
+    return EditorState.create({
+      doc: text,
+      extensions: [...baseExtensions, EditorState.readOnly.of(readOnly)],
+    })
   }
 
-  const text = () => session.view.state.doc.toString()
+  function addTab(source: OpenFile | null): Tab {
+    const tab: Tab = {
+      id: nextId++,
+      path: source?.path ?? null,
+      shape: source?.shape ?? NEW_FILE_SHAPE,
+      readOnly: source?.readOnly ?? false,
+      saved: source?.text ?? '',
+      state: stateFor(source?.text ?? '', source?.readOnly ?? false),
+    }
+    tabs.push(tab)
+    return tab
+  }
+
+  const first = addTab(file)
+  activeId = first.id
+
+  const view = new EditorView({ state: first.state, parent: host })
+
+  const active = (): Tab => tabs.find((tab) => tab.id === activeId) ?? tabs[0]
+
+  /** Puts the live state back into its tab before anything reads it. */
+  function stash() {
+    const current = tabs.find((tab) => tab.id === activeId)
+    if (current) current.state = view.state
+  }
+
+  function show(tab: Tab) {
+    stash()
+    activeId = tab.id
+    view.setState(tab.state)
+    view.focus()
+    notify()
+  }
+
+  /** The text of a tab: the live view for the active one, its stashed state
+   *  otherwise. Reading `tab.state` for the active tab would return whatever it
+   *  held when it was last switched away from. */
+  function textOf(tab: Tab): string {
+    return tab.id === activeId ? view.state.doc.toString() : tab.state.doc.toString()
+  }
+
+  const byId = (id?: number): Tab | undefined =>
+    id === undefined ? active() : tabs.find((tab) => tab.id === id)
 
   const handle: EditorHandle = {
-    session,
+    view,
+    tabs: () => tabs,
+    active,
     subscribe(listener) {
       listeners.add(listener)
       return () => {
@@ -77,26 +139,104 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       }
     },
     revision: () => revision,
-    async load(path) {
-      const next = await openFile(path)
-      session.path = next.path
-      session.shape = next.shape
-      session.readOnly = next.readOnly
-      session.saved = next.text
-      session.view.dispatch({
-        changes: { from: 0, to: session.view.state.doc.length, insert: next.text },
-        selection: { anchor: 0 },
-      })
+
+    async open(path) {
+      const existing = tabs.find((tab) => tab.path === path)
+      if (existing) {
+        show(existing)
+        return
+      }
+      handle.adopt(await openFile(path))
+    },
+
+    adopt(next) {
+      const existing = tabs.find((tab) => tab.path === next.path)
+      if (existing) {
+        show(existing)
+        return
+      }
+      // An untouched blank tab is a placeholder, not work: reuse it rather than
+      // leaving an empty tab behind every time a file is opened.
+      const current = active()
+      const blankAndUnused =
+        current && current.path === null && !handle.isDirty(current.id) && tabs.length === 1
+      if (blankAndUnused) {
+        current.path = next.path
+        current.shape = next.shape
+        current.readOnly = next.readOnly
+        current.saved = next.text
+        current.state = stateFor(next.text, next.readOnly)
+        show(current)
+        return
+      }
+      show(addTab(next))
+    },
+
+    openBlank() {
+      show(addTab(null))
+    },
+
+    select(id) {
+      const tab = tabs.find((candidate) => candidate.id === id)
+      if (tab) show(tab)
+    },
+
+    close(id, force = false) {
+      const index = tabs.findIndex((tab) => tab.id === id)
+      if (index === -1) return true
+      if (!force && handle.isDirty(id)) return false
+
+      const wasActive = tabs[index].id === activeId
+      tabs.splice(index, 1)
+
+      // Never leave the window with no document: the last tab closing means a
+      // fresh blank one, the way a notepad behaves.
+      if (tabs.length === 0) {
+        const blank = addTab(null)
+        activeId = blank.id
+        view.setState(blank.state)
+        view.focus()
+        notify()
+        return true
+      }
+
+      if (wasActive) {
+        show(tabs[Math.min(index, tabs.length - 1)])
+      } else {
+        notify()
+      }
+      return true
+    },
+
+    async save(id) {
+      const tab = byId(id)
+      if (!tab || !tab.path || tab.readOnly) return
+      stash()
+      const current = textOf(tab)
+      await saveFile(tab.path, current, tab.shape)
+      tab.saved = current
       notify()
     },
-    async save() {
-      if (!session.path || session.readOnly) return
-      const current = text()
-      await saveFile(session.path, current, session.shape)
-      session.saved = current
+
+    async saveAs(path) {
+      const tab = active()
+      stash()
+      const current = textOf(tab)
+      await saveFile(path, current, tab.shape)
+      tab.path = path
+      tab.saved = current
+      // A file saved under a new name is no longer the read-only thing it may
+      // have been opened as: the bytes just written are ours and are UTF-8.
+      tab.readOnly = false
       notify()
     },
-    isDirty: () => text() !== session.saved,
+
+    isDirty(id) {
+      const tab = byId(id)
+      return tab ? textOf(tab) !== tab.saved : false
+    },
+
+    anyDirty: () => tabs.some((tab) => handle.isDirty(tab.id)),
   }
 
   view.focus()

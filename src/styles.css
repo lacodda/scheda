@@ -105,3 +105,69 @@ body {
   color: var(--accent);
   font-size: 12px;
 }
+
+/* The tab strip. Hidden entirely when there is one document: a notepad opened
+   on a single file should look like a notepad. */
+.strip-host {
+  flex: 0 0 auto;
+}
+
+.tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--status-bg);
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.8rem;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab--active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.tab-name {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-dirty {
+  color: var(--accent);
+}
+
+.tab-close {
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
+  /* Reserved rather than revealed on hover: a close button that appears under
+     the pointer is one the pointer was not aiming for. */
+  opacity: 0.45;
+}
+
+.tab-close:hover {
+  background: var(--active-line);
+  opacity: 1;
+}

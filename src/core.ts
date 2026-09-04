@@ -1,6 +1,7 @@
 // The one door to the core. Nothing else in the frontend talks to Tauri, and
 // nothing at all talks to the disk (ADR 0001).
 import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 export type LineEnding = 'lf' | 'crlf' | 'mixed'
 
@@ -42,4 +43,15 @@ export function saveFile(path: string, text: string, shape: DocumentShape): Prom
  *  this; without it the threshold is a guess. */
 export function reportFirstPaint(): Promise<void> {
   return invoke<void>('report_first_paint')
+}
+
+/** A second launch handed the running window a file. The core has already read
+ *  it, so what arrives is text, not a path to go and open. */
+export function onFileHandedOver(handler: (file: OpenFile) => void): Promise<UnlistenFn> {
+  return listen<OpenFile>('scheda://open-file', (event) => handler(event.payload))
+}
+
+/** A second launch could not read the file it was given. */
+export function onHandoverFailed(handler: (message: string) => void): Promise<UnlistenFn> {
+  return listen<string>('scheda://open-failed', (event) => handler(event.payload))
 }

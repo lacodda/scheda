@@ -9,6 +9,7 @@ pub mod startup;
 use document::{Document, DocumentShape};
 use serde::Serialize;
 use std::path::PathBuf;
+use tauri::{Emitter, Manager};
 use std::sync::Mutex;
 
 /// A file the core has already read, waiting for the webview to ask for it.
@@ -119,6 +120,29 @@ pub fn run() {
     startup::log("file read", startup::elapsed_ms());
 
     tauri::Builder::default()
+        // First, before anything else registers: a second launch has to hand
+        // its file to the running window and get out of the way, not build a
+        // second one. Everything below this line belongs to the first instance.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let Some(path) = argv.get(1).map(PathBuf::from).filter(|p| p.is_file()) else {
+                // A bare second launch means "show me the window I have".
+                focus_main_window(app);
+                return;
+            };
+
+            // The core reads it, the way it reads the first one — the webview
+            // is handed text, never a path to open for itself (ADR 0001).
+            match document::read(&path) {
+                Ok(doc) => {
+                    let file = OpenFile::new(path, doc);
+                    let _ = app.emit(OPEN_FILE_EVENT, file);
+                }
+                Err(error) => {
+                    let _ = app.emit(OPEN_FAILED_EVENT, error.to_string());
+                }
+            }
+            focus_main_window(app);
+        }))
         // The dialog only ever returns a path; reading and writing it stays in
         // the core, so the webview still never touches the disk.
         .plugin(tauri_plugin_dialog::init())
@@ -131,6 +155,22 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("scheda failed to start");
+}
+
+/// The event a second launch uses to hand its file to the running window.
+const OPEN_FILE_EVENT: &str = "scheda://open-file";
+
+/// The event for a second launch whose file could not be read.
+const OPEN_FAILED_EVENT: &str = "scheda://open-failed";
+
+/// Brings the running window forward, since the user just asked for it by
+/// launching the application again.
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 /// Handles `--register` and `--unregister`, returning the exit code when one of
