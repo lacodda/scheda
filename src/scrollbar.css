@@ -1,0 +1,74 @@
+/* Overlay scrollbars.
+ *
+ * The name for what this is: an *overlay scrollbar* — a bar drawn on top of the
+ * content instead of beside it. The distinction that matters is that it takes
+ * no space in layout, so content does not shift by the width of a bar when one
+ * appears or goes away. That shift is the "jump" a classic scrollbar causes on
+ * every window resize, every typed line that makes a document one row taller,
+ * every switch between a short and a long document.
+ *
+ * Two mechanisms, because no single one is enough:
+ *
+ * - `scrollbar-width: thin` with `scrollbar-color` is the standard property.
+ *   Firefox honours it; Chromium honours it too, but its bar still occupies
+ *   layout space.
+ * - `::-webkit-scrollbar` is what Chromium and the WebView actually lay out.
+ *   Giving the bar a width and painting only the thumb — with a transparent
+ *   track and no buttons — leaves a thin overlay that appears on hover and
+ *   never reserves a gutter.
+ *
+ * This file is written to be lifted wholesale into the design system: it
+ * depends on nothing but the two variables below, which fall back to a neutral
+ * grey when a product has not defined them.
+ */
+
+:root {
+  /* The thumb, at rest and under the pointer. A product overrides these with
+     its own muted and text colours. */
+  --scrollbar-thumb: rgb(128 128 128 / 28%);
+  --scrollbar-thumb-hover: rgb(128 128 128 / 55%);
+  --scrollbar-size: 10px;
+}
+
+/* The standard property. `thin` rather than `auto`, and a transparent track so
+   nothing is painted where the bar is not. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* Chromium and the WebView. The bar is sized but the track is left unpainted,
+   which is what makes it read as an overlay rather than a gutter. */
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  /* The border is transparent and clipped to the padding box: it insets the
+     visible thumb without shrinking the area that can be grabbed, which is how
+     a 10px-wide bar can show a 6px-wide thumb and still be easy to hit. */
+  background-color: var(--scrollbar-thumb);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  /* Below the interactive size deliberately: a thumb thinner than this reads as
+     a hairline and stops looking grabbable. */
+  min-height: 2.5rem;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* The arrow buttons at the ends. Chromium draws them by default and they are
+   the one part of a classic scrollbar nobody uses. */
+*::-webkit-scrollbar-button {
+  display: none;
+}

@@ -25,6 +25,10 @@
   --status-bg: #f5f1ec;
   --match: #f6e0b8;
   --match-active: #f3c98d;
+
+  /* The overlay scrollbar (scrollbar.css) reads these. */
+  --scrollbar-thumb: #cdc4b8;
+  --scrollbar-thumb-hover: #a89c8c;
 }
 
 /* Following the system, unless the user has explicitly chosen light. */
@@ -43,6 +47,8 @@
   --status-bg: #1c1b21;
   --match: #3d3524;
   --match-active: #5c4a24;
+  --scrollbar-thumb: #3a3742;
+  --scrollbar-thumb-hover: #56515f;
   }
 }
 
@@ -62,6 +68,8 @@
   --status-bg: #1c1b21;
   --match: #3d3524;
   --match-active: #5c4a24;
+  --scrollbar-thumb: #3a3742;
+  --scrollbar-thumb-hover: #56515f;
 }
 
 html,
@@ -92,14 +100,21 @@ body {
   height: 100%;
 }
 
-/* The reading column. Constraining the scroller rather than the content keeps
-   CodeMirror measuring line wrapping against the width the text is actually
-   laid out in; putting a max-width on .cm-content instead leaves lines
-   wrapping against the full window and hugging one edge. */
+/* The reading column.
+ *
+ * The scroller spans the whole window and the column is made by padding it,
+ * rather than by narrowing the scroller itself: a narrowed scroller takes its
+ * scrollbar with it, which is why the bar used to sit in the middle of the
+ * window with empty space to its right. The padding is computed so the text
+ * lands centred at the requested width, and collapses to a small margin once
+ * the window is narrower than the column. */
 .editor-host .cm-scroller {
-  max-width: var(--column-width);
-  margin: 0 auto;
+  /* content-box is CodeMirror's default here, and with it the padding is added
+     to the 100% width instead of fitting inside it — the scroller ends up wider
+     than the window and its scrollbar goes out of reach. */
+  box-sizing: border-box;
   width: 100%;
+  padding-inline: max(1.5rem, calc((100% - var(--column-width)) / 2));
 }
 
 .editor-host .cm-editor {
@@ -132,14 +147,40 @@ body {
 }
 
 /* A failure the user would otherwise never see. A released build has no
-   console, so a broken shell has to say so on screen. */
+   console, so a broken shell has to say so on screen — once, with a way to
+   dismiss it, rather than one row per occurrence. */
 .failure {
+  display: flex;
   flex: 0 0 auto;
+  gap: 0.6rem;
+  align-items: center;
   padding: 0.5rem 0.9rem;
   border-top: 1px solid var(--accent);
   background: var(--status-bg);
   color: var(--accent);
   font-size: 12px;
+}
+
+.failure > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failure-close {
+  padding: 0 0.3rem;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: default;
+}
+
+.failure-close:hover {
+  background: var(--active-line);
 }
 
 /* The tab strip. Hidden entirely when there is one document: a notepad opened

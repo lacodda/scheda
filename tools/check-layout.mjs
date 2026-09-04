@@ -39,10 +39,29 @@ const page = await browser.newPage({ viewport: { width: 1200, height: 800 } })
 // The page runs outside Tauri here, so `invoke` does not exist. Stub it with
 // what the core would return for a bare launch: the shell has to come up on an
 // empty buffer just as it does on a file.
-await page.addInitScript(() => {
+// A document long enough to scroll. Without one there is no scrollbar to
+// measure, and the gutter check passes on every stylesheet — including one that
+// reserves a gutter.
+const LONG_DOCUMENT = Array.from(
+  { length: 400 },
+  (_, index) => `Line ${index + 1} of a document that has to be taller than the window.`,
+).join('\n')
+
+await page.addInitScript((text) => {
   window.__TAURI_INTERNALS__ = {
     invoke: async (command) => {
       if (command === 'plugin:event|listen') return 0
+      if (command === 'take_preloaded') {
+        return {
+          path: '/long.md',
+          text,
+          shape: { line_ending: 'lf', bom: false },
+          readOnly: false,
+        }
+      }
+      if (command === 'load_settings') {
+        return { theme: 'system', font_size: 15, column_width: 46.0, recent: [] }
+      }
       return null
     },
     metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
@@ -52,7 +71,7 @@ await page.addInitScript(() => {
       return id
     },
   }
-})
+}, LONG_DOCUMENT)
 
 const failures = []
 page.on('pageerror', (error) => failures.push(`uncaught: ${error.message}`))
@@ -71,11 +90,15 @@ const layout = await page.evaluate(() => {
     const rect = element.getBoundingClientRect()
     return { x: rect.x, y: rect.y, w: rect.width, h: rect.height }
   }
+
+  const scroller = document.querySelector('.cm-scroller')
+
   return {
     viewport: { w: window.innerWidth, h: window.innerHeight },
     scroller: box('.cm-scroller'),
     status: box('.status'),
     shellHost: box('.shell-host'),
+    scrollable: scroller ? scroller.scrollHeight > scroller.clientHeight : false,
   }
 })
 
@@ -94,16 +117,26 @@ if (layout.status) {
   )
 }
 if (layout.scroller) {
-  // The reading column is centred, not flush against an edge.
-  const left = layout.scroller.x
-  const right = layout.viewport.w - (layout.scroller.x + layout.scroller.w)
+  // The scroller spans the window, so its scrollbar sits at the window's edge
+  // rather than floating in the middle beside a narrowed column.
   check(
-    Math.abs(left - right) < 4,
-    `the reading column is off centre (${Math.round(left)}px left, ${Math.round(right)}px right)`,
+    Math.abs(layout.scroller.w - layout.viewport.w) < 2,
+    `the scroller does not span the window (${Math.round(layout.scroller.w)} of ${
+      layout.viewport.w
+    }px), which puts its scrollbar somewhere in the middle`,
   )
   check(
     layout.scroller.h > 100,
     `the editor has almost no height (${Math.round(layout.scroller.h)}px)`,
+  )
+  // Whether the scrollbar reserves layout space is deliberately NOT checked
+  // here. Headless Chromium overlays its scrollbars whatever the stylesheet
+  // says, so `offsetWidth - clientWidth` reads zero for a classic bar too — the
+  // check would pass on a stylesheet that reserves a gutter, which is worse
+  // than no check. That property is verified by eye in the real WebView.
+  check(
+    layout.scrollable,
+    'the test document does not scroll, so nothing here exercises the scroller',
   )
 }
 
@@ -117,3 +150,6 @@ if (failures.length > 0) {
 }
 
 console.log('layout check passed')
+if (process.env.LAYOUT_VERBOSE) {
+  console.log(JSON.stringify(layout, null, 2))
+}

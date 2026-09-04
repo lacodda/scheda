@@ -44,3 +44,13 @@ that has gone drops off the list the next time you try it, without an error —
 the list is a convenience, not a promise.
 
 To clear it, set `"recent": []` and restart.
+
+## Scrollbars
+
+scheda draws overlay scrollbars: a thin bar over the content rather than a
+classic one beside it. The distinction is that an overlay bar takes no space in
+layout, so the text does not shift sideways every time a document becomes tall
+enough to scroll — or short enough not to.
+
+There is no setting for it. The bar appears where the content scrolls, at the
+window's edge, and gets out of the way otherwise.

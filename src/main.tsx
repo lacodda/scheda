@@ -8,6 +8,7 @@
 // text.
 import { reportFirstPaint, takePreloaded, type OpenFile } from './core'
 import { mountEditor } from './editor/mount'
+import './scrollbar.css'
 import './styles.css'
 
 const root = document.getElementById('root')!
@@ -55,12 +56,37 @@ async function start() {
 }
 
 /** Shows a failure in the window itself. There is no console to read in a
- *  released build, and a silent failure in the shell is invisible. */
+ *  released build, and a silent failure in the shell is invisible.
+ *
+ *  One banner, reused. A failure that repeats — a close handler rejecting on
+ *  every click, say — would otherwise stack a row per attempt and push the
+ *  editor off the screen, which is a worse bug than the one being reported. */
 function reportFailure(what: string, error: unknown) {
-  const banner = document.createElement('div')
-  banner.className = 'failure'
-  banner.textContent = `${what}: ${error instanceof Error ? error.message : String(error)}`
-  root.appendChild(banner)
+  const message = `${what}: ${error instanceof Error ? error.message : String(error)}`
+
+  let banner = root.querySelector<HTMLDivElement>('.failure')
+  if (!banner) {
+    banner = document.createElement('div')
+    banner.className = 'failure'
+
+    const dismiss = document.createElement('button')
+    dismiss.type = 'button'
+    dismiss.className = 'failure-close'
+    dismiss.textContent = '×'
+    dismiss.setAttribute('aria-label', 'Dismiss')
+    dismiss.addEventListener('click', () => banner?.remove())
+
+    banner.append(document.createElement('span'), dismiss)
+    root.appendChild(banner)
+  }
+
+  const text = banner.firstElementChild as HTMLSpanElement
+  // The count belongs to this message: a different failure replaces it rather
+  // than inheriting a tally that was never about it.
+  const repeats = banner.dataset.message === message ? Number(banner.dataset.repeats ?? '0') + 1 : 1
+  banner.dataset.message = message
+  banner.dataset.repeats = String(repeats)
+  text.textContent = repeats > 1 ? `${message} (${repeats}×)` : message
 }
 
 void start()
