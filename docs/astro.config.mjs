@@ -9,6 +9,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'scheda',
+			titleDelimiter: '-',
 			description:
 				'A markdown notepad that turns into a vault when there is a folder around it.',
 			logo: {
