@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/banner.svg" alt="scheda" width="720">
+
 # scheda
 
 **A markdown notepad that turns into a vault when there is a folder around it.**
