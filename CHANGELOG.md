@@ -2,10 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.2] - 2026-09-04
+
+### Features
+- Draw the window's own title bar, with the tabs in it
 ## [0.2.1] - 2026-09-04
 
 ### Bug Fixes
 - Close the window, and stop the scrollbar taking space
+
+### Documentation
+- Add the changelog for v0.2.1
 ## [0.2.0] - 2026-09-04
 
 ### Documentation
