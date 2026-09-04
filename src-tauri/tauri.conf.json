@@ -31,6 +31,11 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "installer-hooks.nsh"
+      }
+    },
     "shortDescription": "A markdown notepad with a lean towards the vault.",
     "longDescription": "scheda opens a markdown file before you notice the window, draws the markup over the source without hiding it, and saves back the exact bytes it read."
   }

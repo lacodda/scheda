@@ -1,6 +1,8 @@
 //! The core. The webview never touches the disk: every read, write and path
 //! question is a command here (ADR 0001).
 
+#[cfg(windows)]
+pub mod associations;
 pub mod document;
 pub mod startup;
 
@@ -92,6 +94,14 @@ fn report_first_paint() {
 pub fn run() {
     startup::mark_process_start();
 
+    // The installer calls these; they do their work and exit without ever
+    // creating a window. Checked before anything else so a registration run
+    // costs nothing beyond the registry writes.
+    #[cfg(windows)]
+    if let Some(code) = handle_registration_flags() {
+        std::process::exit(code);
+    }
+
     // Read the file before anything else exists. A window that opens with the
     // text already in hand is the whole point of the ordering (ADR 0001); a
     // window that opens and then asks for a file has already lost the frame.
@@ -121,4 +131,37 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("scheda failed to start");
+}
+
+/// Handles `--register` and `--unregister`, returning the exit code when one of
+/// them was asked for.
+///
+/// These exist for the installer, which is why they are flags rather than a
+/// visible feature: a notepad has no business showing the user a registry
+/// screen, and the shell registration has to happen at install and uninstall
+/// time regardless of whether the app is ever launched.
+#[cfg(windows)]
+fn handle_registration_flags() -> Option<i32> {
+    let flag = std::env::args().nth(1)?;
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(error) => {
+            eprintln!("cannot locate the running executable: {error}");
+            return Some(1);
+        }
+    };
+
+    let result = match flag.as_str() {
+        "--register" => associations::register(&exe),
+        "--unregister" => associations::unregister(),
+        _ => return None,
+    };
+
+    match result {
+        Ok(()) => Some(0),
+        Err(error) => {
+            eprintln!("{error}");
+            Some(1)
+        }
+    }
 }

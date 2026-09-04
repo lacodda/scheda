@@ -14,10 +14,10 @@ else depends on: a file that opens fast and comes back unharmed.
 ## Install
 
 Download the build for your platform from the
-[releases page](https://github.com/lacodda/scheda/releases) and run it. On
-Windows the release ships an `.exe`; there is no installer and no file
-association until `v0.2.0`, so for now you open files from inside the app or
-pass one on the command line.
+[releases page](https://github.com/lacodda/scheda/releases) and run it. The
+Windows installer registers scheda as a markdown handler, so it shows up under
+*Open with* — see [Opening .md with scheda](/scheda/reference/file-associations/)
+for how to make it the default.
 
 Building from source needs [Rust](https://rustup.rs/), Node 22 and pnpm:
 
