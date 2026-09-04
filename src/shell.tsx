@@ -17,6 +17,7 @@ import {
 } from './core'
 import { apply as applyAppearance } from './appearance'
 import { RecentFiles } from './recent'
+import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
 import type { EditorHandle, Tab } from './editor/mount'
 
 const LINE_ENDING_LABEL = { lf: 'LF', crlf: 'CRLF', mixed: 'mixed' } as const
@@ -64,13 +65,12 @@ function useCloseTab(editor: EditorHandle) {
 function TabStrip({ editor, onClose }: { editor: EditorHandle; onClose: (id: number) => void }) {
   useEditor(editor)
   const tabs = editor.tabs()
-
-  // One document needs no tab strip: a notepad opened on a single file should
-  // look like a notepad, not like an editor with one tab open.
-  if (tabs.length < 2) return null
-
   const activeId = editor.active().id
 
+  // Every document gets a tab, including the only one. The strip used to hide
+  // itself for a single file, back when it was a second band under the system
+  // title bar; now it *is* the title bar, and an empty one would just be a
+  // window that has forgotten what it is showing.
   return (
     <div className="tabs" role="tablist">
       {tabs.map((tab) => (
@@ -91,17 +91,19 @@ function TabStrip({ editor, onClose }: { editor: EditorHandle; onClose: (id: num
         >
           <span className="tab-name">{tabLabel(tab)}</span>
           {editor.isDirty(tab.id) && <span className="tab-dirty">•</span>}
-          <button
-            type="button"
-            className="tab-close"
-            aria-label={`Close ${tabLabel(tab)}`}
-            onClick={(event) => {
-              event.stopPropagation()
-              onClose(tab.id)
-            }}
-          >
-            ×
-          </button>
+          {tabs.length > 1 && (
+            <button
+              type="button"
+              className="tab-close"
+              aria-label={`Close ${tabLabel(tab)}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                onClose(tab.id)
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -292,7 +294,7 @@ function Shell({ editor }: { editor: EditorHandle }) {
   return <StatusBar editor={editor} />
 }
 
-/** Mounts the tab strip above the editor and the status bar below it. */
+/** Mounts the title bar above the editor and the status bar below it. */
 export function mountShell(editor: EditorHandle) {
   const root = document.getElementById('root')!
   const editorHost = root.querySelector('.editor-host')!
@@ -305,8 +307,9 @@ export function mountShell(editor: EditorHandle) {
   shellHost.className = 'shell-host'
   root.appendChild(shellHost)
 
-  // The strip and the bar are separate roots so the strip can sit above the
-  // editor: React cannot render one component into two places.
+  // The title bar and the status bar are separate roots so the first can sit
+  // above the editor and the second below it: React cannot render one component
+  // into two places.
   createRoot(shellHost).render(
     <StrictMode>
       <Shell editor={editor} />
@@ -314,7 +317,7 @@ export function mountShell(editor: EditorHandle) {
   )
   createRoot(stripHost).render(
     <StrictMode>
-      <TabStripHost
+      <TitleBar
         editor={editor}
         onOpen={(path) => {
           void editor.open(path).then(
@@ -327,17 +330,12 @@ export function mountShell(editor: EditorHandle) {
   )
 }
 
-/** The strip, with the same close-confirmation the shortcuts use, plus the
- *  recent list an empty window shows. */
-function TabStripHost({
-  editor,
-  onOpen,
-}: {
-  editor: EditorHandle
-  onOpen: (path: string) => void
-}) {
+/** The title bar: the mark, the tabs, the window buttons — plus the recent list
+ *  an empty window shows and the edges a frameless window is resized by. */
+function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: string) => void }) {
   useEditor(editor)
   const closeTab = useCloseTab(editor)
+  const gestures = useTitleBarGestures()
 
   // The list belongs to an empty, unnamed, untouched document and nothing else:
   // one character typed and it would be in the way.
@@ -347,7 +345,22 @@ function TabStripHost({
 
   return (
     <>
-      <TabStrip editor={editor} onClose={(id) => void closeTab(id)} />
+      <header className="titlebar" {...gestures}>
+        <Mark />
+        <TabStrip editor={editor} onClose={(id) => void closeTab(id)} />
+        {/* The gap between the tabs and the buttons is the part of the bar that
+            is only there to be dragged. */}
+        <div className="titlebar-drag" />
+        <WindowButtons
+          onClose={() => {
+            // Ask the window to close rather than closing it: the unsaved-work
+            // guard listens for the request, so the button and the system's own
+            // close cannot drift into behaving differently.
+            void getCurrentWindow().close()
+          }}
+        />
+      </header>
+      <ResizeEdges />
       <RecentFiles visible={empty} onOpen={onOpen} />
     </>
   )

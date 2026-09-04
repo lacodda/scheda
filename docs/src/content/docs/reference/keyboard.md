@@ -17,6 +17,20 @@ description: Every shortcut scheda responds to.
 Dropping files on the window opens them, and launching scheda again with a file
 adds it to the window you already have rather than opening a second one.
 
+## The window
+
+scheda draws its own title bar, so the tabs live in it rather than in a band of
+their own — that is one strip of screen instead of two.
+
+| Gesture | What it does |
+| --- | --- |
+| Drag the bar | Moves the window, including the snap gestures at the screen edges |
+| Double-click the bar | Maximise, or restore a maximised window |
+| Drag an edge or corner | Resizes |
+
+The buttons at the right end are the usual three. Closing goes through the same
+unsaved-work check as `Ctrl+W` and the system's own close.
+
 ## Finding
 
 | Keys | What it does |

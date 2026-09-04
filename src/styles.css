@@ -183,25 +183,48 @@ body {
   background: var(--active-line);
 }
 
-/* The tab strip. Hidden entirely when there is one document: a notepad opened
-   on a single file should look like a notepad. */
+/* The title bar. The system draws no frame (decorations: false), so this is the
+   window's whole top edge: the mark, the tabs, the drag area and the buttons.
+   The tabs live here rather than in a band of their own — a separate strip
+   under a system title bar spends about 60px of a laptop screen twice. */
 .strip-host {
   flex: 0 0 auto;
 }
 
-.tabs {
+.titlebar {
   display: flex;
-  overflow-x: auto;
+  align-items: stretch;
+  height: 2.4rem;
   border-bottom: 1px solid var(--border);
   background: var(--status-bg);
-  scrollbar-width: thin;
+  user-select: none;
+}
+
+.titlebar-mark {
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 0.5rem 0 0.7rem;
+  opacity: 0.85;
+}
+
+/* The empty stretch between the tabs and the buttons. It exists to be grabbed:
+   without it a window full of tabs would have nowhere left to drag by. */
+.titlebar-drag {
+  flex: 1;
+  min-width: 1rem;
+}
+
+.tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .tab {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.4rem 0.5rem 0.4rem 0.8rem;
+  padding: 0 0.5rem 0 0.8rem;
   border-right: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
@@ -218,6 +241,109 @@ body {
   background: var(--bg);
   color: var(--text);
   box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* ------------------------------------------------------- window controls -- */
+
+.window-buttons {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.window-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: default;
+}
+
+.window-button:hover {
+  background: var(--active-line);
+  color: var(--text);
+}
+
+/* Red on hover is what every Windows application does, and the one place in
+   this window where a colour means "this is not undoable". */
+.window-button--close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* ---------------------------------------------------------- resize edges -- */
+
+/* A frameless window has no border to grab, so these put one back: a few pixels
+   along each edge, above everything, invisible. */
+.resize-edge {
+  position: fixed;
+  z-index: 10;
+}
+
+.resize-edge--north,
+.resize-edge--south {
+  left: 4px;
+  right: 4px;
+  height: 4px;
+  cursor: ns-resize;
+}
+
+.resize-edge--east,
+.resize-edge--west {
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  cursor: ew-resize;
+}
+
+.resize-edge--north {
+  top: 0;
+}
+
+.resize-edge--south {
+  bottom: 0;
+}
+
+.resize-edge--west {
+  left: 0;
+}
+
+.resize-edge--east {
+  right: 0;
+}
+
+.resize-edge--northwest,
+.resize-edge--northeast,
+.resize-edge--southwest,
+.resize-edge--southeast {
+  width: 8px;
+  height: 8px;
+}
+
+.resize-edge--northwest {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.resize-edge--northeast {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.resize-edge--southwest {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.resize-edge--southeast {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
 }
 
 .tab-name {

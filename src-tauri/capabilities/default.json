@@ -1,13 +1,18 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The webview talks to the core and nothing else: no filesystem plugin, no shell. `destroy` is here because closing the window after the user confirms discarding unsaved work has to actually close it.",
+  "description": "The webview talks to the core and nothing else: no filesystem plugin, no shell. The window permissions are here because scheda draws its own title bar — dragging, resizing and the window buttons are ours to implement.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-destroy",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-ask"

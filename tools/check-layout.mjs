@@ -95,6 +95,9 @@ const layout = await page.evaluate(() => {
 
   return {
     viewport: { w: window.innerWidth, h: window.innerHeight },
+    titlebar: box('.titlebar'),
+    tabs: box('.tabs'),
+    windowButtons: box('.window-buttons'),
     scroller: box('.cm-scroller'),
     status: box('.status'),
     shellHost: box('.shell-host'),
@@ -104,6 +107,43 @@ const layout = await page.evaluate(() => {
 
 const check = (condition, message) => {
   if (!condition) failures.push(message)
+}
+
+// The window draws its own frame, so the title bar is the top edge: the tabs
+// and the window buttons live in it, and the editor starts directly under it.
+check(layout.titlebar !== null, 'the title bar is missing, and with it the window controls')
+if (layout.titlebar) {
+  check(
+    Math.abs(layout.titlebar.y) < 2,
+    `the title bar is not at the top of the window (y ${Math.round(layout.titlebar.y)})`,
+  )
+  check(
+    layout.tabs !== null && layout.tabs.y >= layout.titlebar.y - 1,
+    'the tabs are not inside the title bar, which is the band they were moved into',
+  )
+  check(
+    layout.windowButtons !== null,
+    'the window buttons are missing, and a frameless window has no others',
+  )
+  if (layout.windowButtons) {
+    check(
+      Math.abs(layout.windowButtons.x + layout.windowButtons.w - layout.viewport.w) < 2,
+      'the window buttons are not at the right edge, where every Windows application puts them',
+    )
+  }
+  // The point of the whole exercise: one band at the top, not two.
+  check(
+    layout.titlebar.h < 48,
+    `the title bar is ${Math.round(layout.titlebar.h)}px tall, which is a band and a half`,
+  )
+  if (layout.scroller) {
+    check(
+      Math.abs(layout.scroller.y - layout.titlebar.h) < 2,
+      `the editor does not start directly under the title bar (editor at ${Math.round(
+        layout.scroller.y,
+      )}, bar ends at ${Math.round(layout.titlebar.h)})`,
+    )
+  }
 }
 
 check(layout.status !== null, 'the status bar is not in the document')

@@ -1,6 +1,6 @@
 [package]
 name = "scheda"
-version = "0.2.1"
+version = "0.2.2"
 description = "A markdown notepad that turns into a vault when there is a folder around it."
 authors = ["Kirill Lakhtachev <lahtachev@gmail.com>"]
 license = "MIT"
