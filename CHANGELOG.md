@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [0.4.1] - 2026-09-05
 
+### Bug Fixes
+- Measure a table cell by what is on screen, and draw dashes as a rule
+
+### Documentation
+- Add the changelog for v0.4.1
+
 ### Features
 - Line a table's columns up without rewriting it
 ## [0.4.0] - 2026-09-05
