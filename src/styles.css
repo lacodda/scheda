@@ -545,6 +545,15 @@ body {
   min-height: 0;
 }
 
+/* The React root the panel renders into. Without a style of its own it is a
+   plain block that shrinks to its content, and the panel ends partway down the
+   window with the editor's background showing under it — which is what the
+   first screenshot of it showed. */
+.outline-host {
+  display: flex;
+  min-height: 0;
+}
+
 .outline {
   flex: 0 0 auto;
   width: 15rem;

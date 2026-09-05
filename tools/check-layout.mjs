@@ -349,6 +349,8 @@ const outline = await page.evaluate(() => {
     open: panel !== null,
     items,
     panelWidth: panel ? panel.getBoundingClientRect().width : 0,
+    panelHeight: panel ? panel.getBoundingClientRect().height : 0,
+    editorHeight: editor ? editor.getBoundingClientRect().height : 0,
     editorWidth: editor ? editor.getBoundingClientRect().width : 0,
     // Nothing may hang off the right edge: a panel that pushes the editor out
     // of the window is worse than no panel.
@@ -364,6 +366,16 @@ check(outline.open, 'Ctrl+Shift+O did not open the outline')
 check(outline.panelWidth > 80, `the outline is ${Math.round(outline.panelWidth)}px wide, which is not a panel`)
 check(outline.editorWidth > 200, `the editor is left ${Math.round(outline.editorWidth)}px, which is not a column`)
 check(!outline.overflows, 'the outline pushes the window into horizontal scrolling')
+// Full height, not just as tall as its list. The React root it renders into is
+// a plain block by default, so the panel ended partway down the window with the
+// editor's background showing beneath it — visible in a screenshot, invisible
+// to every assertion about its contents.
+check(
+  Math.abs(outline.panelHeight - outline.editorHeight) < 2,
+  `the outline is ${Math.round(outline.panelHeight)}px tall beside a ${Math.round(
+    outline.editorHeight,
+  )}px editor, so it stops partway down the window`,
+)
 check(outlineAgain === 0, 'Ctrl+Shift+O did not close the outline again')
 
 await browser.close()
