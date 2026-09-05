@@ -7,9 +7,11 @@ scheda is a markdown notepad. You double-click a `.md` file, the text is on
 screen, and the markup is drawn over it without hiding what you typed. When you
 save, the file goes back to disk with the bytes it arrived with.
 
-At `v0.1.0` that is the whole product. There is no file tree, no tabs and no
-installer yet — those arrive in `v0.2.0`. What there is, is the part everything
-else depends on: a file that opens fast and comes back unharmed.
+Today scheda is a notepad: tabs, find and replace, recent files, a theme, and
+an installer that offers itself as the handler for `.md`. There is no file tree
+and no `[[links]]` yet — those arrive with the vault. What is already here is
+the part everything else depends on: a file that opens fast and comes back
+unharmed.
 
 ## Install
 

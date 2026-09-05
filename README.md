@@ -6,7 +6,7 @@
 
 Double-click a `.md` file and the text is on screen before you notice the window. Headings, emphasis, code and links are drawn over the source as you type; the source itself never changes shape. Open a folder — or a file inside an Obsidian vault — and the same window grows a file tree, `[[wikilinks]]`, backlinks and search. Close it and the folder is exactly as you found it.
 
-> **Status: `v0.2.2` — the notepad.** Windows installer, file associations, tabs in the window's own title bar, find and replace, recent files, themes. Enough to replace Notepad for markdown. The file tree and `[[links]]` come next; see the [roadmap](#roadmap).
+> **Status: `v0.2.3` — the notepad.** Windows installer, file associations, tabs in the window's own title bar, find and replace, recent files, themes. Enough to replace Notepad for markdown. The file tree and `[[links]]` come next; see the [roadmap](#roadmap).
 
 <img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/screenshot.png" alt="scheda showing a markdown file with headings, emphasis and inline code drawn over the source" width="880">
 
