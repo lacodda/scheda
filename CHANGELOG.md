@@ -2,10 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-09-05
+
+### Bug Fixes
+- Hide a callout's kind and a fence's language with their markers
+
+### Features
+- Draw lists, tasks, quotes, callouts, tables, code and rules
 ## [0.2.3] - 2026-09-05
 
 ### Bug Fixes
 - Allow the window to close, and check every window permission
+
+### Documentation
+- Add the changelog for v0.2.3
 ## [0.2.2] - 2026-09-04
 
 ### Documentation
