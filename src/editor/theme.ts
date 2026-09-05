@@ -104,6 +104,19 @@ export const schedaTheme = EditorView.theme({
     backgroundColor: 'var(--code-bg)',
     color: 'var(--code)',
   },
+  // Inside a table the pill has to occupy exactly its characters, or the
+  // columns it sits in stop lining up — measured: `Ctrl+Shift+O` in the pill
+  // above is 12.21 characters wide where the source has 12, and the error
+  // accumulates across a row.
+  //
+  // So the width comes back to the text's own, and the background is painted
+  // outside it with a spread shadow rather than with padding. `box-shadow`
+  // adds nothing to layout, which is the whole point of using it here.
+  '.cm-md-table-line .cm-md-code': {
+    fontSize: '1em',
+    padding: '0.1em 0',
+    boxShadow: '0 0 0 0.25ch var(--code-bg)',
+  },
   '.cm-md-link': { color: 'var(--accent)' },
 
   '.cm-md-highlight': {
@@ -263,6 +276,21 @@ export const schedaTheme = EditorView.theme({
   // A horizontal rule. The three dashes stay in the text — they are the
   // document — but they are dimmed and the line is drawn under them.
   '.cm-md-rule': { color: 'var(--muted)', opacity: '0.5' },
+  // Dashes drawn as the line they stand for. The characters keep their place —
+  // the width is unchanged, so a table's columns still line up — and a rule is
+  // painted through the middle of them.
+  '.cm-md-drawn-rule': {
+    color: 'transparent',
+    position: 'relative',
+  },
+  '.cm-md-drawn-rule::after': {
+    content: '""',
+    position: 'absolute',
+    left: '0',
+    right: '0',
+    top: '50%',
+    borderTop: '1px solid var(--table-border)',
+  },
   '.cm-md-rule-line': {
     borderBottom: '1px solid var(--border)',
   },

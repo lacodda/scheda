@@ -119,7 +119,8 @@ describe('front matter', () => {
     const doc = '# Heading\n\ntext\n\n---\n\nmore\n'
     const v = view(doc, 0)
     expect(v.dom.querySelector('.cm-md-frontmatter-header')).toBeNull()
-    expect(textsOf(v, 'cm-md-rule')).toContain('---')
+    // Drawn as a rule, which is what a horizontal rule away from the caret is.
+    expect(textsOf(v, 'cm-md-drawn-rule')).toContain('---')
     v.destroy()
   })
 

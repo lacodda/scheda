@@ -201,10 +201,21 @@ describe('tables, code and rules', () => {
     v.destroy()
   })
 
-  it('marks a horizontal rule', () => {
+  it('draws a horizontal rule as the line it stands for', () => {
+    // The dashes keep their place in the text — the width is unchanged, which
+    // is what lets a table's columns still line up — and a rule is painted
+    // through them.
     const v = view('above\n\n---\n\nbelow\n', 15)
-    expect(textsOf(v, 'cm-md-rule')).toContain('---')
+    expect(textsOf(v, 'cm-md-drawn-rule')).toContain('---')
     expect(lineCount(v, 'cm-md-rule-line')).toBe(1)
+    v.destroy()
+  })
+
+  it('shows the dashes as characters on the line being edited', () => {
+    // Same rule as every other marker: the line under the caret is text.
+    const v = view('above\n\n---\n\nbelow\n', 8)
+    expect(textsOf(v, 'cm-md-rule')).toContain('---')
+    expect(textsOf(v, 'cm-md-drawn-rule')).not.toContain('---')
     v.destroy()
   })
 })

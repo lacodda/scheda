@@ -15,7 +15,7 @@
 //
 // The document is untouched. Take the decoration away and the file is what it
 // always was.
-import { syntaxTree } from '@codemirror/language'
+import { MARKERS } from './decorations'
 import { fullTree } from './parsed'
 import { type EditorState, type Extension, type Range } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
@@ -66,13 +66,89 @@ type Row = Cell[]
  *  From the tree rather than by splitting on `|`, because a pipe inside inline
  *  code (`` `a|b` ``) is not a column boundary, and a table full of shell
  *  snippets is exactly where that happens. */
-function rowsOf(state: EditorState, from: number, to: number): Row[] {
+
+/** The lines holding a cursor or a selection edge. Their markers stay visible,
+ *  so their cells are as wide as their source. */
+function activeLinesOf(state: EditorState): Set<number> {
+  const lines = new Set<number>()
+  for (const range of state.selection.ranges) {
+    lines.add(state.doc.lineAt(range.head).number)
+    lines.add(state.doc.lineAt(range.anchor).number)
+  }
+  return lines
+}
+
+/** Where the hidden markers are in a table, as a sorted list of spans.
+ *
+ *  Collected once for the whole table rather than looked up per cell. Walking
+ *  the tree for every cell turned 1.4 ms into 57 — caught by the cost gate,
+ *  which is what it is for.
+ *
+ *  A cell holding `` `code` `` is two characters narrower than its source,
+ *  because the backticks hide. Counting the source instead lines the pipes up
+ *  against text that is not on screen, which is what the first version did:
+ *  a column slipping by exactly two characters per pill.
+ *
+ *  Markers stay visible on the line the caret is on, and that is right — with
+ *  them back, the source is what is on screen. */
+function hiddenSpansOf(
+  state: EditorState,
+  tree: ReturnType<typeof fullTree>,
+  from: number,
+  to: number,
+  activeLines: Set<number>,
+): { from: number; to: number }[] {
+  const spans: { from: number; to: number }[] = []
+  tree.iterate({
+    from,
+    to,
+    enter: (node) => {
+      if (!MARKERS.has(node.name) || node.to === node.from) return
+      if (activeLines.has(state.doc.lineAt(node.from).number)) return
+      spans.push({ from: node.from, to: node.to })
+    },
+  })
+  spans.sort((a, b) => a.from - b.from)
+  return spans
+}
+
+/** How much of `from`..`to` is hidden, given the table's spans.
+ *
+ *  A scan from where the last cell left off: the spans and the cells are both
+ *  in document order, so the whole row costs one pass rather than one per cell.
+ */
+function hiddenBetween(
+  spans: { from: number; to: number }[],
+  cursor: { index: number },
+  from: number,
+  to: number,
+): number {
+  let hidden = 0
+  let i = cursor.index
+  while (i < spans.length && spans[i].to <= from) i++
+  cursor.index = i
+  while (i < spans.length && spans[i].from < to) {
+    if (spans[i].from >= from) hidden += spans[i].to - spans[i].from
+    i++
+  }
+  return hidden
+}
+
+function rowsOf(
+  state: EditorState,
+  tree: ReturnType<typeof fullTree>,
+  from: number,
+  to: number,
+  activeLines: Set<number>,
+): Row[] {
   const rows: Row[] = []
+  const spans = hiddenSpansOf(state, tree, from, to, activeLines)
+  const cursor = { index: 0 }
   let current: Row | null = null
   let rowStart = 0
   let currentLine: { from: number; to: number; text: string } | null = null
 
-  syntaxTree(state).iterate({
+  tree.iterate({
     from,
     to,
     enter: (node) => {
@@ -108,7 +184,8 @@ function rowsOf(state: EditorState, from: number, to: number): Row[] {
       }
       const closing = pipeAfter(currentLine, node.to)
       const previous = current.length > 0 ? current[current.length - 1].at : rowStart
-      current.push({ at: closing, span: closing - previous })
+      const hidden = hiddenBetween(spans, cursor, previous, closing)
+      current.push({ at: closing, span: closing - previous - hidden })
     },
   })
 
@@ -171,8 +248,14 @@ function widthsOf(rows: Row[]): number[] {
  *  Exported for the tests and for the benchmark: this is the whole computation,
  *  and it is worth being able to run it without a view.
  */
-export function paddingFor(state: EditorState, from: number, to: number): Range<Decoration>[] {
-  const rows = rowsOf(state, from, to)
+export function paddingFor(
+  state: EditorState,
+  from: number,
+  to: number,
+  tree = fullTree(state),
+  activeLines: Set<number> = activeLinesOf(state),
+): Range<Decoration>[] {
+  const rows = rowsOf(state, tree, from, to, activeLines)
   if (rows.length === 0) return []
   const widths = widthsOf(rows)
 
@@ -195,10 +278,11 @@ function build(state: EditorState): DecorationSet {
   // A table below the parsed region would be left ragged until something else
   // made the parser catch up (see `parsed.ts`).
   const tree = fullTree(state)
+  const activeLines = activeLinesOf(state)
   tree.iterate({
     enter: (node) => {
       if (node.name !== 'Table') return
-      marks.push(...paddingFor(state, node.from, node.to))
+      marks.push(...paddingFor(state, node.from, node.to, tree, activeLines))
       // A table has no tables inside it.
       return false
     },
@@ -207,4 +291,4 @@ function build(state: EditorState): DecorationSet {
   return Decoration.set(marks, true)
 }
 
-export const tableAlignment: Extension = EditorView.decorations.compute(['doc'], build)
+export const tableAlignment: Extension = EditorView.decorations.compute(['doc', 'selection'], build)

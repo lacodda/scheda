@@ -96,6 +96,46 @@ describe('aligning a table', () => {
     for (const count of perRow.values()) expect(count).toBeLessThanOrEqual(2)
   })
 
+  it('measures a cell by what is on screen, not by its source', () => {
+    // A cell holding `` `code` `` is two characters narrower than its source,
+    // because the backticks hide. Counting the source lines the column up
+    // against text nobody sees — which is how it shipped, and what a screenshot
+    // caught: every pill slipped its column by exactly two characters.
+    const doc = '| a | b |\n| --- | --- |\n| `xy` | z |\n'
+    const state = EditorState.create({ doc, extensions: schedaSetup() })
+    const marks = paddingFor(state, 0, doc.length)
+
+    // `| `xy` ` is seven characters of source and five on screen, against a
+    // column six wide — so the cell needs one character of padding. Measured
+    // against the source it would appear to be seven, wider than the column,
+    // and get none at all: the pipe after it lands two characters early, which
+    // is exactly the slip a screenshot showed.
+    const cells = marks
+      .filter((range) => state.doc.lineAt(range.from).number === 3)
+      .map((range) => (range.value.spec.widget as { characters: number }).characters)
+    expect(cells).toEqual([1, 2])
+  })
+
+  it('counts the source on the line the caret is on', () => {
+    // With the markers back, the source is what is on screen — so the same cell
+    // is measured differently, and correctly, depending on where the caret is.
+    const doc = '| a | b |\n| --- | --- |\n| `xy` | z |\n'
+    const caretInCell = doc.indexOf('`xy`') + 1
+    const state = EditorState.create({
+      doc,
+      extensions: schedaSetup(),
+      selection: { anchor: caretInCell },
+    })
+    const marks = paddingFor(state, 0, doc.length)
+    const cells = marks
+      .filter((range) => state.doc.lineAt(range.from).number === 3)
+      .map((range) => (range.value.spec.widget as { characters: number }).characters)
+    // With the backticks showing, the cell really is seven characters wide —
+    // wider than the column — so it takes no padding, and the one after it
+    // takes two.
+    expect(cells).toEqual([2])
+  })
+
   it('asks for nothing when there is no table', () => {
     expect(padding('Just prose.\n\nAnd more.\n')).toEqual([])
   })

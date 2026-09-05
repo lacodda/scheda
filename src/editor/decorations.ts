@@ -45,7 +45,7 @@ const STYLED: Record<string, string> = {
  *
  *  `ListMark` is deliberately absent. A bullet is not noise to be hidden: it is
  *  what makes a list look like a list, so it is styled instead. */
-const MARKERS = new Set([
+export const MARKERS = new Set([
   'HeaderMark',
   'EmphasisMark',
   'CodeMark',
@@ -73,6 +73,8 @@ const hidden = Decoration.mark({ class: 'cm-md-marker-hidden' })
 const listMark = Decoration.mark({ class: 'cm-md-list-mark' })
 const horizontalRule = Decoration.mark({ class: 'cm-md-rule' })
 const tableDelimiter = Decoration.mark({ class: 'cm-md-table-delimiter' })
+/** Dashes drawn as the line they stand for, rather than as three characters. */
+const drawnRule = Decoration.mark({ class: 'cm-md-drawn-rule' })
 
 /** The callout kinds Obsidian ships, each with its own colour. Anything else
  *  written as `> [!whatever]` still renders as a callout, in the default
@@ -150,6 +152,27 @@ export function toggleTask(view: EditorView, pos: number): boolean {
   return true
 }
 
+
+/** The runs of `-` and `:` inside a table's delimiter row.
+ *
+ *  Each becomes its own short rule, inside the cell it belongs to — one line
+ *  across the whole row would cross the pipes, and the pipes are what make the
+ *  table a table. */
+function dashRuns(state: EditorState, from: number, to: number): { from: number; to: number }[] {
+  const text = state.doc.sliceString(from, to)
+  const runs: { from: number; to: number }[] = []
+  let start: number | null = null
+  for (let i = 0; i <= text.length; i++) {
+    const isDash = i < text.length && (text[i] === '-' || text[i] === ':')
+    if (isDash && start === null) start = i
+    if (!isDash && start !== null) {
+      runs.push({ from: from + start, to: from + i })
+      start = null
+    }
+  }
+  return runs
+}
+
 /** The lines a node covers, as line numbers. */
 function linesOf(state: EditorState, from: number, to: number): number[] {
   const first = state.doc.lineAt(from).number
@@ -212,12 +235,28 @@ function build(view: EditorView): DecorationSet {
         }
 
         if (node.name === 'HorizontalRule') {
-          marks.push(horizontalRule.range(node.from, node.to))
+          // The dashes become the line rather than sitting above one: on the
+          // line being edited they are text again, like every other marker.
+          if (activeLines.has(state.doc.lineAt(node.from).number)) {
+            marks.push(horizontalRule.range(node.from, node.to))
+          } else {
+            marks.push(drawnRule.range(node.from, node.to))
+          }
           addLineClass(state.doc.lineAt(node.from).number, 'cm-md-rule-line')
           return
         }
 
         if (node.name === 'TableDelimiter') {
+          // A whole delimiter row: each run of dashes inside it is drawn as a
+          // short rule in its own cell, and the pipes stay where they are. A
+          // single pipe falls through to the dimmed style below.
+          if (node.to - node.from > 1 && !activeLines.has(state.doc.lineAt(node.from).number)) {
+            for (const run of dashRuns(state, node.from, node.to)) {
+              marks.push(drawnRule.range(run.from, run.to))
+            }
+            marks.push(tableDelimiter.range(node.from, node.to))
+            return
+          }
           marks.push(tableDelimiter.range(node.from, node.to))
           return
         }

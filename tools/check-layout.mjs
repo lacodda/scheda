@@ -178,7 +178,9 @@ const markup = await page.evaluate(() => {
     calloutHeads: count('.cm-md-callout-head'),
     tableLines: count('.cm-md-table-line'),
     codeLines: count('.cm-md-code-line'),
-    rules: count('.cm-md-rule'),
+    // The dashes are drawn as the line they stand for, so the class to look
+    // for is the drawn rule rather than the dimmed characters.
+    rules: count('.cm-md-drawn-rule'),
     highlights: count('.cm-md-highlight'),
     // The tokens inside the fence. CodeMirror generates its own class names
     // rather than anything readable, so the check counts coloured spans instead
@@ -279,7 +281,9 @@ check(
 check(markup.calloutHeads === 1, `callout heads: ${markup.calloutHeads}, expected 1`)
 check(markup.tableLines === 3, `table lines: ${markup.tableLines}, expected 3`)
 check(markup.codeLines === 3, `code lines: ${markup.codeLines}, expected 3`)
-check(markup.rules === 1, `horizontal rules: ${markup.rules}, expected 1`)
+// One for the horizontal rule, plus one per column of the table's delimiter
+// row — the document in this gate has a two-column table.
+check(markup.rules === 3, `drawn rules: ${markup.rules}, expected 3`)
 check(markup.highlights === 1, `highlighted runs: ${markup.highlights}, expected 1`)
 
 // The point of carrying grammars at all. Six is a floor, not an exact count: a
