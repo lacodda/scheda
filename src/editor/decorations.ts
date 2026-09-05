@@ -48,6 +48,11 @@ const MARKERS = new Set([
   'HeaderMark',
   'EmphasisMark',
   'CodeMark',
+  // The language after the backticks. Hiding the fence but leaving `rust`
+  // behind reads as the first line of the code — the same failure as a link
+  // whose target stayed while its brackets went. The language is said out loud
+  // by the colouring instead.
+  'CodeInfo',
   'StrikethroughMark',
   'HighlightMark',
   'LinkMark',
@@ -182,7 +187,9 @@ function build(view: EditorView): DecorationSet {
         if (block) {
           for (const line of linesOf(state, node.from, node.to)) addLineClass(line, block)
           // A quote may be a callout; the first line says which.
-          if (node.name === 'Blockquote') markCallout(state, node.from, node.to, addLineClass)
+          if (node.name === 'Blockquote') {
+            markCallout(state, node.from, node.to, addLineClass, marks, activeLines)
+          }
           return
         }
 
@@ -244,12 +251,22 @@ function build(view: EditorView): DecorationSet {
   return Decoration.set(marks, true)
 }
 
-/** Adds the callout classes to a blockquote that opens with `> [!kind]`. */
+/** Adds the callout classes to a blockquote that opens with `> [!kind]`, and
+ *  hides the `[!kind]` label itself.
+ *
+ *  Hiding it is not decoration for its own sake. The parser reads `[!warning]`
+ *  as a link, so its brackets are `LinkMark` and get collapsed like any other —
+ *  leaving `!warning` alone on screen, which is text the author never wrote.
+ *  The same failure as a link whose target stayed visible while its brackets
+ *  went, and the same fix: hide the whole thing or none of it. The kind is
+ *  still said out loud by the colour of the rule. */
 function markCallout(
   state: EditorState,
   from: number,
   to: number,
   addLineClass: (line: number, cls: string) => void,
+  marks: Range<Decoration>[],
+  activeLines: Set<number>,
 ) {
   const firstLine = state.doc.lineAt(from)
   const match = CALLOUT_HEAD.exec(firstLine.text)
@@ -260,6 +277,16 @@ function markCallout(
   for (const line of linesOf(state, from, to)) addLineClass(line, cls)
   addLineClass(firstLine.number, 'cm-md-callout')
   addLineClass(firstLine.number, 'cm-md-callout-head')
+
+  // On the line being edited the label stays, like every other marker.
+  if (activeLines.has(firstLine.number)) return
+  // `[!kind]` plus the fold marker, and the space after it: leaving that space
+  // behind indents the title by one character for no reason.
+  const label = match[0]
+  const start = firstLine.from + label.indexOf('[')
+  const end = firstLine.from + label.length
+  const withSpace = state.doc.sliceString(end, end + 1) === ' ' ? end + 1 : end
+  marks.push(hidden.range(start, withSpace))
 }
 
 export const markdownDecorations: Extension = [

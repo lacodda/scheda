@@ -143,19 +143,28 @@ export const schedaTheme = EditorView.theme({
     borderRadius: '3px',
     backgroundColor: 'transparent',
     cursor: 'pointer',
+    boxSizing: 'border-box',
+    position: 'relative',
   },
   '.cm-md-task:checked': {
     borderColor: 'var(--accent)',
     backgroundColor: 'var(--accent)',
-    // The tick is drawn rather than loaded: an inline SVG in a data URI is
-    // blocked by the content policy, which is how the window's own mark went
-    // missing once already.
-    backgroundImage:
-      'linear-gradient(45deg, transparent 42%, var(--bg) 42%, var(--bg) 56%, transparent 56%),' +
-      'linear-gradient(-45deg, transparent 58%, var(--bg) 58%, var(--bg) 72%, transparent 72%)',
-    backgroundSize: '0.62em 0.62em, 0.62em 0.62em',
-    backgroundPosition: '0.28em 0.34em, 0.05em 0.2em',
-    backgroundRepeat: 'no-repeat',
+  },
+  // The tick, drawn rather than loaded: an inline SVG in a data URI is blocked
+  // by the content policy, which is how the window's own mark went missing
+  // once already.
+  //
+  // Two crossed gradients were the first attempt and they made a roof, not a
+  // tick — visible only in a screenshot of the running app. A clipped box is
+  // unambiguous: the polygon *is* the tick's outline.
+  '.cm-md-task:checked::after': {
+    content: '""',
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'var(--bg)',
+    clipPath:
+      'polygon(20% 52%, 32% 40%, 42% 52%, 68% 22%, 80% 34%, 42% 78%)',
   },
 
   // Quotes. The rule is drawn with a border on the line, so it runs unbroken

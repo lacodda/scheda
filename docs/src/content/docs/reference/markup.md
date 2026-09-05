@@ -105,8 +105,10 @@ names a language scheda carries, the code is coloured:
 `html` (`htm`), `sql` (`postgres`, `postgresql`, `psql`, `mysql`, `sqlite`).
 
 Anything else is left as plain text on the same background — not an error, just
-uncoloured. Grammars load only when a block needs one, so a note with no code
-costs nothing and the first paint never waits for one.
+uncoloured. Most grammars are fetched only when a block asks for one, so a note
+with no code costs nothing and the first paint never waits for one. (HTML, CSS
+and JavaScript come along with the markdown parser itself, which highlights
+embedded HTML, so those three are always present.)
 
 Extra words after the language are ignored, so ```` ```js title="example.js" ````
 works.

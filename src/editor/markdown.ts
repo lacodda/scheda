@@ -59,9 +59,16 @@ export function schedaMarkdown(): Extension {
  *  notes. An unknown language is not an error — the block still gets its
  *  background and its monospace, it just is not coloured (decision 2026-09-05).
  *
- *  Each is a `LanguageDescription` whose `load` is a dynamic import, which is
- *  what makes this lazy: a note with no code parses no grammar, and a note with
- *  Rust in it loads one, after the text is already on screen (ADR 0001).
+ *  Each is a `LanguageDescription` whose `load` is a dynamic import, so Rust,
+ *  Python, SQL and JSON are fetched only when a block asks for one, after the
+ *  text is on screen (ADR 0001).
+ *
+ *  HTML, CSS and JavaScript are the exception, and not by choice:
+ *  `@codemirror/lang-markdown` imports `lang-html` outright — it highlights
+ *  embedded HTML — and `lang-html` imports the other two. They are in the
+ *  bundle whether or not they are listed here, which the build says out loud
+ *  as INEFFECTIVE_DYNAMIC_IMPORT. Listing them costs nothing extra and dropping
+ *  them would save nothing.
  */
 const CODE_LANGUAGES = [
   LanguageDescription.of({

@@ -136,6 +136,30 @@ describe('quotes and callouts', () => {
     v.destroy()
   })
 
+  it('hides the whole [!kind] label, not just its brackets', () => {
+    // Found in a screenshot of the running app, not by any test: the parser
+    // reads `[!warning]` as a link, so its brackets collapsed as LinkMark and
+    // left `!warning` on screen — text the author never wrote. The same shape
+    // of bug as a link whose target stayed while its brackets went.
+    const v = view('> [!warning] Careful\n> body\n\nafter\n', 31)
+    const hiddenText = textsOf(v, 'cm-md-marker-hidden').join('')
+    expect(hiddenText).toContain('[!warning]')
+    // And what is left on the line is the title alone.
+    const head = v.dom.querySelector('.cm-md-callout-head')
+    const visible = [...(head?.childNodes ?? [])]
+      .filter((n) => !(n instanceof HTMLElement) || !n.classList.contains('cm-md-marker-hidden'))
+      .map((n) => n.textContent ?? '')
+      .join('')
+    expect(visible).not.toContain('!warning')
+    v.destroy()
+  })
+
+  it('shows the label on the line being edited', () => {
+    const v = view('> [!warning] Careful\n> body\n\nafter\n', 5)
+    expect(textsOf(v, 'cm-md-marker-hidden').join('')).not.toContain('[!warning]')
+    v.destroy()
+  })
+
   it('treats a plain quote as a quote, not a callout', () => {
     const v = view('> just a quote\n\nafter\n', 18)
     expect(lineCount(v, 'cm-md-callout-head')).toBe(0)
@@ -159,6 +183,21 @@ describe('tables, code and rules', () => {
   it('marks the lines of a fenced block, fence included', () => {
     const v = view('```js\nconst x = 1\n```\n\nafter\n', 25)
     expect(lineCount(v, 'cm-md-code-line')).toBe(3)
+    v.destroy()
+  })
+
+  it('hides the language name with the fence, not just the backticks', () => {
+    // Found in a screenshot: the backticks collapsed and `rust` stayed, so the
+    // block opened with a line of text nobody wrote as code. Same shape as the
+    // callout label and the link target before it.
+    const v = view('```rust\nfn main() {}\n```\n\nafter\n', 30)
+    expect(textsOf(v, 'cm-md-marker-hidden')).toContain('rust')
+    v.destroy()
+  })
+
+  it('shows the language name on the line being edited', () => {
+    const v = view('```rust\nfn main() {}\n```\n\nafter\n', 4)
+    expect(textsOf(v, 'cm-md-marker-hidden')).not.toContain('rust')
     v.destroy()
   })
 
