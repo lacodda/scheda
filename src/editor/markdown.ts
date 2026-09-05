@@ -42,11 +42,53 @@ const Highlight: MarkdownConfig = {
 }
 
 
+/** YAML front matter: a `---` fence at the very top of the file.
+ *
+ *  Without this the parser reads the opening `---` as a horizontal rule and the
+ *  fields under it as a setext heading, so a note with front matter opens with
+ *  a line and a giant bold `title:` — markup the author did not write.
+ *
+ *  A block parser rather than a delimiter, because it is only front matter at
+ *  the very start of the document: `---` in the middle of a note stays the
+ *  horizontal rule it is.
+ */
+const FrontMatter: MarkdownConfig = {
+  defineNodes: [
+    { name: 'FrontMatter', block: true },
+    { name: 'FrontMatterMark' },
+  ],
+  parseBlock: [
+    {
+      name: 'FrontMatter',
+      before: 'HorizontalRule',
+      parse(cx, line) {
+        // Only at the top, and only for a bare `---`.
+        if (cx.lineStart !== 0 || line.text.trim() !== '---') return false
+
+        const start = cx.lineStart
+        const marks = [cx.elt('FrontMatterMark', start, start + 3)]
+        while (cx.nextLine()) {
+          if (line.text.trim() === '---') {
+            const end = cx.lineStart + line.text.length
+            marks.push(cx.elt('FrontMatterMark', cx.lineStart, cx.lineStart + 3))
+            cx.addElement(cx.elt('FrontMatter', start, end, marks))
+            cx.nextLine()
+            return true
+          }
+        }
+        // Unterminated: not front matter, so give the lines back rather than
+        // swallowing the whole note.
+        return false
+      },
+    },
+  ],
+}
+
 /** The language support for a markdown document, dialect and all. */
 export function schedaMarkdown(): Extension {
   return markdown({
     base: markdownLanguage,
-    extensions: [Highlight],
+    extensions: [Highlight, FrontMatter],
     // Fenced code is highlighted by `codeLanguages`, resolved lazily so no
     // grammar is parsed before it is on screen (ADR 0001).
     codeLanguages: loadCodeLanguage,

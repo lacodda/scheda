@@ -16,7 +16,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `protocol-asset` serves pictures to the webview, and only from the
+# directories the core has allowed (ADR 0004). The feature and the
+# `assetProtocol` block in tauri.conf.json have to agree; the build fails if
+# either is present without the other.
+tauri = { version = "2", features = ["protocol-asset"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

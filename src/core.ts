@@ -1,6 +1,6 @@
 // The one door to the core. Nothing else in the frontend talks to Tauri, and
 // nothing at all talks to the disk (ADR 0001).
-import { invoke } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 export type LineEnding = 'lf' | 'crlf' | 'mixed'
@@ -37,6 +37,19 @@ export function openFile(path: string): Promise<OpenFile> {
 
 export function saveFile(path: string, text: string, shape: DocumentShape): Promise<void> {
   return invoke<void>('save_file', { path, text, shape })
+}
+
+/** Turns a link written in `document` into a URL the webview may load, or null
+ *  if it does not point at a file inside the document's root.
+ *
+ *  The frontend does not resolve paths and does not decide what is inside the
+ *  root — the core does both, and opens the asset scope while it is at it
+ *  (ADR 0004). What comes back is a checked path; `convertFileSrc` only puts
+ *  the protocol's host in front of it.
+ */
+export async function resolveAsset(document: string, link: string): Promise<string | null> {
+  const path = await invoke<string | null>('resolve_asset', { document, link })
+  return path === null ? null : convertFileSrc(path)
 }
 
 /** Tells the core the first character is on screen. The startup gate reads

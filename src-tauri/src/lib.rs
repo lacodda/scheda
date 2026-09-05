@@ -4,7 +4,8 @@
 #[cfg(windows)]
 pub mod associations;
 pub mod document;
-pub mod settings;
+pub mod root;
+mod settings;
 pub mod startup;
 
 use document::{Document, DocumentShape};
@@ -85,6 +86,41 @@ fn open_file(path: String) -> Result<OpenFile, CommandError> {
 fn save_file(path: String, text: String, shape: DocumentShape) -> Result<(), CommandError> {
     document::write(&PathBuf::from(path), &text, &shape)?;
     Ok(())
+}
+
+/// Turns a link written in a document into a URL the webview may load.
+///
+/// The webview never resolves a path itself and never learns one it has not
+/// been given (ADR 0004). This is the only door: the core finds the document's
+/// root, checks the link stays inside it, opens the asset scope to that root,
+/// and hands back a URL. A link that climbs out, points at an absolute path or
+/// names something remote comes back as `None` — the picture simply does not
+/// appear, which is the honest outcome for a link that does not point at the
+/// vault.
+///
+/// Opening the scope here rather than at startup means it is opened for a root
+/// the user actually opened a file in, and only then.
+#[tauri::command]
+fn resolve_asset(app: tauri::AppHandle, document: String, link: String) -> Option<String> {
+    use tauri::Manager as _;
+    let document = PathBuf::from(document);
+    let root = root::for_file(&document);
+    let target = root::resolve_link(&root, &document, &link).ok()?;
+
+    // Allowing the root, not the file: a vault of notes referring to a shared
+    // `assets/` folder would otherwise need one call per picture, and the
+    // scope would grow a entry for every image ever displayed.
+    if app
+        .asset_protocol_scope()
+        .allow_directory(&root, true)
+        .is_err()
+    {
+        return None;
+    }
+    // The path, not a URL: turning it into one is `convertFileSrc` on the other
+    // side, which knows the protocol's host for the platform it is running on.
+    // What matters is that this path has already been checked.
+    Some(target.to_string_lossy().into_owned())
 }
 
 /// Records that the frontend has painted the first character.
@@ -196,6 +232,7 @@ pub fn run() {
             take_preloaded,
             open_file,
             save_file,
+            resolve_asset,
             report_first_paint,
             load_settings,
             save_settings,

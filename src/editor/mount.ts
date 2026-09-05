@@ -11,6 +11,7 @@
 import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { openFile, saveFile, type DocumentShape, type OpenFile } from '../core'
+import { documentPath, forgetAssets, setDocumentPath } from './images'
 import { schedaSetup } from './setup'
 
 /** A document with a filename, or an unnamed buffer that has never been saved. */
@@ -77,10 +78,17 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
     }),
   ]
 
-  function stateFor(text: string, readOnly: boolean): EditorState {
+  function stateFor(text: string, readOnly: boolean, path: string | null): EditorState {
     return EditorState.create({
       doc: text,
-      extensions: [...baseExtensions, EditorState.readOnly.of(readOnly)],
+      extensions: [
+        ...baseExtensions,
+        EditorState.readOnly.of(readOnly),
+        // Which file this is. Embedded pictures are resolved relative to it,
+        // and a buffer with no path resolves nothing — correctly, since a
+        // relative link has nothing to be relative to yet.
+        documentPath.init(() => path),
+      ],
     })
   }
 
@@ -91,7 +99,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       shape: source?.shape ?? NEW_FILE_SHAPE,
       readOnly: source?.readOnly ?? false,
       saved: source?.text ?? '',
-      state: stateFor(source?.text ?? '', source?.readOnly ?? false),
+      state: stateFor(source?.text ?? '', source?.readOnly ?? false, source?.path ?? null),
     }
     tabs.push(tab)
     return tab
@@ -165,7 +173,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
         current.shape = next.shape
         current.readOnly = next.readOnly
         current.saved = next.text
-        current.state = stateFor(next.text, next.readOnly)
+        current.state = stateFor(next.text, next.readOnly, next.path)
         show(current)
         return
       }
@@ -223,8 +231,12 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       stash()
       const current = textOf(tab)
       await saveFile(path, current, tab.shape)
+      const previous = tab.path
       tab.path = path
       tab.saved = current
+      // The document moved, so its relative links point somewhere else now.
+      if (previous) forgetAssets(previous)
+      view.dispatch({ effects: setDocumentPath.of(path) })
       // A file saved under a new name is no longer the read-only thing it may
       // have been opened as: the bytes just written are ours and are UTF-8.
       tab.readOnly = false

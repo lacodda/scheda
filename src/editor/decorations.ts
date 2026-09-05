@@ -16,8 +16,9 @@
 // the document — `[ ]` becomes `[x]` — rather than toggling any view state:
 // the text stays the truth, and undo puts it back.
 import { syntaxTree } from '@codemirror/language'
+import { readingMode } from './reading'
 import { type Range, type Extension, type EditorState } from '@codemirror/state'
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view'
+import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
 
 /** Node names whose whole span gets a class. */
 const STYLED: Record<string, string> = {
@@ -169,11 +170,15 @@ function build(view: EditorView): DecorationSet {
     else lineClasses.set(line, new Set([cls]))
   }
 
-  // Lines holding a cursor or a selection edge keep their markers visible.
+  // Lines holding a cursor or a selection edge keep their markers visible —
+  // unless the document is being read rather than edited, in which case no line
+  // is being edited and every marker hides.
   const activeLines = new Set<number>()
-  for (const range of state.selection.ranges) {
-    activeLines.add(state.doc.lineAt(range.head).number)
-    activeLines.add(state.doc.lineAt(range.anchor).number)
+  if (!state.field(readingMode, false)) {
+    for (const range of state.selection.ranges) {
+      activeLines.add(state.doc.lineAt(range.head).number)
+      activeLines.add(state.doc.lineAt(range.anchor).number)
+    }
   }
 
   for (const { from, to } of view.visibleRanges) {
@@ -290,24 +295,15 @@ function markCallout(
 }
 
 export const markdownDecorations: Extension = [
-  ViewPlugin.fromClass(
-    class {
-      decorations: DecorationSet
-
-      constructor(view: EditorView) {
-        this.decorations = build(view)
-      }
-
-      update(update: ViewUpdate) {
-        // Selection matters as much as content here: moving the cursor onto a
-        // line is what brings that line's markers back.
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
-          this.decorations = build(update.view)
-        }
-      }
-    },
-    { decorations: (plugin) => plugin.decorations },
-  ),
+  // Provided directly rather than from a view plugin. A `Decoration.line` is a
+  // block decoration as far as CodeMirror is concerned, and a function given to
+  // this facet runs after the viewport is measured, so it may not produce one:
+  // the view throws "Block decorations may not be specified via plugins" while
+  // being constructed, taking the whole editor down rather than just the lists.
+  //
+  // The cost is recomputing on every state change rather than only on the three
+  // that matter; the walk is over the visible ranges either way.
+  EditorView.decorations.of(build),
   // Clicking a checkbox edits the document. Registered as a DOM handler rather
   // than inside the widget so the position is resolved against the live state.
   EditorView.domEventHandlers({

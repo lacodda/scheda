@@ -10,7 +10,10 @@ import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/sea
 import { type Extension } from '@codemirror/state'
 import { EditorView, drawSelection, highlightActiveLine, keymap } from '@codemirror/view'
 import { markdownDecorations } from './decorations'
+import { frontMatterFold } from './frontmatter'
 import { schedaHighlightStyle } from './highlight'
+import { markdownImages } from './images'
+import { reading, toggleReading } from './reading'
 import { schedaMarkdown } from './markdown'
 import { schedaTheme } from './theme'
 
@@ -25,6 +28,9 @@ export function schedaSetup(): Extension[] {
     // no class ever reaches the DOM.
     syntaxHighlighting(schedaHighlightStyle),
     markdownDecorations,
+    markdownImages,
+    frontMatterFold,
+    reading,
     // The panel sits at the top: at the bottom it would cover the status bar,
     // and the line being searched for is more often near the start.
     search({ top: true }),
@@ -32,6 +38,19 @@ export function schedaSetup(): Extension[] {
     schedaTheme,
     // Search bindings first: `Ctrl+F` and `Escape` have defaults in the base
     // keymap that would otherwise win.
-    keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
+    keymap.of([
+      // Reading mode. Before the defaults: `Ctrl+E` is "move to line end" in
+      // the base keymap, and Obsidian's binding is the one a reader expects.
+      {
+        key: 'Mod-e',
+        run: (view) => {
+          view.dispatch({ effects: toggleReading.of() })
+          return true
+        },
+      },
+      ...searchKeymap,
+      ...defaultKeymap,
+      ...historyKeymap,
+    ]),
   ]
 }

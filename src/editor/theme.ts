@@ -202,6 +202,54 @@ export const schedaTheme = EditorView.theme({
     marginLeft: '1rem',
   },
 
+  // ------------------------------------------------------------ pictures --
+
+  // Drawn under the line that names it, never in place of it: the source stays
+  // there to be edited (ADR 0002).
+  '.cm-md-image': {
+    padding: '0.4rem 1rem 0.6rem',
+  },
+  '.cm-md-image img': {
+    display: 'block',
+    maxWidth: '100%',
+    // A tall picture must not push the text off screen; the reader can open the
+    // file itself for the full thing.
+    maxHeight: '60vh',
+    borderRadius: '6px',
+    border: '1px solid var(--border)',
+  },
+  // A picture that failed to decode leaves nothing behind. The line above still
+  // says what was meant, which beats a broken-image glyph sitting in the prose.
+  '.cm-md-image-failed': { display: 'none' },
+
+  // -------------------------------------------------------- front matter --
+
+  '.cm-md-frontmatter-header': {
+    display: 'block',
+    width: 'calc(100% - 2rem)',
+    margin: '0 1rem 0.4rem',
+    padding: '0.35rem 0.7rem',
+    textAlign: 'left',
+    font: 'inherit',
+    fontSize: '0.85em',
+    color: 'var(--muted)',
+    background: 'var(--status-bg)',
+    border: '1px solid var(--border)',
+    borderRadius: '5px',
+    cursor: 'pointer',
+  },
+  '.cm-md-frontmatter-header:hover': {
+    color: 'var(--accent)',
+    borderColor: 'var(--accent)',
+  },
+
+  // ---------------------------------------------------------- reading mode --
+
+  // No caret, no active line: nothing that says "your cursor is here", because
+  // in reading mode it is not anywhere that matters.
+  '&.cm-reading .cm-cursor, &.cm-reading .cm-dropCursor': { display: 'none' },
+  '&.cm-reading .cm-activeLine': { backgroundColor: 'transparent' },
+
   // A horizontal rule. The three dashes stay in the text — they are the
   // document — but they are dimmed and the line is drawn under them.
   '.cm-md-rule': { color: 'var(--muted)', opacity: '0.5' },
