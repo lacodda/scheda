@@ -333,6 +333,39 @@ check(reading.on, 'Ctrl+E did not turn reading mode on')
 check(!reading.caretVisible, 'the caret is still drawn in reading mode')
 check(!readingOff, 'Ctrl+E did not turn reading mode off again')
 
+// The outline panel, driven by its real key in a real browser. It changes the
+// layout — the editor gives up width to it — so this is the place to check it:
+// a unit test can see the component render and not that the text still fits
+// beside it.
+await page.click('.cm-content')
+const outlineClosed = await page.evaluate(() => document.querySelectorAll('.outline').length)
+await page.keyboard.press('Control+Shift+o')
+await page.waitForTimeout(300)
+const outline = await page.evaluate(() => {
+  const panel = document.querySelector('.outline')
+  const editor = document.querySelector('.editor-host')
+  const items = [...document.querySelectorAll('.outline-item')].map((e) => e.textContent)
+  return {
+    open: panel !== null,
+    items,
+    panelWidth: panel ? panel.getBoundingClientRect().width : 0,
+    editorWidth: editor ? editor.getBoundingClientRect().width : 0,
+    // Nothing may hang off the right edge: a panel that pushes the editor out
+    // of the window is worse than no panel.
+    overflows: document.documentElement.scrollWidth > window.innerWidth + 1,
+  }
+})
+await page.keyboard.press('Control+Shift+o')
+await page.waitForTimeout(300)
+const outlineAgain = await page.evaluate(() => document.querySelectorAll('.outline').length)
+
+check(outlineClosed === 0, 'the outline is open before anything asked for it')
+check(outline.open, 'Ctrl+Shift+O did not open the outline')
+check(outline.panelWidth > 80, `the outline is ${Math.round(outline.panelWidth)}px wide, which is not a panel`)
+check(outline.editorWidth > 200, `the editor is left ${Math.round(outline.editorWidth)}px, which is not a column`)
+check(!outline.overflows, 'the outline pushes the window into horizontal scrolling')
+check(outlineAgain === 0, 'Ctrl+Shift+O did not close the outline again')
+
 await browser.close()
 server.close()
 

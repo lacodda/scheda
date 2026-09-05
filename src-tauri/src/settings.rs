@@ -43,6 +43,12 @@ pub struct Settings {
     pub column_width: f32,
     /// Recently opened files, most recent first.
     pub recent: Vec<String>,
+    /// Whether typing an opening bracket or quote inserts its closing partner.
+    ///
+    /// Off by default. In prose the guess is wrong more often than it is right
+    /// — an apostrophe in "don't" is not an opening quote — and a notepad that
+    /// types characters nobody asked for is worse than one that does not.
+    pub close_brackets: bool,
 }
 
 impl Default for Settings {
@@ -52,6 +58,7 @@ impl Default for Settings {
             font_size: 15,
             column_width: 46.0,
             recent: Vec::new(),
+            close_brackets: false,
         }
     }
 }

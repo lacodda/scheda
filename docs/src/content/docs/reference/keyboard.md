@@ -42,6 +42,23 @@ on, which is the one difference from editing — and the document refuses change
 Not a preview pane: it is the same view with two things switched, so what you
 read is what you were just editing.
 
+## Getting around a long note
+
+| Keys | What it does |
+| --- | --- |
+| `Ctrl+Shift+O` | Show or hide the outline |
+| `Ctrl+Shift+[` | Fold the section the caret is in |
+| `Ctrl+Shift+]` | Unfold it |
+| `Ctrl+Alt+[` / `Ctrl+Alt+]` | Fold or unfold every section |
+
+The outline lists the document's headings, indented by level; clicking one puts
+the caret at that heading. It is hidden until you ask for it — most notes have
+three headings or none, and a sidebar that is always there is not a notepad.
+
+A folded section shows `⋯` in place of what it holds. There is no arrow column
+beside the text: folding is a thing you do now and then, and a permanent strip
+for it costs more than it gives.
+
 ## Finding
 
 | Keys | What it does |
@@ -62,6 +79,20 @@ the rest.
 | `Ctrl+A` | Select all |
 | `Ctrl+Home` / `Ctrl+End` | Jump to the start or end of the document |
 | `Home` / `End` | Jump to the start or end of the line |
+
+### In a list
+
+| Keys | What it does |
+| --- | --- |
+| `Enter` | Continues the list, the numbering or the quote you are in |
+| `Enter` on an empty item | Ends the list |
+| `Tab` / `Shift+Tab` | Moves the item a level deeper or shallower |
+| `Backspace` on an empty item | Takes the marker off, leaving the indent; again removes that |
+
+Numbering counts up on its own, and a finished task continues as an unfinished
+one — `- [x]` followed by another `- [x]` would claim work nobody did.
+
+Outside a list none of this applies: `Tab` in a paragraph is a tab.
 
 Undo history belongs to the tab, so switching away and back does not lose it.
 

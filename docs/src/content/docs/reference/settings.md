@@ -54,3 +54,17 @@ enough to scroll — or short enough not to.
 
 There is no setting for it. The bar appears where the content scrolls, at the
 window's edge, and gets out of the way otherwise.
+
+## `close_brackets`
+
+```json
+{ "close_brackets": true }
+```
+
+Off by default. With it on, typing an opening bracket or quote inserts its
+closing partner, and typing the closing one over an inserted one steps past it
+instead of doubling it.
+
+It is off because prose is not code. The apostrophe in "don't" is not an opening
+quote, and a notepad that inserts characters nobody typed is worse than one that
+leaves them alone. Turn it on if you write more code in your notes than prose.

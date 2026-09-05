@@ -534,3 +534,74 @@ body {
 #root {
   position: relative;
 }
+
+/* ------------------------------------------------------------- outline -- */
+
+/* The editor and the outline sit side by side; the row is what makes that
+   possible without the panel pushing the status bar around. */
+.middle {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.outline {
+  flex: 0 0 auto;
+  width: 15rem;
+  overflow-y: auto;
+  padding: 0.6rem 0;
+  border-left: 1px solid var(--border);
+  background: var(--status-bg);
+  font-size: 12px;
+}
+
+/* On a narrow window the panel would leave the text no room at all, so it
+   takes a share instead of a fixed width. */
+@media (max-width: 60rem) {
+  .outline {
+    width: 40%;
+    min-width: 9rem;
+  }
+}
+
+.outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline-empty {
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  color: var(--muted);
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  padding: 0.22rem 0.9rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  /* One line each: a long heading is cut rather than wrapped, so the list stays
+     scannable and its rows stay the same height. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.outline-item:hover {
+  background: var(--active-line);
+  color: var(--accent);
+}
+
+/* Indented by level, so the shape of the document is visible in the list. */
+.outline-level-1 { padding-left: 0.9rem; font-weight: 600; }
+.outline-level-2 { padding-left: 1.7rem; }
+.outline-level-3 { padding-left: 2.5rem; }
+.outline-level-4 { padding-left: 3.3rem; color: var(--muted); }
+.outline-level-5 { padding-left: 4.1rem; color: var(--muted); }
+.outline-level-6 { padding-left: 4.9rem; color: var(--muted); }

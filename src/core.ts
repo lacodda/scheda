@@ -67,6 +67,9 @@ export interface Settings {
   font_size: number
   column_width: number
   recent: string[]
+  /** Whether an opening bracket or quote types its closing partner. Off by
+   *  default: in prose the guess is wrong more often than right. */
+  close_brackets: boolean
 }
 
 export function loadSettings(): Promise<Settings> {

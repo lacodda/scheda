@@ -3,7 +3,7 @@
 //
 // Mounted after the first paint. If this file were slow it would cost the
 // window nothing, which is exactly why it is a separate module.
-import { StrictMode, useCallback, useEffect, useSyncExternalStore } from 'react'
+import { StrictMode, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
@@ -16,6 +16,8 @@ import {
   rememberRecent,
 } from './core'
 import { apply as applyAppearance } from './appearance'
+import { Outline } from './outline'
+import { setBracketClosing } from './editor/edits'
 import { RecentFiles } from './recent'
 import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
 import type { EditorHandle, Tab } from './editor/mount'
@@ -258,12 +260,18 @@ function Shell({ editor }: { editor: EditorHandle }) {
     // the window appearing in the system theme and correcting itself a frame
     // later is cheaper than a blank window waiting on a file read.
     void loadSettings()
-      .then(applyAppearance)
+      .then((settings) => {
+        applyAppearance(settings)
+        // Bracket closing is an editor extension rather than a CSS variable,
+        // so it is reconfigured rather than applied. The compartment means the
+        // document, the undo history and the caret all survive the change.
+        editor.view.dispatch(setBracketClosing(settings.close_brackets))
+      })
       .catch(() => {
         // Unreadable settings are not worth a dialog on startup; the defaults
         // are already on screen.
       })
-  }, [])
+  }, [editor])
 
   useEffect(() => {
     // Closing the window with unsaved work asks first. Tauri lets us take the
@@ -294,6 +302,28 @@ function Shell({ editor }: { editor: EditorHandle }) {
   return <StatusBar editor={editor} />
 }
 
+/** The outline, and the key that shows it.
+ *
+ *  The state lives here rather than in the editor: it is a property of the
+ *  window, not of the document, and switching tabs should not close a panel
+ *  that was open. */
+function OutlinePanel({ editor }: { editor: EditorHandle }) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 'o') return
+      event.preventDefault()
+      setVisible((was) => !was)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  return <Outline editor={editor} visible={visible} />
+}
+
 /** Mounts the title bar above the editor and the status bar below it. */
 export function mountShell(editor: EditorHandle) {
   const root = document.getElementById('root')!
@@ -307,12 +337,29 @@ export function mountShell(editor: EditorHandle) {
   shellHost.className = 'shell-host'
   root.appendChild(shellHost)
 
+  // The outline sits beside the editor rather than above or below it, so the
+  // two are wrapped in a row of their own. Done here rather than in the markup
+  // because the editor host already exists by now — the text was on screen
+  // before this file ran, which is the whole ordering (ADR 0001).
+  const middle = document.createElement('div')
+  middle.className = 'middle'
+  editorHost.parentElement!.insertBefore(middle, editorHost)
+  const outlineHost = document.createElement('div')
+  outlineHost.className = 'outline-host'
+  middle.appendChild(editorHost)
+  middle.appendChild(outlineHost)
+
   // The title bar and the status bar are separate roots so the first can sit
   // above the editor and the second below it: React cannot render one component
   // into two places.
   createRoot(shellHost).render(
     <StrictMode>
       <Shell editor={editor} />
+    </StrictMode>,
+  )
+  createRoot(outlineHost).render(
+    <StrictMode>
+      <OutlinePanel editor={editor} />
     </StrictMode>,
   )
   createRoot(stripHost).render(
