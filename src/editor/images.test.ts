@@ -77,6 +77,21 @@ describe('embedded pictures', () => {
     v.destroy()
   })
 
+  it('hides the line of a refused link too, alt text and all', async () => {
+    // Found in a screenshot: the picture was gone, as intended, and `escapes`
+    // was left sitting there reading as a word the author wrote. The line goes
+    // whether or not there is a picture to put in its place.
+    resolveAsset.mockResolvedValue(null)
+    const v = view('Before\n\n![escapes](../../secret.png)\n\nAfter\n', '/vault/note.md')
+    // No dispatch of our own before the check. One would redraw the view by
+    // itself and hide whether the resolver asks for a redraw when every answer
+    // was "no" — which is the case that shipped the defect.
+    await settle()
+    expect(v.dom.textContent).not.toContain('escapes')
+    expect(v.dom.querySelector('.cm-md-image')).toBeNull()
+    v.destroy()
+  })
+
   it('asks about a link once, not on every keystroke', async () => {
     resolveAsset.mockResolvedValue('asset://localhost/x.png')
     const v = view(NOTE, '/vault/note.md')
@@ -129,13 +144,35 @@ describe('embedded pictures', () => {
     v.destroy()
   })
 
-  it('keeps the source line, drawing the picture under it', async () => {
-    // The rule the whole decoration layer follows: the markdown is still there
-    // to be edited (ADR 0002).
+  it('leaves the document alone while drawing the picture', async () => {
+    // The rule the whole decoration layer follows: the markdown is still there,
+    // whatever is drawn over it (ADR 0002).
     resolveAsset.mockResolvedValue('asset://localhost/x.png')
     const v = view(NOTE, '/vault/note.md')
     await settle()
     expect(v.state.doc.toString()).toBe(NOTE)
+    v.destroy()
+  })
+
+  it('hides the source line while the caret is elsewhere', async () => {
+    // Hiding only the brackets and the URL would leave `a diagram` above the
+    // picture, reading as a caption the author wrote — the same failure as a
+    // link whose target stayed when its brackets went.
+    resolveAsset.mockResolvedValue('asset://localhost/x.png')
+    const v = view(NOTE, '/vault/note.md')
+    v.dispatch({ selection: { anchor: 0 } })
+    await settle()
+    expect(v.dom.textContent).not.toContain('a diagram')
+    v.destroy()
+  })
+
+  it('brings the source line back when the caret lands on it', async () => {
+    resolveAsset.mockResolvedValue('asset://localhost/x.png')
+    const v = view(NOTE, '/vault/note.md')
+    await settle()
+    // Somewhere inside `![a diagram](assets/diagram.png)`.
+    v.dispatch({ selection: { anchor: NOTE.indexOf('a diagram') + 2 } })
+    await settle()
     expect(v.dom.textContent).toContain('a diagram')
     v.destroy()
   })

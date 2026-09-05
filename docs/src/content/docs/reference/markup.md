@@ -120,3 +120,41 @@ works.
 ```
 
 The three dashes stay in the text, dimmed, with a line drawn under them.
+
+## Pictures
+
+```markdown
+![a diagram](assets/diagram.png)
+```
+
+The picture is drawn under the line, and the line stays where it is — it is
+still the markdown you are editing.
+
+Links are relative to the note, so `assets/diagram.png` and `../shared/logo.png`
+both work. What they may reach is decided by the core: a link is resolved
+against the note's root — the vault it belongs to, or its own folder if there is
+no vault — and anything outside that root simply does not appear. Nor do remote
+images: a note cannot load `https://…`, so it cannot report that you opened it.
+
+A link pointing at nothing shows no picture and no broken-image icon. The line
+above it already says what was meant.
+
+## Front matter
+
+```markdown
+---
+title: A note
+tags: [drafts, ideas]
+---
+```
+
+The fields at the top of a file fold into a single line saying how many there
+are. Click it to see them, click again to fold them back; put the caret inside
+and they unfold on their own, because a fold over the line you are typing into
+would be in the way.
+
+Folding is a view state and nothing else — the file is untouched, and closing the
+tab forgets it.
+
+Three dashes anywhere but the very top of a file are a horizontal rule, not
+front matter.

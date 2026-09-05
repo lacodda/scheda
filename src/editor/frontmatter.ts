@@ -87,9 +87,16 @@ function build(state: EditorState): DecorationSet {
     to: Math.min(state.doc.length, 4096),
     enter: (node) => {
       if (node.name !== 'FrontMatter') return
-      // The cursor inside it means it is being edited, and a fold would hide
-      // the line under the caret.
+      // A cursor inside it means it is being edited, and a fold would hide the
+      // line under the caret.
+      //
+      // "Inside" has to exclude the very start of the document, though: a file
+      // opens with the caret at position 0, which is inside the front matter by
+      // any ordinary reading — so the fold would never happen on open, which is
+      // the one moment it is for. A caret at 0 that nobody has moved is not
+      // editing anything.
       for (const range of state.selection.ranges) {
+        if (range.from === 0 && range.to === 0) continue
         if (range.from <= node.to && range.to >= node.from) return
       }
       const text = state.doc.sliceString(node.from, node.to)

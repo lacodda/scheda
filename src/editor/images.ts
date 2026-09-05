@@ -160,20 +160,49 @@ function build(state: EditorState): DecorationSet {
       const parsed = linkOf(state, node.from, node.to)
       if (!parsed) return
 
-      // Unknown or refused: nothing to draw. The plugin below is what turns
-      // "unknown" into an answer.
+      // Unknown: nothing to draw yet, and the line stays as it is. The plugin
+      // below is what turns "unknown" into an answer.
       const known = cache.get(parsed.link)
-      if (!known) return
+      if (known === undefined) return
 
       // Below the line, not in place of it: the source stays visible and
       // editable, which is the rule the whole decoration layer follows.
+      //
+      // But the *whole* source line hides while the caret is elsewhere. Hiding
+      // only the brackets and the URL would leave the alt text sitting above
+      // the picture as if it were a caption the author wrote — the same failure
+      // as a link whose target stayed visible when its brackets went, and as a
+      // callout that rendered `!warning`. Whole construction or none of it.
       const line = state.doc.lineAt(node.to)
+
+      // The line hides only when the caret is elsewhere, exactly like every
+      // other marker: step onto it and the markdown is back to be edited.
+      const caretHere = state.selection.ranges.some(
+        (range) => range.from <= line.to && range.to >= line.from,
+      )
+      const wholeLine = line.from === node.from && line.to === node.to
+      if (caretHere || !wholeLine) return
+
+      // The line is *replaced* by the picture rather than hidden above it.
+      //
+      // Hiding the text and adding a widget underneath left the emptied line
+      // still holding its height — a blank band over every picture. A block
+      // replacement takes the line itself, so the picture stands where the
+      // markdown was.
+      //
+      // And it applies whether or not there is a picture to put there: a link
+      // the core refused draws nothing, and leaving `escapes` behind — the alt
+      // text of `![escapes](../../secret.png)` — would put a word on screen
+      // that reads as prose the author wrote.
+      if (known === null) {
+        marks.push(Decoration.replace({ block: true }).range(line.from, line.to))
+        return
+      }
       marks.push(
-        Decoration.widget({
+        Decoration.replace({
           widget: new ImageWidget(known, parsed.alt),
-          side: 1,
           block: true,
-        }).range(line.to),
+        }).range(line.from, line.to),
       )
     },
   })
@@ -191,20 +220,19 @@ async function resolvePending(view: EditorView, path: string, links: string[]): 
     if (!cache.has(link)) cache.set(link, null)
   }
 
-  let changed = false
   for (const link of links) {
     try {
-      const url = await resolveAsset(path, link)
-      if (url) {
-        cache.set(link, url)
-        changed = true
-      }
+      cache.set(link, await resolveAsset(path, link))
     } catch {
-      // A core that cannot answer leaves the link unresolved, which shows the
-      // text and nothing else. Not worth a dialog.
+      // A core that cannot answer leaves the link refused. Not worth a dialog:
+      // the note reads as it did before pictures existed.
     }
   }
-  if (changed) view.dispatch({ effects: assetsResolved.of(null) })
+  // Always, not only when something resolved. A refused link changes the
+  // drawing too — its line is hidden rather than left showing the alt text —
+  // and skipping the redraw when every answer was "no" left exactly that
+  // behind, which a screenshot caught after the tests had gone green.
+  view.dispatch({ effects: assetsResolved.of(null) })
 }
 
 export const markdownImages: Extension = [
@@ -216,7 +244,7 @@ export const markdownImages: Extension = [
   // throwing "Block decorations may not be specified via plugins" while the
   // view is being constructed, which takes the whole editor down rather than
   // just the pictures.
-  EditorView.decorations.compute([documentPath, 'doc', assetsGeneration], build),
+  EditorView.decorations.compute([documentPath, 'doc', 'selection', assetsGeneration], build),
   // Asking the core is a side effect, and side effects do not belong in a
   // facet's compute — it runs while state is being built, before any view
   // exists. So the walk happens again here, where there *is* a view to nudge

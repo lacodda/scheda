@@ -96,6 +96,16 @@ describe('front matter', () => {
     v.destroy()
   })
 
+  it('folds on open, when the caret is still at the start of the file', () => {
+    // The moment the fold is for. A file opens with the caret at 0, which is
+    // inside the front matter by any ordinary reading — so treating that as
+    // "being edited" meant the fold never happened on open, which a screenshot
+    // caught and no test did.
+    const v = view(WITH_FRONT_MATTER, 0)
+    expect(v.dom.querySelector('.cm-md-frontmatter-header')).not.toBeNull()
+    v.destroy()
+  })
+
   it('unfolds itself while the cursor is inside it', () => {
     // A fold over the caret would hide the line being typed into.
     const v = view(WITH_FRONT_MATTER, 6)

@@ -31,6 +31,17 @@ their own — that is one strip of screen instead of two.
 The buttons at the right end are the usual three. Closing goes through the same
 unsaved-work check as `Ctrl+W` and the system's own close.
 
+## Reading
+
+| Keys | What it does |
+| --- | --- |
+| `Ctrl+E` | Reading mode on or off |
+
+In reading mode every syntax marker hides — including on the line the caret is
+on, which is the one difference from editing — and the document refuses changes.
+Not a preview pane: it is the same view with two things switched, so what you
+read is what you were just editing.
+
 ## Finding
 
 | Keys | What it does |

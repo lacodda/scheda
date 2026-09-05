@@ -247,7 +247,10 @@ export const schedaTheme = EditorView.theme({
 
   // No caret, no active line: nothing that says "your cursor is here", because
   // in reading mode it is not anywhere that matters.
-  '&.cm-reading .cm-cursor, &.cm-reading .cm-dropCursor': { display: 'none' },
+  // `!important` because the base theme draws the caret through
+  // `.cm-focused .cm-cursor`, which outranks a class on the editor. The gate
+  // caught this: the class was applied and the caret stayed on screen anyway.
+  '&.cm-reading .cm-cursor, &.cm-reading .cm-dropCursor': { display: 'none !important' },
   '&.cm-reading .cm-activeLine': { backgroundColor: 'transparent' },
 
   // A horizontal rule. The three dashes stay in the text — they are the

@@ -35,9 +35,17 @@ export const reading: Extension = [
   // and it does nothing at all to a transaction dispatched directly — which a
   // test caught by dispatching one and watching the document change.
   EditorState.readOnly.compute([readingMode], (state) => state.field(readingMode)),
-  // `editable` is the DOM: a contenteditable that is not editable takes no
-  // typing, no paste, no drop.
-  EditorView.editable.compute([readingMode], (state) => !state.field(readingMode)),
+  // `editable` is deliberately NOT switched off.
+  //
+  // It was, at first: a contenteditable that is not editable takes no typing,
+  // no paste and no drop, which sounds exactly right. But it also stops taking
+  // key events, so `Ctrl+E` never reached the keymap and reading mode could be
+  // entered and not left — caught by driving the real keyboard in the browser
+  // gate, after the unit tests (which dispatch the effect directly) had all
+  // passed.
+  //
+  // The filter below is what actually refuses edits, and it refuses them from
+  // every source, so nothing is lost by leaving the DOM editable.
   // And the filter is the actual guarantee: whatever the source, a transaction
   // that changes the document is refused while reading. Selection still moves,
   // so the text can be selected and copied.

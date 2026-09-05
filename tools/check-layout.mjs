@@ -304,6 +304,35 @@ if (markup.calloutRule) {
   failures.push('no callout line to measure')
 }
 
+// Reading mode, driven by the real keyboard in a real browser. The unit tests
+// dispatch the effect directly; this is the only place the binding itself is
+// exercised, and a binding that never fires is a feature nobody can reach.
+await page.click('.cm-content')
+const readingBefore = await page.evaluate(() => document.querySelectorAll('.cm-reading').length)
+await page.keyboard.press('Control+e')
+await page.waitForTimeout(300)
+const reading = await page.evaluate(() => {
+  const editor = document.querySelector('.cm-editor')
+  return {
+    on: editor ? editor.classList.contains('cm-reading') : false,
+    caretVisible: (() => {
+      const caret = document.querySelector('.cm-cursor')
+      if (!caret) return false
+      return getComputedStyle(caret).display !== 'none'
+    })(),
+  }
+})
+await page.keyboard.press('Control+e')
+await page.waitForTimeout(300)
+const readingOff = await page.evaluate(() =>
+  document.querySelector('.cm-editor')?.classList.contains('cm-reading') ?? false,
+)
+
+check(readingBefore === 0, 'reading mode is on before anything asked for it')
+check(reading.on, 'Ctrl+E did not turn reading mode on')
+check(!reading.caretVisible, 'the caret is still drawn in reading mode')
+check(!readingOff, 'Ctrl+E did not turn reading mode off again')
+
 await browser.close()
 server.close()
 
