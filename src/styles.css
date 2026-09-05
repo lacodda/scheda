@@ -26,6 +26,34 @@
   --match: #f6e0b8;
   --match-active: #f3c98d;
 
+  /* Markup. The quote rule and the highlight stay in the product's own two
+     colours; the callouts need their own, because their whole job is to say
+     "this one is a warning" at a glance. */
+  --quote-rule: #d8cec2;
+  --quote-text: #6a635b;
+  --highlight-bg: #fbe6a8;
+  --highlight-text: #3d3527;
+  --table-border: #e5ded6;
+  --table-head-bg: #f5f1ec;
+  --callout-note: #3b82c4;
+  --callout-tip: #2faf8c;
+  --callout-success: #3f9e57;
+  --callout-question: #c08a2e;
+  --callout-warning: #d08320;
+  --callout-danger: #cc4436;
+  --callout-example: #8a63c4;
+  --callout-quote: #8a8279;
+
+  /* Tokens inside a code block. */
+  --tok-keyword: #a8452a;
+  --tok-string: #3f7d4e;
+  --tok-number: #9a6a1f;
+  --tok-comment: #96908a;
+  --tok-function: #2f7fa8;
+  --tok-type: #7a5aa8;
+  --tok-property: #2f8f78;
+  --tok-punctuation: #8a8279;
+
   /* The overlay scrollbar (scrollbar.css) reads these. */
   --scrollbar-thumb: #cdc4b8;
   --scrollbar-thumb-hover: #a89c8c;
@@ -47,6 +75,28 @@
   --status-bg: #1c1b21;
   --match: #3d3524;
   --match-active: #5c4a24;
+  --quote-rule: #3a3742;
+  --quote-text: #a49c93;
+  --highlight-bg: #4a3f1e;
+  --highlight-text: #f0e6c8;
+  --table-border: #2a2830;
+  --table-head-bg: #1e1d23;
+  --callout-note: #6ba6e8;
+  --callout-tip: #4fd0a8;
+  --callout-success: #63c47c;
+  --callout-question: #e0b153;
+  --callout-warning: #e8a34a;
+  --callout-danger: #e8695c;
+  --callout-example: #ad8ae0;
+  --callout-quote: #837c74;
+  --tok-keyword: #e08a68;
+  --tok-string: #8fd0a0;
+  --tok-number: #e0b153;
+  --tok-comment: #6d675f;
+  --tok-function: #74b8dd;
+  --tok-type: #b79ae8;
+  --tok-property: #5fd0b0;
+  --tok-punctuation: #837c74;
   --scrollbar-thumb: #3a3742;
   --scrollbar-thumb-hover: #56515f;
   }
@@ -68,6 +118,28 @@
   --status-bg: #1c1b21;
   --match: #3d3524;
   --match-active: #5c4a24;
+  --quote-rule: #3a3742;
+  --quote-text: #a49c93;
+  --highlight-bg: #4a3f1e;
+  --highlight-text: #f0e6c8;
+  --table-border: #2a2830;
+  --table-head-bg: #1e1d23;
+  --callout-note: #6ba6e8;
+  --callout-tip: #4fd0a8;
+  --callout-success: #63c47c;
+  --callout-question: #e0b153;
+  --callout-warning: #e8a34a;
+  --callout-danger: #e8695c;
+  --callout-example: #ad8ae0;
+  --callout-quote: #837c74;
+  --tok-keyword: #e08a68;
+  --tok-string: #8fd0a0;
+  --tok-number: #e0b153;
+  --tok-comment: #6d675f;
+  --tok-function: #74b8dd;
+  --tok-type: #b79ae8;
+  --tok-property: #5fd0b0;
+  --tok-punctuation: #837c74;
   --scrollbar-thumb: #3a3742;
   --scrollbar-thumb-hover: #56515f;
 }

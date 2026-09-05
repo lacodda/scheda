@@ -2,6 +2,57 @@
 // the decoration classes and their styling stay in one place.
 import { EditorView } from '@codemirror/view'
 
+
+/** The kinds Obsidian ships, mapped onto the eight colours the palette
+ *  defines. Several names mean the same thing — `tip` and `hint`, `danger` and
+ *  `error` — and Obsidian treats them as aliases, so scheda does too. */
+const CALLOUT_COLOURS: Record<string, string> = {
+  note: 'note',
+  abstract: 'note',
+  summary: 'note',
+  tldr: 'note',
+  info: 'note',
+  todo: 'note',
+  tip: 'tip',
+  hint: 'tip',
+  important: 'tip',
+  success: 'success',
+  check: 'success',
+  done: 'success',
+  question: 'question',
+  help: 'question',
+  faq: 'question',
+  warning: 'warning',
+  caution: 'warning',
+  attention: 'warning',
+  failure: 'danger',
+  fail: 'danger',
+  missing: 'danger',
+  danger: 'danger',
+  error: 'danger',
+  bug: 'danger',
+  example: 'example',
+  quote: 'quote',
+  cite: 'quote',
+}
+
+/** One rule per callout kind: the quote rule in the kind's colour, and the
+ *  kind's colour again, very faintly, behind the block. */
+function calloutColours(): Record<string, Record<string, string>> {
+  const rules: Record<string, Record<string, string>> = {}
+  for (const [kind, colour] of Object.entries(CALLOUT_COLOURS)) {
+    rules[`.cm-md-callout-${kind}`] = {
+      borderLeftColor: `var(--callout-${colour})`,
+      color: 'var(--text)',
+      fontStyle: 'normal',
+      // `color-mix` keeps the tint honest in both themes: it is the kind's own
+      // colour, thinned into whatever the background happens to be.
+      backgroundColor: `color-mix(in srgb, var(--callout-${colour}) 8%, transparent)`,
+    }
+  }
+  return rules
+}
+
 export const schedaTheme = EditorView.theme({
   '&': {
     // The size comes from the settings, through a variable the stylesheet sets;
@@ -55,9 +106,99 @@ export const schedaTheme = EditorView.theme({
   },
   '.cm-md-link': { color: 'var(--accent)' },
 
+  '.cm-md-highlight': {
+    backgroundColor: 'var(--highlight-bg)',
+    color: 'var(--highlight-text)',
+    borderRadius: '3px',
+    padding: '0.05em 0.15em',
+  },
+
   // Syntax markers on an inactive line. Collapsed to nothing rather than made
   // transparent: leaving the width behind is the tell of a fake WYSIWYG.
   '.cm-md-marker-hidden': { display: 'none' },
+
+  // ------------------------------------------------------------- blocks --
+
+  // Lists. The indent is hanging: a wrapped item lines up under its own text
+  // rather than sliding back under the bullet, which is the difference between
+  // a list that reads as a list and one that reads as ragged paragraphs.
+  //
+  // `text-indent` is negative by exactly the padding, so the first line starts
+  // where the bullet is and every wrapped line starts one indent in. This costs
+  // no measurement and survives any font size.
+  '.cm-md-list-line': {
+    paddingLeft: '2.6rem',
+    textIndent: '-1.6rem',
+  },
+  '.cm-md-list-mark': { color: 'var(--accent)' },
+
+  // Checkboxes. Sized in `em` so they follow the reading size.
+  '.cm-md-task': {
+    appearance: 'none',
+    width: '0.95em',
+    height: '0.95em',
+    margin: '0 0.35em 0 0',
+    verticalAlign: '-0.1em',
+    border: '1.5px solid var(--muted)',
+    borderRadius: '3px',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+  },
+  '.cm-md-task:checked': {
+    borderColor: 'var(--accent)',
+    backgroundColor: 'var(--accent)',
+    // The tick is drawn rather than loaded: an inline SVG in a data URI is
+    // blocked by the content policy, which is how the window's own mark went
+    // missing once already.
+    backgroundImage:
+      'linear-gradient(45deg, transparent 42%, var(--bg) 42%, var(--bg) 56%, transparent 56%),' +
+      'linear-gradient(-45deg, transparent 58%, var(--bg) 58%, var(--bg) 72%, transparent 72%)',
+    backgroundSize: '0.62em 0.62em, 0.62em 0.62em',
+    backgroundPosition: '0.28em 0.34em, 0.05em 0.2em',
+    backgroundRepeat: 'no-repeat',
+  },
+
+  // Quotes. The rule is drawn with a border on the line, so it runs unbroken
+  // down a wrapped paragraph.
+  '.cm-md-quote-line': {
+    paddingLeft: '1.6rem',
+    borderLeft: '3px solid var(--quote-rule)',
+    marginLeft: '1rem',
+    color: 'var(--quote-text)',
+    fontStyle: 'italic',
+  },
+
+  // Callouts. A quote that named its kind: the rule takes the kind's colour and
+  // the whole block gets a tint of it, so it reads as a panel without a border
+  // box that would fight the text column.
+  '.cm-md-callout-head': { fontWeight: '600' },
+  ...calloutColours(),
+
+  // Tables. The cells are not laid out in a grid — that would be a rendering,
+  // and the source is the truth — but the delimiters are dimmed so the columns
+  // read as columns.
+  '.cm-md-table-line': {
+    backgroundColor: 'var(--table-head-bg)',
+    borderLeft: '3px solid var(--table-border)',
+    paddingLeft: '0.7rem',
+    marginLeft: '1rem',
+  },
+  '.cm-md-table-delimiter': { color: 'var(--muted)', opacity: '0.7' },
+
+  // Fenced and indented code, as a block. The inline `.cm-md-code` above is a
+  // different thing and keeps its pill.
+  '.cm-md-code-line': {
+    backgroundColor: 'var(--code-bg)',
+    paddingLeft: '1.7rem',
+    marginLeft: '1rem',
+  },
+
+  // A horizontal rule. The three dashes stay in the text — they are the
+  // document — but they are dimmed and the line is drawn under them.
+  '.cm-md-rule': { color: 'var(--muted)', opacity: '0.5' },
+  '.cm-md-rule-line': {
+    borderBottom: '1px solid var(--border)',
+  },
 
   // Search. CodeMirror's panel is plain HTML controls, which look like nothing
   // else in the window until they are told otherwise.

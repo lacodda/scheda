@@ -5,11 +5,13 @@
 // before the first character reaches the screen. What is here was added one
 // piece at a time, each because something needed it.
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { markdown } from '@codemirror/lang-markdown'
+import { syntaxHighlighting } from '@codemirror/language'
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search'
 import { type Extension } from '@codemirror/state'
 import { EditorView, drawSelection, highlightActiveLine, keymap } from '@codemirror/view'
 import { markdownDecorations } from './decorations'
+import { schedaHighlightStyle } from './highlight'
+import { schedaMarkdown } from './markdown'
 import { schedaTheme } from './theme'
 
 export function schedaSetup(): Extension[] {
@@ -18,7 +20,10 @@ export function schedaSetup(): Extension[] {
     drawSelection(),
     highlightActiveLine(),
     EditorView.lineWrapping,
-    markdown(),
+    schedaMarkdown(),
+    // Without this the grammars parse and nothing shows: tags are assigned and
+    // no class ever reaches the DOM.
+    syntaxHighlighting(schedaHighlightStyle),
     markdownDecorations,
     // The panel sits at the top: at the bottom it would cover the status bar,
     // and the line being searched for is more often near the start.

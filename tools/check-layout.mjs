@@ -42,10 +42,33 @@ const page = await browser.newPage({ viewport: { width: 1200, height: 800 } })
 // A document long enough to scroll. Without one there is no scrollbar to
 // measure, and the gutter check passes on every stylesheet — including one that
 // reserves a gutter.
-const LONG_DOCUMENT = Array.from(
-  { length: 400 },
-  (_, index) => `Line ${index + 1} of a document that has to be taller than the window.`,
-).join('\n')
+const LONG_DOCUMENT = [
+  // Block markup, at the top so it is inside the first viewport and therefore
+  // actually decorated: CodeMirror only builds decorations for what is on
+  // screen, and a check on markup scrolled out of view proves nothing.
+  '```rust',
+  'fn main() { let x = 1; }',
+  '```',
+  '',
+  '- [ ] a task',
+  '- [x] a finished task',
+  '',
+  '> [!warning] Careful',
+  '> the body of the callout',
+  '',
+  '| a | b |',
+  '| --- | --- |',
+  '| 1 | 2 |',
+  '',
+  '---',
+  '',
+  'a ==marked== word',
+  '',
+  ...Array.from(
+    { length: 400 },
+    (_, index) => `Line ${index + 1} of a document that has to be taller than the window.`,
+  ),
+].join('\n')
 
 await page.addInitScript((text) => {
   window.__TAURI_INTERNALS__ = {
@@ -102,6 +125,53 @@ const layout = await page.evaluate(() => {
     status: box('.status'),
     shellHost: box('.shell-host'),
     scrollable: scroller ? scroller.scrollHeight > scroller.clientHeight : false,
+  }
+})
+
+// The grammar for a fenced block is fetched on demand, so the colouring lands a
+// moment after the text does. Waiting for it is not optional politeness: read
+// the DOM too early and the check fails on a perfectly good build, which is
+// exactly what this gate did on three runs out of five before the wait was
+// added. The failure below stays honest — if the spans never arrive, the check
+// still reports it.
+await page
+  .waitForFunction(
+    () => {
+      const line = document.querySelector('.cm-md-code-line + .cm-md-code-line')
+      return line ? line.querySelectorAll('span[class]').length >= 6 : false
+    },
+    { timeout: 10_000 },
+  )
+  .catch(() => {})
+
+// Block markup, measured in a real browser for the same reason the layout is:
+// jsdom applies no styles and finishes no nested parse, so the unit tests can
+// see that a class was applied but not that anything is drawn.
+const markup = await page.evaluate(() => {
+  const count = (selector) => document.querySelectorAll(selector).length
+  const codeLine = document.querySelector('.cm-md-code-line + .cm-md-code-line')
+  const measure = (selector, properties) => {
+    const element = document.querySelector(selector)
+    if (!element) return null
+    const style = getComputedStyle(element)
+    return Object.fromEntries(properties.map((name) => [name, style[name]]))
+  }
+  return {
+    listLines: count('.cm-md-list-line'),
+    tasks: count('input.cm-md-task'),
+    tasksChecked: count('input.cm-md-task:checked'),
+    calloutWarning: count('.cm-md-callout-warning'),
+    calloutHeads: count('.cm-md-callout-head'),
+    tableLines: count('.cm-md-table-line'),
+    codeLines: count('.cm-md-code-line'),
+    rules: count('.cm-md-rule'),
+    highlights: count('.cm-md-highlight'),
+    // The tokens inside the fence. CodeMirror generates its own class names
+    // rather than anything readable, so the check counts coloured spans instead
+    // of naming them.
+    codeSpans: codeLine ? codeLine.querySelectorAll('span[class]').length : 0,
+    listIndent: measure('.cm-md-list-line', ['paddingLeft', 'textIndent']),
+    calloutRule: measure('.cm-md-callout-warning', ['borderLeftWidth', 'borderLeftColor']),
   }
 })
 
@@ -178,6 +248,60 @@ if (layout.scroller) {
     layout.scrollable,
     'the test document does not scroll, so nothing here exercises the scroller',
   )
+}
+
+// ------------------------------------------------------------- markup --
+
+check(markup.listLines === 2, `list lines: ${markup.listLines}, expected 2`)
+check(markup.tasks === 2, `checkboxes drawn: ${markup.tasks}, expected 2`)
+check(
+  markup.tasksChecked === 1,
+  `checked boxes: ${markup.tasksChecked}, expected 1 - a done task must look done`,
+)
+check(
+  markup.calloutWarning === 2,
+  `callout lines in the warning colour: ${markup.calloutWarning}, expected 2`,
+)
+check(markup.calloutHeads === 1, `callout heads: ${markup.calloutHeads}, expected 1`)
+check(markup.tableLines === 3, `table lines: ${markup.tableLines}, expected 3`)
+check(markup.codeLines === 3, `code lines: ${markup.codeLines}, expected 3`)
+check(markup.rules === 1, `horizontal rules: ${markup.rules}, expected 1`)
+check(markup.highlights === 1, `highlighted runs: ${markup.highlights}, expected 1`)
+
+// The point of carrying grammars at all. Six is a floor, not an exact count: a
+// grammar update may split the tokens differently, but zero means the
+// highlighting is gone - which is how it shipped missing the first time.
+check(
+  markup.codeSpans >= 6,
+  `coloured spans inside the fence: ${markup.codeSpans}, expected at least 6 -` +
+    ' the grammar or the highlight style is missing',
+)
+
+// A wrapped list item hangs under its own text. Both halves matter: the padding
+// puts the item in, the negative indent pulls its first line back out to the
+// bullet. Either one alone looks wrong, in a different way each time.
+if (markup.listIndent) {
+  check(
+    parseFloat(markup.listIndent.paddingLeft) > 0,
+    `list items are not indented (padding ${markup.listIndent.paddingLeft})`,
+  )
+  check(
+    parseFloat(markup.listIndent.textIndent) < 0,
+    `list items have no hanging indent (text-indent ${markup.listIndent.textIndent}),` +
+      ' so a wrapped line slides back under the bullet',
+  )
+} else {
+  failures.push('no list line to measure')
+}
+
+// The callout's rule is what carries its colour.
+if (markup.calloutRule) {
+  check(
+    parseFloat(markup.calloutRule.borderLeftWidth) >= 2,
+    `the callout rule is ${markup.calloutRule.borderLeftWidth}, which is not a rule`,
+  )
+} else {
+  failures.push('no callout line to measure')
 }
 
 await browser.close()

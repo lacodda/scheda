@@ -52,6 +52,9 @@ The markup you write is drawn as you write it. A `# heading` becomes a heading,
 whenever your cursor is on their line. Move away and they step back; move back
 and they return, because they are what you are editing.
 
+Lists, tasks, quotes, callouts, tables and fenced code are drawn too — see
+[Markup scheda draws](/scheda/reference/markup/) for the whole list.
+
 ## What it will not do to your file
 
 scheda writes back what it read:
