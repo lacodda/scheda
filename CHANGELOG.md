@@ -2,10 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.1] - 2026-09-05
+
+### Bug Fixes
+- Replace an image line with its picture, and make Ctrl+E work twice
+
+### Features
+- Show embedded pictures, fold front matter, and read without editing
 ## [0.3.0] - 2026-09-05
 
 ### Bug Fixes
 - Hide a callout's kind and a fence's language with their markers
+
+### Documentation
+- Add the changelog for v0.3.0
 
 ### Features
 - Draw lists, tasks, quotes, callouts, tables, code and rules
