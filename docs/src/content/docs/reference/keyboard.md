@@ -46,10 +46,17 @@ read is what you were just editing.
 
 | Keys | What it does |
 | --- | --- |
+| `Ctrl+Shift+E` | Show or hide the file tree |
 | `Ctrl+Shift+O` | Show or hide the outline |
 | `Ctrl+Shift+[` | Fold the section the caret is in |
 | `Ctrl+Shift+]` | Unfold it |
 | `Ctrl+Alt+[` / `Ctrl+Alt+]` | Fold or unfold every section |
+
+The file tree appears only when the open document is inside a vault — a folder
+with `.obsidian/` somewhere above it. A note opened on its own stays a note:
+there is no tree of the Desktop beside a Desktop file. Opening the tree opens
+the branch holding the document and marks it, so you can see where you are;
+clicking a file opens it in a tab.
 
 The outline lists the document's headings, indented by level; clicking one puts
 the caret at that heading. It is hidden until you ask for it — most notes have
