@@ -15,7 +15,7 @@
 // And a task's `[ ]` is replaced by a real checkbox widget. Clicking it edits
 // the document — `[ ]` becomes `[x]` — rather than toggling any view state:
 // the text stays the truth, and undo puts it back.
-import { syntaxTree } from '@codemirror/language'
+import { fullTree } from './parsed'
 import { readingMode } from './reading'
 import { type Range, type Extension, type EditorState } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
@@ -181,8 +181,11 @@ function build(view: EditorView): DecorationSet {
     }
   }
 
+  // One tree for the whole pass: parsing is what the ranges are walked
+  // against, and asking per range would repeat the work.
+  const tree = fullTree(state)
   for (const { from, to } of view.visibleRanges) {
-    syntaxTree(state).iterate({
+    tree.iterate({
       from,
       to,
       enter: (node) => {

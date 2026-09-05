@@ -4,7 +4,7 @@
 // so a hash inside a code fence is not mistaken for a heading — which is the
 // one thing a regular expression gets wrong here, and gets wrong often, since
 // shell examples are full of comments.
-import { syntaxTree } from '@codemirror/language'
+import { fullTree } from './parsed'
 import { type EditorState } from '@codemirror/state'
 
 export interface Heading {
@@ -36,7 +36,11 @@ const HEADING_LEVELS: Record<string, number> = {
 /** Every heading in the document, in the order they appear. */
 export function outlineOf(state: EditorState): Heading[] {
   const headings: Heading[] = []
-  syntaxTree(state).iterate({
+  // The whole document, not the part the parser has reached: an outline built
+  // from a partial tree lists the headings near the top and drops the rest
+  // (see `parsed.ts`).
+  const tree = fullTree(state)
+  tree.iterate({
     enter: (node) => {
       const level = HEADING_LEVELS[node.name]
       if (!level) return

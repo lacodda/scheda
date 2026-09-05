@@ -16,6 +16,7 @@ import { schedaHighlightStyle } from './highlight'
 import { markdownImages } from './images'
 import { reading, toggleReading } from './reading'
 import { schedaMarkdown } from './markdown'
+import { tableAlignment } from './tables'
 import { schedaTheme } from './theme'
 
 export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extension[] {
@@ -40,6 +41,7 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
     // no class ever reaches the DOM.
     syntaxHighlighting(schedaHighlightStyle),
     markdownDecorations,
+    tableAlignment,
     markdownImages,
     frontMatterFold,
     reading,

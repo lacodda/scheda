@@ -193,6 +193,13 @@ export const schedaTheme = EditorView.theme({
     marginLeft: '1rem',
   },
   '.cm-md-table-delimiter': { color: 'var(--muted)', opacity: '0.7' },
+  // The space that lines a column up. Inline-block so its width counts, and
+  // nothing inside it: it is layout standing in for characters that are not
+  // there, and it must not be selectable or copyable.
+  '.cm-md-table-pad': {
+    display: 'inline-block',
+    userSelect: 'none',
+  },
 
   // Fenced and indented code, as a block. The inline `.cm-md-code` above is a
   // different thing and keeps its pill.
