@@ -34,6 +34,24 @@ pub fn for_file(path: &Path) -> PathBuf {
     start.to_path_buf()
 }
 
+/// The vault a document belongs to, if it belongs to one.
+///
+/// Distinct from [`for_file`], which always answers: this one says `None` when
+/// there is no `.obsidian/` above the file. That is what decides whether a
+/// window shows a tree at all — a note on the Desktop is a note, not a folder
+/// to browse (decision 2026-09-05).
+pub fn for_vault(path: &Path) -> Option<PathBuf> {
+    let start = path.parent().unwrap_or(path);
+    let mut current = Some(start);
+    while let Some(dir) = current {
+        if dir.join(VAULT_MARKER).is_dir() {
+            return Some(dir.to_path_buf());
+        }
+        current = dir.parent();
+    }
+    None
+}
+
 /// Why a link could not become something the webview may load.
 #[derive(Debug, PartialEq, Eq)]
 pub enum LinkError {
@@ -213,6 +231,32 @@ mod tests {
         temp.file("folder/.obsidian");
         let note = temp.file("folder/one.md");
         assert_eq!(for_file(&note), temp.0.join("folder"));
+    }
+
+    #[test]
+    fn a_file_outside_a_vault_has_no_vault() {
+        // What decides whether a window shows a tree. A note on the Desktop is
+        // a note, not a folder to browse.
+        let temp = TempDir::new("novault");
+        let note = temp.file("loose/one.md");
+        assert_eq!(for_vault(&note), None);
+    }
+
+    #[test]
+    fn a_file_in_a_vault_finds_it() {
+        let temp = TempDir::new("hasvault");
+        temp.dir("vault/.obsidian");
+        let note = temp.file("vault/deep/one.md");
+        assert_eq!(for_vault(&note), Some(temp.0.join("vault")));
+    }
+
+    #[test]
+    fn the_nearest_vault_wins_here_too() {
+        let temp = TempDir::new("nestedvault");
+        temp.dir("outer/.obsidian");
+        temp.dir("outer/inner/.obsidian");
+        let note = temp.file("outer/inner/one.md");
+        assert_eq!(for_vault(&note), Some(temp.0.join("outer/inner")));
     }
 
     #[test]

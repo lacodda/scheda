@@ -76,14 +76,28 @@ await page.addInitScript((text) => {
       if (command === 'plugin:event|listen') return 0
       if (command === 'take_preloaded') {
         return {
-          path: '/long.md',
+          path: '/vault/notes/long.md',
           text,
           shape: { line_ending: 'lf', bom: false },
           readOnly: false,
         }
       }
       if (command === 'load_settings') {
-        return { theme: 'system', font_size: 15, column_width: 46.0, recent: [] }
+        return { theme: 'system', font_size: 15, column_width: 46.0, recent: [], close_brackets: false }
+      }
+      if (command === 'read_tree') {
+        return {
+          root: '/vault',
+          name: 'vault',
+          entries: [
+            {
+              name: 'notes',
+              path: '/vault/notes',
+              children: [{ name: 'long.md', path: '/vault/notes/long.md' }],
+            },
+            { name: 'top.md', path: '/vault/top.md' },
+          ],
+        }
       }
       return null
     },
@@ -377,6 +391,52 @@ check(
   )}px editor, so it stops partway down the window`,
 )
 check(outlineAgain === 0, 'Ctrl+Shift+O did not close the outline again')
+
+// The file tree, on its own key, in a real browser. Like the outline it takes
+// width from the editor, so the layout is what this checks — and, once open,
+// that the branch holding the open document opened with it.
+await page.click('.cm-content')
+const treeClosed = await page.evaluate(() => document.querySelectorAll('.tree').length)
+await page.keyboard.press('Control+Shift+e')
+await page.waitForTimeout(400)
+const tree = await page.evaluate(() => {
+  const panel = document.querySelector('.tree')
+  const editor = document.querySelector('.editor-host')
+  return {
+    open: panel !== null,
+    width: panel ? panel.getBoundingClientRect().width : 0,
+    height: panel ? panel.getBoundingClientRect().height : 0,
+    editorHeight: editor ? editor.getBoundingClientRect().height : 0,
+    editorWidth: editor ? editor.getBoundingClientRect().width : 0,
+    rows: [...document.querySelectorAll('.tree-item')].map((e) => e.textContent),
+    current: document.querySelectorAll('.tree-current').length,
+    overflows: document.documentElement.scrollWidth > window.innerWidth + 1,
+  }
+})
+await page.keyboard.press('Control+Shift+e')
+await page.waitForTimeout(300)
+const treeAgain = await page.evaluate(() => document.querySelectorAll('.tree').length)
+
+check(treeClosed === 0, 'the file tree is open before anything asked for it')
+check(tree.open, 'Ctrl+Shift+E did not open the file tree')
+check(tree.width > 80, `the tree is ${Math.round(tree.width)}px wide, which is not a panel`)
+check(
+  Math.abs(tree.height - tree.editorHeight) < 2,
+  `the tree is ${Math.round(tree.height)}px tall beside a ${Math.round(
+    tree.editorHeight,
+  )}px editor, so it stops partway down the window`,
+)
+check(tree.editorWidth > 200, `the editor is left ${Math.round(tree.editorWidth)}px, which is not a column`)
+check(!tree.overflows, 'the tree pushes the window into horizontal scrolling')
+// The branch holding the open document opens with the tree: without it the
+// highlight marking the current file is never on screen, which makes it not a
+// highlight at all.
+check(
+  tree.rows.some((row) => row.includes('long.md')),
+  `the branch holding the open file did not open — rows were ${JSON.stringify(tree.rows)}`,
+)
+check(tree.current === 1, `the open file is marked ${tree.current} times, expected once`)
+check(treeAgain === 0, 'Ctrl+Shift+E did not close the file tree again')
 
 await browser.close()
 server.close()

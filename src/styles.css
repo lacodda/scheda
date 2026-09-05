@@ -614,3 +614,94 @@ body {
 .outline-level-4 { padding-left: 3.3rem; color: var(--muted); }
 .outline-level-5 { padding-left: 4.1rem; color: var(--muted); }
 .outline-level-6 { padding-left: 4.9rem; color: var(--muted); }
+
+/* ---------------------------------------------------------------- tree -- */
+
+.tree-host {
+  display: flex;
+  min-height: 0;
+}
+
+.tree {
+  flex: 0 0 auto;
+  width: 16rem;
+  overflow: auto;
+  padding: 0.6rem 0;
+  border-right: 1px solid var(--border);
+  background: var(--status-bg);
+  font-size: 12px;
+}
+
+@media (max-width: 60rem) {
+  .tree {
+    width: 40%;
+    min-width: 9rem;
+  }
+}
+
+.tree-root {
+  margin: 0 0 0.4rem;
+  padding: 0 0.9rem 0.4rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-empty {
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  color: var(--muted);
+}
+
+.tree-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-item {
+  display: block;
+  width: 100%;
+  padding-block: 0.22rem;
+  padding-right: 0.6rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  /* One line each, cut rather than wrapped: the rows stay the same height and
+     the list stays scannable. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.tree-item:hover {
+  background: var(--active-line);
+  color: var(--accent);
+}
+
+/* The file being edited, so the tree says where you are. */
+.tree-current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tree-folder {
+  color: var(--heading);
+}
+
+/* The disclosure triangle. A fixed width so names line up whether or not the
+   row has one — a file beside a folder must not sit a character to the left. */
+.tree-mark {
+  display: inline-block;
+  width: 1em;
+  color: var(--muted);
+}

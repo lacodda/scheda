@@ -52,6 +52,32 @@ export async function resolveAsset(document: string, link: string): Promise<stri
   return path === null ? null : convertFileSrc(path)
 }
 
+/** One entry in a vault's tree: a file, or a folder with its contents. */
+export interface TreeEntry {
+  name: string
+  path: string
+  /** Present on a folder, absent on a file — never both, so the two cannot
+   *  blur into each other. */
+  children?: TreeEntry[]
+}
+
+export interface Vault {
+  root: string
+  /** The folder's own name, which is what the panel calls the vault. */
+  name: string
+  entries: TreeEntry[]
+}
+
+/** The vault a document belongs to, with its files — or null when the document
+ *  is not in one.
+ *
+ *  Null is the ordinary answer for a note opened on its own, and it is what
+ *  keeps a notepad a notepad: no tree of the Desktop beside a Desktop file
+ *  (decision 2026-09-05). */
+export function readTree(document: string): Promise<Vault | null> {
+  return invoke<Vault | null>('read_tree', { document })
+}
+
 /** Tells the core the first character is on screen. The startup gate reads
  *  this; without it the threshold is a guess. */
 export function reportFirstPaint(): Promise<void> {

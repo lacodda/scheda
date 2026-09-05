@@ -7,6 +7,7 @@ pub mod document;
 pub mod root;
 mod settings;
 pub mod startup;
+mod tree;
 
 use document::{Document, DocumentShape};
 use serde::Serialize;
@@ -123,6 +124,35 @@ fn resolve_asset(app: tauri::AppHandle, document: String, link: String) -> Optio
     Some(target.to_string_lossy().into_owned())
 }
 
+/// The root a document belongs to, and the files in it — or nothing.
+///
+/// "Nothing" is the answer for a file that is not in a vault, and it is a
+/// deliberate one (decision 2026-09-05): a note on the Desktop opens as a
+/// notepad, without a tree of the Desktop beside it. A vault is recognised by
+/// `.obsidian/`, the same rule the whole product hangs on (ADR 0003).
+#[tauri::command]
+fn read_tree(document: String) -> Option<Vault> {
+    let document = PathBuf::from(document);
+    let root = root::for_vault(&document)?;
+    Some(Vault {
+        root: root.to_string_lossy().into_owned(),
+        name: root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        entries: tree::read(&root),
+    })
+}
+
+/// A root and what is in it.
+#[derive(Debug, Serialize)]
+pub struct Vault {
+    root: String,
+    /// The folder's own name, which is what the panel calls the vault.
+    name: String,
+    entries: Vec<tree::Entry>,
+}
+
 /// Records that the frontend has painted the first character.
 #[tauri::command]
 fn report_first_paint() {
@@ -233,6 +263,7 @@ pub fn run() {
             open_file,
             save_file,
             resolve_asset,
+            read_tree,
             report_first_paint,
             load_settings,
             save_settings,

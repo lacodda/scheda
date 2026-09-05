@@ -17,6 +17,7 @@ import {
 } from './core'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
+import { FileTree } from './tree'
 import { setBracketClosing } from './editor/edits'
 import { RecentFiles } from './recent'
 import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
@@ -324,6 +325,41 @@ function OutlinePanel({ editor }: { editor: EditorHandle }) {
   return <Outline editor={editor} visible={visible} />
 }
 
+/** The file tree, and the key that shows it.
+ *
+ *  Like the outline, the state belongs to the window rather than to the
+ *  document: switching tabs should not close a panel that was open. The path
+ *  it reads from does follow the tabs, because the tree is the vault of
+ *  whatever is being edited. */
+function TreePanel({ editor }: { editor: EditorHandle }) {
+  const [visible, setVisible] = useState(false)
+  useEditor(editor)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 'e') return
+      event.preventDefault()
+      setVisible((was) => !was)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  return (
+    <FileTree
+      documentPath={editor.active().path}
+      visible={visible}
+      onOpen={(path) => {
+        void editor.open(path).catch(() => {
+          // A file that will not open leaves the tree as it was; the banner in
+          // main.tsx is what says why.
+        })
+      }}
+    />
+  )
+}
+
 /** Mounts the title bar above the editor and the status bar below it. */
 export function mountShell(editor: EditorHandle) {
   const root = document.getElementById('root')!
@@ -344,8 +380,13 @@ export function mountShell(editor: EditorHandle) {
   const middle = document.createElement('div')
   middle.className = 'middle'
   editorHost.parentElement!.insertBefore(middle, editorHost)
+  // The tree on the left, the editor in the middle, the outline on the right —
+  // the order they are appended is the order they appear.
+  const treeHost = document.createElement('div')
+  treeHost.className = 'tree-host'
   const outlineHost = document.createElement('div')
   outlineHost.className = 'outline-host'
+  middle.appendChild(treeHost)
   middle.appendChild(editorHost)
   middle.appendChild(outlineHost)
 
@@ -360,6 +401,11 @@ export function mountShell(editor: EditorHandle) {
   createRoot(outlineHost).render(
     <StrictMode>
       <OutlinePanel editor={editor} />
+    </StrictMode>,
+  )
+  createRoot(treeHost).render(
+    <StrictMode>
+      <TreePanel editor={editor} />
     </StrictMode>,
   )
   createRoot(stripHost).render(
