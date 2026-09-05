@@ -2,10 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.2] - 2026-09-05
+
+### Bug Fixes
+- Let the outline reach the bottom of the window
+
+### Features
+- An outline, folded sections, and the edits a list expects
 ## [0.3.1] - 2026-09-05
 
 ### Bug Fixes
 - Replace an image line with its picture, and make Ctrl+E work twice
+
+### Documentation
+- Add the changelog for v0.3.1
 
 ### Features
 - Show embedded pictures, fold front matter, and read without editing
