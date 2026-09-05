@@ -2,10 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-09-05
+
+### Features
+- Show the vault as a tree beside the document
 ## [0.3.2] - 2026-09-05
 
 ### Bug Fixes
 - Let the outline reach the bottom of the window
+
+### Documentation
+- Add the changelog for v0.3.2
 
 ### Features
 - An outline, folded sections, and the edits a list expects
