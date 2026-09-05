@@ -85,9 +85,19 @@ colour. A note written for a plugin should not lose its shape here.
 | 1 | 2 |
 ```
 
-The rows are tinted and the pipes are dimmed so the columns read as columns. The
-cells are **not** laid out in a grid: that would be a rendering, and in scheda
-the source is what you are editing.
+The columns line up: each cell is followed by as much space as its column needs,
+so the pipes stand under each other however the source was written — including
+`|---|---|` with no spaces at all.
+
+None of that space is in the file. It is drawn, the same way a heading is drawn
+larger, and the bytes on disk are the ones you typed. Put the caret in a cell
+and you are editing the text you wrote, not a grid standing in for it.
+
+The cells are **not** laid out in a real table. That would be a rendering, and
+in scheda the source is what you are editing — see
+[Text first, decorations over it](/scheda/concepts/decorations/). It is also
+twenty-eight times more expensive: on the largest table in the author's own
+notes, lining the columns up costs 1.4 ms and rendering a table costs 39.5.
 
 ## Code
 

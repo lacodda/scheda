@@ -1,6 +1,6 @@
 {
   "name": "scheda",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A markdown notepad that turns into a vault when there is a folder around it.",
   "license": "MIT",
   "private": true,

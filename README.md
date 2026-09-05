@@ -6,7 +6,7 @@
 
 Double-click a `.md` file and the text is on screen before you notice the window. Headings, emphasis, code and links are drawn over the source as you type; the source itself never changes shape. Open a folder — or a file inside an Obsidian vault — and the same window grows a file tree, `[[wikilinks]]`, backlinks and search. Close it and the folder is exactly as you found it.
 
-> **Status: `v0.4.0` — the notepad, and the vault beside it.** Markup drawn over the source, embedded pictures, a reading mode, an outline and the list edits — plus the vault as a file tree when the note is in one. `[[links]]` and search come next; see the [roadmap](#roadmap).
+> **Status: `v0.4.1` — the notepad, the vault beside it, and tables that line up.** Markup drawn over the source, embedded pictures, a reading mode, an outline, the list edits, the vault as a file tree — and a table whose columns stand in a line without a byte being rewritten. `[[links]]` and search come next; see the [roadmap](#roadmap).
 
 <img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/screenshot.png" alt="scheda showing a markdown file with headings, emphasis and inline code drawn over the source" width="880">
 
@@ -44,7 +44,8 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 | 0.3.1 | **Released.** Embedded pictures over a scoped protocol, front matter folded into a header, and a reading mode. |
 | 0.3.2 | **Released.** An outline panel, folded sections, and the list edits Enter, Tab and Backspace should make. |
 | 0.4.0 | **Released.** The vault as a tree: the root rule in the interface, the branch holding the open file revealed. |
-| 0.4.1 – 0.7 | Aligned tables, file operations, watching the folder, links and backlinks, search and index, sessions. |
+| 0.4.1 | **Released.** Table columns lined up by decoration — 1.4 ms against 39.5 for rendering one, and the file untouched. |
+| 0.4.2 – 0.7 | File operations, watching the folder, links and backlinks, search and index, sessions. |
 | 1.0 | Desktop complete; the index and settings formats are frozen. |
 | 1.x | Sync between desktops via efema, then the Android replica. |
 
