@@ -6,7 +6,7 @@
 
 Double-click a `.md` file and the text is on screen before you notice the window. Headings, emphasis, code and links are drawn over the source as you type; the source itself never changes shape. Open a folder — or a file inside an Obsidian vault — and the same window grows a file tree, `[[wikilinks]]`, backlinks and search. Close it and the folder is exactly as you found it.
 
-> **Status: `v0.3.0` — the notepad, with block markup.** Lists, tasks you can tick, quotes, Obsidian callouts, tables, fenced code with syntax highlighting — drawn over the source, never instead of it. Plus the installer, file associations, tabs in the window's own title bar, find and replace, recent files and themes. The file tree and `[[links]]` come next; see the [roadmap](#roadmap).
+> **Status: `v0.3.1` — the notepad, with markup, pictures and a reading mode.** Lists, tasks you can tick, quotes, Obsidian callouts, tables, fenced code with highlighting; embedded pictures, folded front matter and `Ctrl+E` to read without editing. Plus the installer, file associations, tabs in the window's own title bar, find and replace, recent files and themes. The file tree and `[[links]]` come next; see the [roadmap](#roadmap).
 
 <img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/screenshot.png" alt="scheda showing a markdown file with headings, emphasis and inline code drawn over the source" width="880">
 
@@ -41,7 +41,8 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 | 0.1 | **Released.** A file on screen: open, decorate, save byte for byte. Cold start measured at 440 ms against the 0.5 s threshold. |
 | 0.2 | **Released.** The notepad: installer, file associations, tabs in a custom title bar, recent files, find and replace, themes. |
 | 0.3.0 | **Released.** Block markup: lists with hanging indents, checkboxes that edit the file, quotes, callouts, tables, fenced code with highlighting, rules and highlights. |
-| 0.3.1 – 0.7 | Images and reading mode, an outline and smart edits, the vault root rule, links and backlinks, search and index, sessions and a command palette. |
+| 0.3.1 | **Released.** Embedded pictures over a scoped protocol, front matter folded into a header, and a reading mode. |
+| 0.3.2 – 0.7 | An outline and smart edits, the vault root rule, links and backlinks, search and index, sessions and a command palette. |
 | 1.0 | Desktop complete; the index and settings formats are frozen. |
 | 1.x | Sync between desktops via efema, then the Android replica. |
 
