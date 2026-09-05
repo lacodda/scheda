@@ -2,7 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.3] - 2026-09-05
+
+### Bug Fixes
+- Allow the window to close, and check every window permission
 ## [0.2.2] - 2026-09-04
+
+### Documentation
+- Add the changelog for v0.2.2
 
 ### Features
 - Draw the window's own title bar, with the tabs in it
