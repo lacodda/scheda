@@ -87,7 +87,9 @@ colour. A note written for a plugin should not lose its shape here.
 
 The columns line up: each cell is followed by as much space as its column needs,
 so the pipes stand under each other however the source was written — including
-`|---|---|` with no spaces at all.
+`|---|---|` with no spaces at all. The row of dashes between the header and the
+body is drawn as a rule in each of its cells, so the table's shape reads at a
+glance.
 
 None of that space is in the file. It is drawn, the same way a heading is drawn
 larger, and the bytes on disk are the ones you typed. Put the caret in a cell
@@ -129,7 +131,10 @@ works.
 ---
 ```
 
-The three dashes stay in the text, dimmed, with a line drawn under them.
+Drawn as the line it stands for. The dashes keep their place in the text —
+nothing is moved, which is what lets a table's columns stay aligned — and a rule
+is painted through them. Put the caret on the line and they are three characters
+again, like every other marker.
 
 ## Pictures
 
