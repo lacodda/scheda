@@ -1,6 +1,6 @@
 [package]
 name = "scheda"
-version = "0.4.1"
+version = "0.5.0"
 description = "A markdown notepad that turns into a vault when there is a folder around it."
 authors = ["Kirill Lakhtachev <lahtachev@gmail.com>"]
 license = "MIT"
@@ -25,6 +25,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 dirs = "6"
+# Deleting a note means the recycle bin, not `remove_file`: a misclick in a tree
+# may not cost someone their writing. The crate is the whole job on every
+# platform scheda targets, which is exactly when the line takes a dependency
+# rather than writing its own.
+trash = "5"
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-single-instance = "2.4.4"
 

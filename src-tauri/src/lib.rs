@@ -3,15 +3,18 @@
 
 #[cfg(windows)]
 pub mod associations;
+pub mod attachments;
 pub mod document;
+pub mod files;
 pub mod root;
+pub mod scratch;
 mod settings;
 pub mod startup;
 mod tree;
 
 use document::{Document, DocumentShape};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -153,6 +156,183 @@ pub struct Vault {
     entries: Vec<tree::Entry>,
 }
 
+impl From<files::FileError> for CommandError {
+    fn from(error: files::FileError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
+impl From<scratch::ScratchError> for CommandError {
+    fn from(error: scratch::ScratchError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
+/// Creates an empty note in a folder of the tree, and hands back its path.
+#[tauri::command]
+fn create_file(parent: String, name: String) -> Result<String, CommandError> {
+    let path = files::create_file(Path::new(&parent), &name)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Creates a folder in the tree.
+#[tauri::command]
+fn create_folder(parent: String, name: String) -> Result<String, CommandError> {
+    let path = files::create_folder(Path::new(&parent), &name)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Renames a file or folder, returning where it now is.
+///
+/// The frontend needs the answer rather than assuming it: a rename that only
+/// changes case, or one the filesystem adjusted, would otherwise leave a tab
+/// pointing at a path that no longer names anything.
+#[tauri::command]
+fn rename_entry(path: String, name: String) -> Result<files::Moved, CommandError> {
+    let from = PathBuf::from(&path);
+    let to = files::rename(&from, &name)?;
+    // A renamed document's pictures were resolved against its old path; the
+    // frontend clears its own cache, and this is the moment it learns to.
+    Ok(files::Moved {
+        from: path,
+        to: to.to_string_lossy().into_owned(),
+    })
+}
+
+/// Moves a file or folder to the recycle bin.
+#[tauri::command]
+fn delete_entry(path: String) -> Result<(), CommandError> {
+    files::delete(Path::new(&path))?;
+    Ok(())
+}
+
+/// Writes a pasted picture into the vault's attachment folder and returns the
+/// link to put in the document.
+///
+/// The bytes arrive from the webview — the clipboard is the one thing the core
+/// cannot read for itself, since it belongs to the window rather than to the
+/// process — but everything after that is the core's: where the folder is, what
+/// the file is called, and creating it. The frontend receives a link, not a
+/// path (ADR 0001).
+#[tauri::command]
+fn paste_image(
+    document: Option<String>,
+    extension: String,
+    bytes: Vec<u8>,
+) -> Result<PastedImage, CommandError> {
+    // A picture pasted into an unsaved draft has nothing to be relative to. The
+    // honest refusal is to say so rather than to invent a folder: the draft is
+    // saved in a moment, and then the paste works.
+    let Some(document) = document.map(PathBuf::from) else {
+        return Err(CommandError {
+            message: "save this draft to a file before pasting a picture into it".into(),
+            read_only: false,
+        });
+    };
+
+    let root = root::for_file(&document);
+    let folder = attachments::folder_for(&root).resolve(&root, &document);
+    std::fs::create_dir_all(&folder).map_err(|error| CommandError {
+        message: format!(
+            "the attachment folder “{}” could not be created: {error}",
+            folder.display()
+        ),
+        read_only: false,
+    })?;
+
+    // The name Obsidian uses, so a vault read by both does not grow two
+    // conventions: `Pasted image` plus the moment, and a counter when two
+    // pastes land in the same second.
+    let stem = format!("Pasted image {}", stamp());
+    let target = files::free_name(&folder, &stem, &extension);
+    std::fs::write(&target, &bytes).map_err(|error| CommandError {
+        message: format!("the picture could not be written: {error}"),
+        read_only: false,
+    })?;
+
+    Ok(PastedImage {
+        link: attachments::link_from(&document, &target),
+        path: target.to_string_lossy().into_owned(),
+    })
+}
+
+/// A picture that landed in the vault: where it went, and how the document
+/// should refer to it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PastedImage {
+    link: String,
+    path: String,
+}
+
+/// `YYYYMMDDHHMMSS` in local time, the way Obsidian stamps a pasted picture.
+///
+/// Computed by hand rather than with a date crate: this is the only place a
+/// calendar is needed, and a dependency for one format string is the trade the
+/// line does not make.
+fn stamp() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let (days, seconds) = (now / 86_400, now % 86_400);
+    let (year, month, day) = civil_from_days(days as i64);
+    format!(
+        "{year:04}{month:02}{day:02}{:02}{:02}{:02}",
+        seconds / 3600,
+        (seconds % 3600) / 60,
+        seconds % 60
+    )
+}
+
+/// Days since the epoch as a calendar date (Howard Hinnant's `civil_from_days`).
+///
+/// UTC, not local time: a timezone needs the platform's database, and the stamp
+/// is a name for a file rather than a record of when anything happened. A
+/// picture named an hour off is still the picture you just pasted.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let day_of_era = z.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = (day_of_year - (153 * shifted_month + 2) / 5 + 1) as u32;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    } as u32;
+    (if month <= 2 { year + 1 } else { year }, month, day)
+}
+
+/// Keeps an unsaved draft where it will survive a restart.
+#[tauri::command]
+fn keep_draft(key: Option<String>, text: String) -> Result<Option<String>, CommandError> {
+    Ok(scratch::keep(key, &text)?)
+}
+
+/// Forgets a draft — it was saved to a file, or closed on purpose.
+#[tauri::command]
+fn discard_draft(key: String) -> Result<(), CommandError> {
+    scratch::discard(&key)?;
+    Ok(())
+}
+
+/// The drafts left over from a previous run.
+#[tauri::command]
+fn restore_drafts() -> Result<Vec<scratch::Draft>, CommandError> {
+    Ok(scratch::restore()?)
+}
+
 /// Records that the frontend has painted the first character.
 #[tauri::command]
 fn report_first_paint() {
@@ -264,6 +444,14 @@ pub fn run() {
             save_file,
             resolve_asset,
             read_tree,
+            create_file,
+            create_folder,
+            rename_entry,
+            delete_entry,
+            paste_image,
+            keep_draft,
+            discard_draft,
+            restore_drafts,
             report_first_paint,
             load_settings,
             save_settings,

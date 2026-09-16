@@ -35,3 +35,7 @@ Thumbs.db
 # Astro generates these on every docs build
 docs/.astro/
 docs/dist/
+
+# Screenshots the layout gate takes while it measures. Evidence for the run,
+# not artefacts of the product.
+/tools/*.png

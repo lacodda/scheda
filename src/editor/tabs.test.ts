@@ -18,6 +18,10 @@ vi.mock('../core', () => ({
     readOnly: false,
   })),
   saveFile: vi.fn(async () => undefined),
+  // Drafts are filed by the core too. The key it hands back is what the tab
+  // keeps using, so the stub has to answer with one rather than with nothing.
+  keepDraft: vi.fn(async (key: string | null) => key ?? 'draft-1'),
+  discardDraft: vi.fn(async () => undefined),
 }))
 
 const { mountEditor } = await import('./mount')
@@ -188,5 +192,135 @@ describe('tabs', () => {
     const editor = mount(file('/a.md', 'a\n', true))
     await editor.save()
     expect(core.saveFile).not.toHaveBeenCalled()
+  })
+
+  it('makes the tab follow a file that was renamed under it', () => {
+    // The rename happens in the tree; the tab showing the file has to end up
+    // pointing at the new name, or the next `Ctrl+S` writes to a path that no
+    // longer names anything.
+    const editor = mount(file('/notes/a.md', 'a\n'))
+    editor.adopt(file('/notes/b.md', 'b\n'))
+
+    editor.follow('/notes/a.md', '/notes/renamed.md')
+
+    expect(editor.tabs()[0].path).toBe('/notes/renamed.md')
+    expect(editor.tabs()[1].path).toBe('/notes/b.md')
+  })
+
+  it('follows a rename even for the tab that is not on screen', () => {
+    // The stashed state carries the document path as well, and a tab renamed
+    // while another is showing would otherwise resolve its pictures against a
+    // name it no longer has.
+    const editor = mount(file('/a.md', 'a\n'))
+    editor.adopt(file('/b.md', 'b\n'))
+
+    editor.follow('/a.md', '/moved.md')
+
+    expect(editor.tabs()[0].path).toBe('/moved.md')
+    expect(editor.active().path).toBe('/b.md')
+  })
+
+  it('reads a rename through either spelling of the path', () => {
+    // The tree hands back whatever the filesystem said; the tab may hold what
+    // was typed on a command line. A `===` between the two leaves the tab
+    // behind, pointing at a file that is not there any more.
+    const editor = mount(file('C:\\vault\\a.md', 'a\n'))
+    editor.follow('C:/vault/a.md', 'C:\\vault\\b.md')
+    expect(editor.active().path).toBe('C:\\vault\\b.md')
+  })
+
+  it('tells a tab its file went to the recycle bin, and keeps the text', () => {
+    const editor = mount(file('/a.md', 'a\n'))
+    type(editor, 'work in progress')
+
+    editor.orphan('/a.md')
+
+    expect(editor.active().orphaned).toBe(true)
+    expect(editor.view.state.doc.toString()).toBe('a\nwork in progress')
+  })
+
+  it('orphans every tab under a deleted folder', () => {
+    const editor = mount(file('/notes/one.md', 'one\n'))
+    editor.adopt(file('/notes/deep/two.md', 'two\n'))
+    editor.adopt(file('/elsewhere/three.md', 'three\n'))
+
+    editor.orphan('/notes')
+
+    expect(editor.tabs().map((tab) => tab.orphaned)).toEqual([true, true, false])
+  })
+
+  it('does not orphan a tab in a folder whose name merely starts the same', () => {
+    // `/notes-old/one.md` starts with `/notes` as a string and is somewhere
+    // else entirely.
+    const editor = mount(file('/notes-old/one.md', 'one\n'))
+    editor.orphan('/notes')
+    expect(editor.active().orphaned).toBe(false)
+  })
+
+  it('stops being orphaned once the text has a file again', async () => {
+    const editor = mount(file('/a.md', 'a\n'))
+    editor.orphan('/a.md')
+
+    await editor.saveAs('/b.md')
+
+    expect(editor.active().orphaned).toBe(false)
+  })
+
+  it('opens one tab for a file named two ways', async () => {
+    const editor = mount(file('C:\\vault\\a.md', 'a\n'))
+    await editor.open('C:/vault/a.md')
+    expect(editor.tabs()).toHaveLength(1)
+  })
+
+  it('brings a draft back as a tab with unsaved text', () => {
+    const editor = mount(file('/a.md', 'a\n'))
+
+    editor.adoptDraft({ key: 'draft-7', text: 'three lines I typed yesterday' })
+
+    expect(editor.active().path).toBeNull()
+    expect(editor.view.state.doc.toString()).toBe('three lines I typed yesterday')
+    // Never written to a file, so it is unsaved by definition — and the dot in
+    // the strip is what says so.
+    expect(editor.isDirty()).toBe(true)
+  })
+
+  it('files an unnamed tab as a draft when the window is closing', async () => {
+    const editor = mount(null)
+    type(editor, 'a thought')
+
+    await editor.keepDrafts()
+
+    expect(core.keepDraft).toHaveBeenCalledWith(null, 'a thought')
+  })
+
+  it('does not file a named file as a draft', async () => {
+    // The file on disk is the truth; a second copy in the application folder
+    // would be a second one to disagree with it (ADR 0002).
+    const editor = mount(file('/a.md', 'a\n'))
+    type(editor, ' edited')
+
+    await editor.keepDrafts()
+
+    expect(core.keepDraft).not.toHaveBeenCalled()
+  })
+
+  it('throws a draft away when its tab is closed on purpose', () => {
+    const editor = mount(file('/a.md', 'a\n'))
+    editor.adoptDraft({ key: 'draft-7', text: 'something' })
+    const draftId = editor.active().id
+
+    editor.close(draftId, true)
+
+    expect(core.discardDraft).toHaveBeenCalledWith('draft-7')
+  })
+
+  it('throws a draft away when its text is saved to a real file', async () => {
+    const editor = mount(null)
+    editor.adoptDraft({ key: 'draft-7', text: 'something' })
+
+    await editor.saveAs('/kept.md')
+
+    expect(core.discardDraft).toHaveBeenCalledWith('draft-7')
+    expect(editor.active().path).toBe('/kept.md')
   })
 })

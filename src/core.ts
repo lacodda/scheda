@@ -78,6 +78,76 @@ export function readTree(document: string): Promise<Vault | null> {
   return invoke<Vault | null>('read_tree', { document })
 }
 
+/** Creates an empty note in a folder, and answers with its path. */
+export function createFile(parent: string, name: string): Promise<string> {
+  return invoke<string>('create_file', { parent, name })
+}
+
+export function createFolder(parent: string, name: string): Promise<string> {
+  return invoke<string>('create_folder', { parent, name })
+}
+
+/** Where a renamed file ended up. */
+export interface Moved {
+  from: string
+  to: string
+}
+
+/** Renames a file or folder. The answer is where it now is rather than what was
+ *  asked for: a rename that only changes case, or one the filesystem adjusted,
+ *  would otherwise leave a tab pointing at nothing. */
+export function renameEntry(path: string, name: string): Promise<Moved> {
+  return invoke<Moved>('rename_entry', { path, name })
+}
+
+/** Moves a file or folder to the operating system's recycle bin. Never an
+ *  unlink: a misclick in a tree may not cost someone their writing. */
+export function deleteEntry(path: string): Promise<void> {
+  return invoke<void>('delete_entry', { path })
+}
+
+/** A picture that landed in the vault. */
+export interface PastedImage {
+  /** The link to write in the document, relative to it. */
+  link: string
+  path: string
+}
+
+/** Writes a pasted picture into the vault's attachment folder.
+ *
+ *  The bytes come from here because the clipboard belongs to the window, not to
+ *  the process — it is the one thing the core cannot read for itself. Where the
+ *  file goes and what it is called are still the core's answer (ADR 0001). */
+export function pasteImage(
+  document: string | null,
+  extension: string,
+  bytes: number[],
+): Promise<PastedImage> {
+  return invoke<PastedImage>('paste_image', { document, extension, bytes })
+}
+
+/** A draft with no file, kept where it survives a restart. */
+export interface Draft {
+  key: string
+  text: string
+}
+
+/** Keeps an unsaved draft. Returns the key it is filed under, or null when the
+ *  draft was empty and therefore not worth a file. */
+export function keepDraft(key: string | null, text: string): Promise<string | null> {
+  return invoke<string | null>('keep_draft', { key, text })
+}
+
+/** Forgets a draft — it was saved to a file, or closed on purpose. */
+export function discardDraft(key: string): Promise<void> {
+  return invoke<void>('discard_draft', { key })
+}
+
+/** The drafts left over from a previous run, oldest first. */
+export function restoreDrafts(): Promise<Draft[]> {
+  return invoke<Draft[]>('restore_drafts')
+}
+
 /** Tells the core the first character is on screen. The startup gate reads
  *  this; without it the threshold is a guess. */
 export function reportFirstPaint(): Promise<void> {

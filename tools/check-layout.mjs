@@ -85,6 +85,13 @@ await page.addInitScript((text) => {
       if (command === 'load_settings') {
         return { theme: 'system', font_size: 15, column_width: 46.0, recent: [], close_brackets: false }
       }
+      // Drafts and file operations: the shell asks for these on mount and the
+      // tree asks on every menu item. Answering with null would leave the
+      // console full of rejected promises and the failure list full of noise
+      // about the stub rather than the page.
+      if (command === 'restore_drafts') return []
+      if (command === 'keep_draft') return 'draft-1'
+      if (command === 'discard_draft') return null
       if (command === 'read_tree') {
         return {
           root: '/vault',
@@ -417,6 +424,100 @@ const tree = await page.evaluate(() => {
     overflows: document.documentElement.scrollWidth > window.innerWidth + 1,
   }
 })
+// The context menu and the row you type a name into, in a real browser.
+//
+// Both are drawn over the tree — one fixed to the pointer, one in the flow of
+// the list — and both are the kind of thing a unit test renders correctly while
+// the real page puts it behind the editor or off the bottom of the window. The
+// menu is opened on a *file* on purpose: a right click there means "beside this
+// one", and it is the case where the obvious implementation asks the core to
+// create a file inside a file.
+await page.click('.tree-file')
+await page.waitForTimeout(200)
+await page.click('.tree-file', { button: 'right' })
+await page.waitForTimeout(200)
+const menu = await page.evaluate(() => {
+  const panel = document.querySelector('.tree-menu')
+  if (!panel) return { open: false }
+  const rect = panel.getBoundingClientRect()
+  const items = [...panel.querySelectorAll('button')].map((b) => b.textContent)
+  const sample = panel.querySelector('button')
+  return {
+    open: true,
+    items,
+    // Inside the window on both axes: a menu opened near the bottom edge that
+    // runs off it is a menu whose last item cannot be clicked.
+    insideWindow:
+      rect.right <= window.innerWidth + 1 &&
+      rect.bottom <= window.innerHeight + 1 &&
+      rect.left >= -1 &&
+      rect.top >= -1,
+    // Over the tree, not under it: the panel and the editor both paint after
+    // it in document order.
+    onTop: (() => {
+      const at = document.elementFromPoint(rect.left + 8, rect.top + rect.height - 8)
+      return at !== null && panel.contains(at)
+    })(),
+    background: sample ? getComputedStyle(panel).backgroundColor : null,
+  }
+})
+
+// Naming: the row appears in the list, at the depth the file will have, with a
+// field that already has focus — otherwise the first keystroke goes to the
+// editor behind it.
+await page.screenshot({ path: 'tools/tree-menu.png' })
+
+const naming = await (async () => {
+  if (!menu.open) return { shown: false }
+  await page.click('.tree-menu button:nth-of-type(1)')
+  await page.waitForTimeout(200)
+  return page.evaluate(() => {
+    const row = document.querySelector('.tree-naming')
+    const field = document.querySelector('.tree-name-input')
+    const tree = document.querySelector('.tree')
+    if (!row || !field || !tree) return { shown: false }
+    const rowRect = row.getBoundingClientRect()
+    const treeRect = tree.getBoundingClientRect()
+    return {
+      shown: true,
+      focused: document.activeElement === field,
+      // Inside the panel, not spilling past its right edge into the editor.
+      insidePanel: rowRect.right <= treeRect.right + 1 && rowRect.left >= treeRect.left - 1,
+      width: field.getBoundingClientRect().width,
+      menuGone: document.querySelectorAll('.tree-menu').length === 0,
+    }
+  })
+})()
+
+await page.screenshot({ path: 'tools/tree-naming.png' })
+await page.keyboard.press('Escape')
+await page.waitForTimeout(200)
+
+check(menu.open, 'a right click on a file opened no menu')
+if (menu.open) {
+  check(
+    menu.items.length === 4,
+    `the menu offers ${menu.items.length} items, expected four (two to make, rename, delete)`,
+  )
+  check(
+    menu.items.some((item) => item.toLowerCase().includes('recycle bin')),
+    `the menu does not say where a deleted file goes — items were ${JSON.stringify(menu.items)}`,
+  )
+  check(menu.insideWindow, 'the menu runs off the edge of the window')
+  check(menu.onTop, 'the menu is drawn under the tree rather than over it')
+  check(
+    menu.background !== 'rgba(0, 0, 0, 0)',
+    'the menu has no background, so the tree reads through it',
+  )
+}
+check(naming.shown, 'choosing "New note" did not offer a row to type a name in')
+if (naming.shown) {
+  check(naming.menuGone, 'the menu stayed open after an item was chosen')
+  check(naming.focused, 'the name field does not have focus, so the first keystroke is lost')
+  check(naming.insidePanel, 'the name field spills out of the tree panel')
+  check(naming.width > 60, `the name field is ${Math.round(naming.width)}px wide, which is a slot`)
+}
+
 await page.keyboard.press('Control+Shift+e')
 await page.waitForTimeout(300)
 const treeAgain = await page.evaluate(() => document.querySelectorAll('.tree').length)

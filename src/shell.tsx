@@ -14,7 +14,9 @@ import {
   onFileHandedOver,
   onHandoverFailed,
   rememberRecent,
+  restoreDrafts,
 } from './core'
+import { basename } from './paths'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
 import { FileTree } from './tree'
@@ -29,11 +31,6 @@ const MARKDOWN_FILTER = [
   { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd', 'txt'] },
   { name: 'All files', extensions: ['*'] },
 ]
-
-function basename(path: string): string {
-  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
-  return cut === -1 ? path : path.slice(cut + 1)
-}
 
 function tabLabel(tab: Tab): string {
   return tab.path ? basename(tab.path) : 'Untitled'
@@ -51,8 +48,16 @@ function useEditor(editor: EditorHandle) {
 function useCloseTab(editor: EditorHandle) {
   return useCallback(
     async (id: number) => {
-      if (editor.close(id)) return
       const tab = editor.tabs().find((candidate) => candidate.id === id)
+      // Closing a draft is closing it: the text was never a file, and the
+      // question "discard?" about a scratch tab is the notepad asking whether
+      // you meant the thing you just did. Closing the *window* is different —
+      // nobody said anything about this tab, so the draft is kept.
+      if (tab && tab.path === null) {
+        editor.close(id, true)
+        return
+      }
+      if (editor.close(id)) return
       const discard = await ask(`${tab ? tabLabel(tab) : 'This file'} has unsaved changes.`, {
         title: 'Close without saving?',
         kind: 'warning',
@@ -130,6 +135,7 @@ function StatusBar({ editor }: { editor: EditorHandle }) {
         {editor.isDirty() ? ' •' : ''}
       </span>
       <span className="status-spacer" />
+      {tab.orphaned && <span className="status-warning">file deleted — save as</span>}
       {tab.readOnly && <span className="status-warning">read-only</span>}
       <span>
         Ln {line.number}, Col {column}
@@ -178,7 +184,11 @@ function Shell({ editor }: { editor: EditorHandle }) {
   }, [editor])
 
   const saveActive = useCallback(async () => {
-    if (editor.active().path) await editor.save()
+    const tab = editor.active()
+    // A tab whose file went to the recycle bin has a path that names nothing.
+    // Writing to it would quietly recreate the file somebody just deleted, so
+    // it asks where to put the text instead.
+    if (tab.path && !tab.orphaned) await editor.save()
     else await saveAs()
   }, [editor, saveAs])
 
@@ -190,6 +200,18 @@ function Shell({ editor }: { editor: EditorHandle }) {
     // mount: every later open records itself.
     const path = editor.active().path
     if (path) void rememberRecent(path)
+
+    // Drafts from a previous run come back as tabs. After the recent list, so
+    // the order on screen is "the file you launched with, then what you had
+    // open" rather than the other way round.
+    void restoreDrafts()
+      .then((drafts) => {
+        for (const draft of drafts) editor.adoptDraft(draft)
+      })
+      .catch(() => {
+        // No drafts is the ordinary case, and an unreadable draft folder is not
+        // worth a dialog on startup.
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -278,9 +300,20 @@ function Shell({ editor }: { editor: EditorHandle }) {
     // Closing the window with unsaved work asks first. Tauri lets us take the
     // close request back, which is the only reason this can be honest.
     const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
-      if (!editor.anyDirty()) return
+      // A tab with no file is not work about to be lost: its text is written to
+      // the draft folder and comes back on the next launch. So the question is
+      // only ever about named files whose edits are not on disk.
+      const dirty = editor.tabs().filter((tab) => tab.path !== null && editor.isDirty(tab.id))
+      if (dirty.length === 0) {
+        // Still taken back, because writing the drafts is a round trip to the
+        // core and the window would otherwise go first.
+        event.preventDefault()
+        await editor.keepDrafts()
+        await getCurrentWindow().destroy()
+        return
+      }
       event.preventDefault()
-      const dirty = editor.tabs().filter((tab) => editor.isDirty(tab.id))
+      await editor.keepDrafts()
       const names = dirty.map(tabLabel).join(', ')
       const discard = await ask(
         dirty.length === 1
@@ -351,10 +384,27 @@ function TreePanel({ editor }: { editor: EditorHandle }) {
       documentPath={editor.active().path}
       visible={visible}
       onOpen={(path) => {
-        void editor.open(path).catch(() => {
-          // A file that will not open leaves the tree as it was; the banner in
-          // main.tsx is what says why.
-        })
+        void editor.open(path).then(
+          () => rememberRecent(path),
+          () => {
+            // A file that will not open leaves the tree as it was; the banner in
+            // main.tsx is what says why.
+          },
+        )
+      }}
+      onRenamed={(from, to) => {
+        editor.follow(from, to)
+        void forgetRecent(from)
+        void rememberRecent(to)
+      }}
+      onDeleted={(path) => {
+        editor.orphan(path)
+        void forgetRecent(path)
+      }}
+      onFailure={(message) => {
+        // The core's own words: "“notes.md” already exists", "“note.md” is open
+        // in another program". A dialog nobody can act on is the same as none.
+        void ask(message, { title: 'That did not work', kind: 'error', okLabel: 'OK' })
       }}
     />
   )

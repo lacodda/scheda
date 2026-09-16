@@ -7,7 +7,7 @@
 // The first version compared them with `startsWith` and the branch holding the
 // open file silently never opened.
 import { describe, expect, it } from 'vitest'
-import { ancestorsOf, samePath } from './tree'
+import { ancestorsOf, editableName, folderFor } from './tree'
 
 const TREE = [
   {
@@ -23,29 +23,6 @@ const TREE = [
   },
   { name: 'note.md', path: 'C:\\vault\\note.md' },
 ]
-
-describe('comparing paths', () => {
-  it('sees one file through two spellings of its path', () => {
-    expect(samePath('C:\\vault\\note.md', 'C:/vault/note.md')).toBe(true)
-  })
-
-  it('ignores case, because Windows does', () => {
-    expect(samePath('C:\\Vault\\Note.md', 'c:\\vault\\note.md')).toBe(true)
-  })
-
-  it('ignores a trailing separator', () => {
-    expect(samePath('C:\\vault\\Projects\\', 'C:/vault/Projects')).toBe(true)
-  })
-
-  it('still tells two different files apart', () => {
-    expect(samePath('C:\\vault\\one.md', 'C:\\vault\\two.md')).toBe(false)
-  })
-
-  it('does not confuse a folder with one whose name starts the same', () => {
-    // `Projects` and `Projects-old` share a prefix and are not the same place.
-    expect(samePath('C:\\vault\\Projects', 'C:\\vault\\Projects-old')).toBe(false)
-  })
-})
 
 describe('finding the branch that holds a file', () => {
   it('lists the folders down to it', () => {
@@ -92,3 +69,49 @@ describe('finding the branch that holds a file', () => {
     expect(ancestorsOf(tree, 'C:\\vault\\Projects\\one.md')).toEqual(['C:\\vault\\Projects'])
   })
 })
+
+describe('deciding where a new file goes', () => {
+  const root = 'C:\\vault'
+
+  it('puts it in the folder that was clicked', () => {
+    expect(folderFor({ name: 'Notes', path: 'C:\\vault\\Notes', children: [] }, root)).toBe(
+      'C:\\vault\\Notes',
+    )
+  })
+
+  it('puts it beside a file, not inside it', () => {
+    // The obvious implementation passes the clicked path straight through and
+    // asks the core to create `C:\vault\Notes\one.md\new.md`, which is not a
+    // place. A file's neighbour is its folder.
+    expect(folderFor({ name: 'one.md', path: 'C:\\vault\\Notes\\one.md' }, root)).toBe(
+      'C:\\vault\\Notes',
+    )
+  })
+
+  it('puts it in the root when nothing was clicked', () => {
+    expect(folderFor(null, root)).toBe(root)
+  })
+})
+
+describe('offering a name to edit', () => {
+  it('separates the name from the extension', () => {
+    // Typing replaces the name and keeps the `.md`: renaming a note should not
+    // begin by making it stop being one.
+    expect(editableName('note.md')).toEqual({ stem: 'note', suffix: '.md' })
+  })
+
+  it('treats a dotfile as all name', () => {
+    // `.gitignore` has no extension to keep, and selecting an empty stem would
+    // make the first keystroke delete the whole name.
+    expect(editableName('.gitignore')).toEqual({ stem: '.gitignore', suffix: '' })
+  })
+
+  it('takes the last dot, not the first', () => {
+    expect(editableName('archive.tar.gz')).toEqual({ stem: 'archive.tar', suffix: '.gz' })
+  })
+
+  it('leaves a name with no dot alone', () => {
+    expect(editableName('Notes')).toEqual({ stem: 'Notes', suffix: '' })
+  })
+})
+

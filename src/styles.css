@@ -705,3 +705,79 @@ body {
   width: 1em;
   color: var(--muted);
 }
+
+/* The row you type a name into. Laid out like a `.tree-item` so the file you
+   are naming appears exactly where it will be, rather than in a dialog over
+   the top of the tree. */
+.tree-naming {
+  display: flex;
+  align-items: center;
+  padding-block: 0.22rem;
+  padding-right: 0.6rem;
+}
+
+.tree-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 0.2rem;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+/* The context menu. Fixed to the pointer rather than to the row: it is placed
+   where the click was, the way every file manager places one. */
+.tree-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 11rem;
+  padding: 0.25rem 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 28%);
+  font-size: 12px;
+}
+
+.tree-menu-where {
+  margin: 0;
+  padding: 0.2rem 0.75rem 0.35rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.75rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.tree-menu button:hover {
+  background: var(--active-line);
+  color: var(--accent);
+}
+
+.tree-menu hr {
+  margin: 0.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Deleting is the one item here that a misclick would be remembered for. It is
+   the recycle bin rather than an unlink, so the warning is a colour and not a
+   confirmation dialog in the way. */
+.tree-menu-danger:hover {
+  color: var(--callout-danger);
+}
