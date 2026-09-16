@@ -6,7 +6,7 @@
 
 Double-click a `.md` file and the text is on screen before you notice the window. Headings, emphasis, code and links are drawn over the source as you type; the source itself never changes shape. Open a folder — or a file inside an Obsidian vault — and the same window grows a file tree, `[[wikilinks]]`, backlinks and search. Close it and the folder is exactly as you found it.
 
-> **Status: `v0.4.1` — the notepad, the vault beside it, and tables that line up.** Markup drawn over the source, embedded pictures, a reading mode, an outline, the list edits, the vault as a file tree — and a table whose columns stand in a line without a byte being rewritten. `[[links]]` and search come next; see the [roadmap](#roadmap).
+> **Status: `v0.5.0` — files you can actually manage.** Everything below, plus making, renaming and removing notes from the tree — into the recycle bin, never an unlink — a tab that follows its file through a rename, drafts that survive being closed, and a screenshot pasted straight into a note. `[[links]]` and search come next; see the [roadmap](#roadmap).
 
 <img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/screenshot.png" alt="scheda showing a markdown file with headings, emphasis and inline code drawn over the source" width="880">
 
@@ -26,6 +26,9 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 - **Holds several files at once.** Tabs with their own undo history, in the window's own title bar rather than a band of their own — one strip of screen instead of two. A second launch hands its file to the window you already have instead of opening another one.
 - **Finds and replaces.** `Ctrl+F`, with every match highlighted and the current one standing apart.
 - **Remembers.** The files you last opened, shown on an empty window. Theme, font size and column width in a settings file — in the application's own directory, never in the folder you opened.
+- **Manages the files in front of you.** Make, rename and remove notes and folders from the tree. Deleting goes to the recycle bin, never straight out; a rename carries the open tab with it; a refusal from the filesystem says which file and what is wrong, not an error number.
+- **Keeps a draft you never named.** `Ctrl+N` opens a tab with no file. Text in it survives closing the window and comes back next launch — written to scheda's own directory, never into your vault. Unsaved edits to a *named* file are not shadowed anywhere: one copy of every note, in the vault where you put it.
+- **Takes a screenshot straight into a note.** `Ctrl+V` writes the picture into the vault's attachment folder and links it. Which folder that is comes from `attachmentFolderPath` in the vault's own `.obsidian/app.json`, so scheda and Obsidian never disagree about where pictures live.
 - **Says what it is holding.** The status bar reports the line endings and the encoding it will write, before you save.
 
 ## What it will do
@@ -45,7 +48,9 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 | 0.3.2 | **Released.** An outline panel, folded sections, and the list edits Enter, Tab and Backspace should make. |
 | 0.4.0 | **Released.** The vault as a tree: the root rule in the interface, the branch holding the open file revealed. |
 | 0.4.1 | **Released.** Table columns lined up by decoration — 1.4 ms against 39.5 for rendering one, and the file untouched. |
-| 0.4.2 – 0.7 | File operations, watching the folder, links and backlinks, search and index, sessions. |
+| 0.5.0 | **Released.** File operations from the tree, deletion to the recycle bin, tabs that follow a rename, drafts that survive a restart, pictures pasted from the clipboard. |
+| 0.6 – 0.9 | Watching the folder, `scheda --wait` as `$EDITOR`, links and backlinks, renaming across a vault, search and index. |
+| 0.10 – 0.12 | Writing comforts, a lived-in window, and the editor packaged for the rest of the line. |
 | 1.0 | Desktop complete; the index and settings formats are frozen. |
 | 1.x | Sync between desktops via efema, then the Android replica. |
 

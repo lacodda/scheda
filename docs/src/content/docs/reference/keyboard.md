@@ -8,7 +8,7 @@ description: Every shortcut scheda responds to.
 | Keys | What it does |
 | --- | --- |
 | `Ctrl+O` | Open a file — focuses the tab already showing it, if there is one |
-| `Ctrl+N` | New empty tab |
+| `Ctrl+N` | New draft — a tab with no file, kept until you close it |
 | `Ctrl+S` | Save; asks where on a file that has never been saved |
 | `Ctrl+Shift+S` | Save as |
 | `Ctrl+W` | Close the tab, asking first if it holds unsaved work |
@@ -16,6 +16,10 @@ description: Every shortcut scheda responds to.
 
 Dropping files on the window opens them, and launching scheda again with a file
 adds it to the window you already have rather than opening a second one.
+
+A draft with text in it survives closing the window and comes back as a tab next
+time. Closing its tab discards it. See
+[Working with files](/scheda/reference/files/).
 
 ## The window
 
@@ -52,6 +56,9 @@ read is what you were just editing.
 | `Ctrl+Shift+]` | Unfold it |
 | `Ctrl+Alt+[` / `Ctrl+Alt+]` | Fold or unfold every section |
 
+Right-clicking a row of the tree makes, renames or removes files — see
+[Working with files](/scheda/reference/files/).
+
 The file tree appears only when the open document is inside a vault — a folder
 with `.obsidian/` somewhere above it. A note opened on its own stays a note:
 there is no tree of the Desktop beside a Desktop file. Opening the tree opens
@@ -84,6 +91,7 @@ the rest.
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
 | `Ctrl+A` | Select all |
+| `Ctrl+V` with a picture on the clipboard | Writes it into the vault's attachment folder and links it |
 | `Ctrl+Home` / `Ctrl+End` | Jump to the start or end of the document |
 | `Home` / `End` | Jump to the start or end of the line |
 
