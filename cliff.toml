@@ -5,9 +5,9 @@ header = """
 # Changelog
 
 All notable changes to this project are documented in this file.
-
 """
 body = """
+
 {% if version %}\
 ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
@@ -26,6 +26,14 @@ body = """
 {% endfor %}\
 {% endif %}\
 """
+# The blank line that separates two releases lives at the TOP of `body`, before
+# the heading.
+#
+# At the bottom it does not survive: the group loop ends in `{% endfor %}\`, and
+# the backslash swallows the newline after the last bullet — which is why every
+# release heading used to sit glued to the previous release's last line. In
+# front of the heading it survives, and `trim` only strips the one at the very
+# top of the file.
 trim = true
 
 [git]
