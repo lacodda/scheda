@@ -14,6 +14,7 @@ import { bracketClosing, smartEditKeymap } from './edits'
 import { frontMatterFold } from './frontmatter'
 import { schedaHighlightStyle } from './highlight'
 import { markdownImages } from './images'
+import { imagePaste } from './paste'
 import { reading, toggleReading } from './reading'
 import { schedaMarkdown } from './markdown'
 import { tableAlignment } from './tables'
@@ -43,6 +44,10 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
     markdownDecorations,
     tableAlignment,
     markdownImages,
+    // A screenshot pasted into a note becomes a file in the vault's attachment
+    // folder and a link in the text. Before the keymap: this is a DOM event
+    // handler, and the two do not compete.
+    imagePaste,
     frontMatterFold,
     reading,
     // The panel sits at the top: at the bottom it would cover the status bar,
