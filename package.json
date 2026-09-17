@@ -1,6 +1,6 @@
 {
   "name": "scheda",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A markdown notepad that turns into a vault when there is a folder around it.",
   "license": "MIT",
   "private": true,
@@ -33,6 +33,7 @@
     "@lezer/markdown": "^1.7.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-opener": "^2.5.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

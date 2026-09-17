@@ -39,3 +39,21 @@ opened by scheda and by Obsidian in turn sees no foreign files from either.
 That is a rule with teeth: it means the vault can be a git repository, a
 synchronised folder, or somebody else's, and scheda leaves it exactly as it was
 found.
+
+## Handing the note to Obsidian
+
+There is a button in the title bar of any note that is in a vault: it opens that
+same note in Obsidian.
+
+It is there because the arrangement runs both ways. scheda reads Obsidian's
+conventions and writes none of them; the graph, the plugins, the daily note and
+everything else built on top of a vault live over there. A note you opened
+quickly in scheda and now want the rest of is one click away, and the button
+takes nothing away from either program.
+
+It appears only for a note inside a vault, because that is the only case where
+Obsidian has a vault to open it in.
+
+Both programs can have the same vault open at once — see
+[Changed outside](/scheda/concepts/changed-outside/) for what happens when they
+both touch the same file.
