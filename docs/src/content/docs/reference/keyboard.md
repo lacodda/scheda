@@ -13,6 +13,7 @@ description: Every shortcut scheda responds to.
 | `Ctrl+Shift+S` | Save as |
 | `Ctrl+W` | Close the tab, asking first if it holds unsaved work |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next or previous tab, wrapping at the ends |
+| `Ctrl+P` | Go to a file by name — see [Going to a file](/scheda/reference/going-to-a-file/) |
 
 Dropping files on the window opens them, and launching scheda again with a file
 adds it to the window you already have rather than opening a second one.

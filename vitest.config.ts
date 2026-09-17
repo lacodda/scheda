@@ -11,7 +11,10 @@ export default mergeConfig(
       // The decoration tests mount a real CodeMirror view. Asserting against
       // rendered spans is the only way to prove what the reader actually sees.
       environment: 'jsdom',
-      include: ['src/**/*.test.ts'],
+      // Both extensions: a test that renders a component is written in JSX,
+      // and a pattern that only matched .test.ts let one sit in the repo
+      // without ever running.
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     },
   }),
 )

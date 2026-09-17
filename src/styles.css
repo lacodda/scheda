@@ -781,3 +781,139 @@ body {
 .tree-menu-danger:hover {
   color: var(--callout-danger);
 }
+
+/* A process is blocked on this tab: scheda was launched as somebody's
+   `$EDITOR`. Said in the status bar rather than shouted, but not in the muted
+   colour either — a terminal sitting there doing nothing is a mystery, and the
+   way out of it is not something anybody guesses. */
+.status-waiting {
+  color: var(--accent);
+}
+
+/* Handing the note to Obsidian. Sits in the title bar beside the window
+   buttons, and is the same size as them so the row reads as one band rather
+   than a bar with something stuck to it. */
+.titlebar-action {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.6rem;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-action:hover {
+  background: var(--active-line);
+  color: var(--text);
+}
+
+.titlebar-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Go to file.
+ *
+ * Over the text rather than beside it: the panel is a place you pass through,
+ * and one that pushed the document sideways would move the line you were
+ * reading every time you looked for another file. */
+.palette-backdrop {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  /* Not centred: a panel in the middle of the window covers the paragraph you
+     were just in. Near the top is out of the way and still where the eye is. */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgb(0 0 0 / 22%);
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(34rem, calc(100vw - 4rem));
+  max-height: 60vh;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 34%);
+}
+
+.palette-field {
+  flex: 0 0 auto;
+  padding: 0.7rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.palette-field:focus {
+  outline: none;
+}
+
+.palette-empty {
+  margin: 0;
+  padding: 0.9rem;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.palette-list {
+  margin: 0;
+  padding: 0.25rem 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.3rem 0.9rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-row--at {
+  background: var(--active-line);
+}
+
+.palette-name {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The letters the query actually matched. Without them a fuzzy list is a list
+   of files with no account of why any of them is in it. */
+.palette-hit {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.palette-folder {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<!--
+  A page to look at the go-to-file panel with.
+
+  It exists because a Tauri window cannot be screenshotted on this machine: both
+  `CopyFromScreen` and `PrintWindow(PW_RENDERFULLCONTENT)` come back with the
+  window *behind* scheda, and a positive control — the previous release, built
+  from a stash and captured the same way — came back identical. So the panel is
+  looked at here, in a browser, against the real stylesheet and the real
+  component.
+
+  Not shipped and not imported by anything in `src/`; it lives beside the layout
+  check, which is the other tool that renders the product to measure it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scheda — go to file (preview)</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/scrollbar.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 3rem;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <p>A document would be here.</p>
+    <div id="preview"></div>
+    <script type="module">
+      // The core is not here, so its one door is stubbed before the component
+      // that goes through it is loaded. What comes back is shaped exactly as
+      // `find_files` shapes it: the name, the folder under the root, and which
+      // characters of the name the query matched.
+      const rows = [
+        { path: '/v/release-notes.md', name: 'release-notes.md', folder: '', matched: [0, 8] },
+        { path: '/v/projects/plan.md', name: 'plan.md', folder: 'projects', matched: [0, 1, 2, 3] },
+        { path: '/v/reading/list.md', name: 'list.md', folder: 'reading/2026', matched: [] },
+        {
+          path: '/v/deep/a-very-long-note-name-that-has-to-be-cut-somewhere.md',
+          name: 'a-very-long-note-name-that-has-to-be-cut-somewhere.md',
+          folder: 'deep/nested/folder',
+          matched: [0],
+        },
+        { path: '/v/garden/seedling.md', name: '🌱 seedling.md', folder: 'garden', matched: [0, 2] },
+      ]
+
+      // Stubbed at the boundary itself rather than at the module: an ES module
+      // export cannot be reassigned, and the boundary is where the real thing
+      // would answer anyway. Tauri routes every `invoke` through this hook when
+      // it is present, which is how the panel gets a list without a core.
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: (callback) => {
+          const id = Math.random()
+          window[`_${id}`] = callback
+          return id
+        },
+        invoke: async (command) => (command === 'find_files' ? rows : null),
+      }
+
+      const { createRoot } = await import('react-dom/client')
+      const { createElement } = await import('react')
+      const { Palette } = await import('/src/palette.tsx')
+
+      createRoot(document.getElementById('preview')).render(
+        createElement(Palette, {
+          documentPath: '/v/release-notes.md',
+          visible: true,
+          onPick: () => {},
+          onClose: () => {},
+        }),
+      )
+    </script>
+  </body>
+</html>
