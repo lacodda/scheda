@@ -2,10 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.6.0] - 2026-09-17
+
+### Features
+- Watch the vault and report what changed
+- Take an outside edit without losing anyone's writing
+- Go to a file by name with Ctrl+P
+- Return when the tab closes, for use as $EDITOR
+- Hand the note over to Obsidian
+- Wire the outside into the window, and ship 0.6.0
+
+### Testing
+- Drop the second vault gate, the repository already had one
+
 ## [0.5.0] - 2026-09-16
 
 ### Documentation
 - Describe working with files, and gate a real vault on demand
+- Add the changelog for v0.5.0, with the releases apart again
 
 ### Features
 - Make, rename and remove files from the tree
