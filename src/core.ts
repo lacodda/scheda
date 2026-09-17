@@ -18,6 +18,9 @@ export interface OpenFile {
   text: string
   shape: DocumentShape
   readOnly: boolean
+  /** True when a process is blocked on this file — it was opened by
+   *  `scheda --wait`, and closing the tab is what lets that process go. */
+  awaited?: boolean
 }
 
 export interface CoreError {
@@ -37,6 +40,83 @@ export function openFile(path: string): Promise<OpenFile> {
 
 export function saveFile(path: string, text: string, shape: DocumentShape): Promise<void> {
   return invoke<void>('save_file', { path, text, shape })
+}
+
+/** Reads a file again, for a tab whose file was written by somebody else.
+ *
+ *  The shape comes back with the text and replaces the tab's own: a note
+ *  rewritten by a sync client may have arrived with different line endings, and
+ *  saving it back in the shape it had *before* would rewrite every line of
+ *  somebody else's file. */
+export function rereadFile(path: string): Promise<OpenFile> {
+  return invoke<OpenFile>('reread_file', { path })
+}
+
+/** Whether the file on disk still holds `text`.
+ *
+ *  Asked before the window says a word about an external change. A file
+ *  rewritten with identical bytes — which is what a sync client does constantly
+ *  — is not a change anybody wants to be told about, and an editor that asks
+ *  "reload?" when nothing differs teaches people to dismiss the question
+ *  without reading it. */
+export function fileDiffers(path: string, text: string): Promise<boolean> {
+  return invoke<boolean>('file_differs', { path, text })
+}
+
+/** Points the folder watcher at the vault of a document, or stops it when the
+ *  document is not in one. */
+export function watchVault(document: string | null): Promise<void> {
+  return invoke<void>('watch_vault', { document })
+}
+
+/** What changed under the watched root, after a burst of filesystem events has
+ *  settled. Paths are absolute. */
+export interface VaultChanges {
+  changed: string[]
+  added: string[]
+  removed: string[]
+}
+
+/** Somebody else wrote in the folder this window is looking at. */
+export function onVaultChanged(handler: (changes: VaultChanges) => void): Promise<UnlistenFn> {
+  return listen<VaultChanges>('scheda://vault-changed', (event) => handler(event.payload))
+}
+
+/** One row of the go-to-file list. */
+export interface FileHit {
+  path: string
+  name: string
+  /** The folders between the root and the file, joined with `/`. */
+  folder: string
+  /** Which characters of `name` matched, as indices. The row bolds these. */
+  matched: number[]
+}
+
+/** The files in this document's vault that match `query`, best first.
+ *
+ *  Matched in the core, not here: the list of files is the core's, and shipping
+ *  a few thousand paths across on every keystroke so this side can filter them
+ *  is a round trip per character to answer a question the other side could
+ *  answer once. */
+export function findFiles(document: string, query: string): Promise<FileHit[]> {
+  return invoke<FileHit[]>('find_files', { document, query })
+}
+
+/** Throws the picker's list away, so the next search reads the vault again. */
+export function forgetFileIndex(): Promise<void> {
+  return invoke<void>('forget_file_index')
+}
+
+/** The URL that opens a document in Obsidian, or null when it is not in a vault
+ *  and Obsidian would have none to open it in. */
+export function obsidianUrl(document: string): Promise<string | null> {
+  return invoke<string | null>('obsidian_url', { document })
+}
+
+/** Lets every process waiting on this file go — the tab that was somebody's
+ *  `$EDITOR` is closing. */
+export function releaseWaiter(path: string): Promise<void> {
+  return invoke<void>('release_waiter', { path })
 }
 
 /** Turns a link written in `document` into a URL the webview may load, or null

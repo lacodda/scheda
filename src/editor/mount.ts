@@ -14,6 +14,8 @@ import {
   discardDraft,
   keepDraft,
   openFile,
+  releaseWaiter,
+  rereadFile,
   saveFile,
   type DocumentShape,
   type Draft,
@@ -40,6 +42,9 @@ export interface Tab {
    *  still here and still saveable — under a new name, since the old one no
    *  longer names anything. */
   orphaned: boolean
+  /** True when a process is blocked on this file: it was opened by
+   *  `scheda --wait`, and closing this tab is what lets that process go. */
+  awaited: boolean
 }
 
 /** The shape a brand new file is written with: no BOM, LF, nothing to replay. */
@@ -67,6 +72,18 @@ export interface EditorHandle {
   follow: (from: string, to: string) => void
   /** Tells the tab showing `path` that its file has gone. The text stays. */
   orphan: (path: string) => void
+  /** Takes the text a tab's file now holds, discarding what was on screen.
+   *
+   *  For a tab with no unsaved changes this is the whole answer to an external
+   *  edit; for one with them it is what happens after the person chooses. The
+   *  shape travels with the text, because a file rewritten elsewhere may have
+   *  come back with different line endings. */
+  reload: (id: number) => Promise<void>
+  /** Marks the text on screen as being what is on disk, without writing
+   *  anything. For the person who looked at both versions and kept theirs: the
+   *  file will be overwritten when they save, and until then the window must
+   *  stop asking about a change they have already answered. */
+  acceptAsSaved: (id: number, text: string) => void
   select: (id: number) => void
   /** Closes a tab. Returns false when it has unsaved changes and `force` was
    *  not set — the caller is expected to ask before discarding work. */
@@ -129,6 +146,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       state: stateFor(source?.text ?? '', source?.readOnly ?? false, source?.path ?? null),
       draftKey,
       orphaned: false,
+      awaited: source?.awaited ?? false,
     }
     tabs.push(tab)
     return tab
@@ -236,6 +254,11 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
     adopt(next) {
       const existing = tabs.find((tab) => tab.path !== null && samePath(tab.path, next.path))
       if (existing) {
+        // Somebody ran `scheda --wait` on a file this window already had open.
+        // The tab is the one that has to release them, so it takes on the
+        // promise rather than leaving a process blocked on a tab that will
+        // never know about it.
+        if (next.awaited) existing.awaited = true
         show(existing)
         return
       }
@@ -251,6 +274,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
         current.shape = next.shape
         current.readOnly = next.readOnly
         current.saved = next.text
+        current.awaited = next.awaited ?? false
         current.state = stateFor(next.text, next.readOnly, next.path)
         show(current)
         return
@@ -298,6 +322,38 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       notify()
     },
 
+    async reload(id) {
+      const tab = tabs.find((candidate) => candidate.id === id)
+      if (!tab || tab.path === null) return
+      const fresh = await rereadFile(tab.path)
+
+      // The shape too, not just the text: a file that came back from a sync
+      // client with CRLF where it had LF would otherwise be written back in the
+      // old shape on the next save, rewriting every line of it.
+      tab.shape = fresh.shape
+      tab.readOnly = fresh.readOnly
+      tab.saved = fresh.text
+      tab.orphaned = false
+
+      const next = stateFor(fresh.text, fresh.readOnly, tab.path)
+      if (tab.id === activeId) {
+        // Through the live view rather than by swapping the state in, so the
+        // caret and the scroll position are the view's to keep where it can.
+        view.setState(next)
+        tab.state = next
+      } else {
+        tab.state = next
+      }
+      notify()
+    },
+
+    acceptAsSaved(id, text) {
+      const tab = tabs.find((candidate) => candidate.id === id)
+      if (!tab) return
+      tab.saved = text
+      notify()
+    },
+
     select(id) {
       const tab = tabs.find((candidate) => candidate.id === id)
       if (tab) show(tab)
@@ -313,6 +369,11 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       // A draft closed on purpose is a draft thrown away; keeping it would mean
       // the tab comes back on the next launch after being told to go.
       if (closing.draftKey !== null) void discardDraft(closing.draftKey)
+      // Somebody's `$EDITOR` was this tab, and they have been blocked since it
+      // opened. Closing it is the signal they are waiting for — so it is sent
+      // here, in the one place every close goes through, rather than beside
+      // each of the three ways a tab can be closed.
+      if (closing.awaited && closing.path !== null) void releaseWaiter(closing.path)
       drafting.delete(closing.id)
       tabs.splice(index, 1)
 

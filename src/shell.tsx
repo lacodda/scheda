@@ -9,14 +9,21 @@ import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
+  fileDiffers,
+  forgetFileIndex,
   forgetRecent,
   loadSettings,
+  obsidianUrl,
   onFileHandedOver,
   onHandoverFailed,
+  onVaultChanged,
   rememberRecent,
   restoreDrafts,
+  watchVault,
 } from './core'
-import { basename } from './paths'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { Palette } from './palette'
+import { basename, samePath } from './paths'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
 import { FileTree } from './tree'
@@ -137,6 +144,10 @@ function StatusBar({ editor }: { editor: EditorHandle }) {
       <span className="status-spacer" />
       {tab.orphaned && <span className="status-warning">file deleted — save as</span>}
       {tab.readOnly && <span className="status-warning">read-only</span>}
+      {/* Somebody is blocked on this tab. Worth a word: a terminal sitting
+          there doing nothing is otherwise a mystery, and the way out of it —
+          close the tab — is not something anybody guesses. */}
+      {tab.awaited && <span className="status-waiting">waiting — close to return</span>}
       <span>
         Ln {line.number}, Col {column}
       </span>
@@ -157,6 +168,11 @@ function countWords(text: string): number {
 }
 
 function Shell({ editor }: { editor: EditorHandle }) {
+  // The watch below follows the active tab, so this component has to hear about
+  // tabs changing. The status bar renders from the same subscription.
+  useEditor(editor)
+  const revision = editor.revision()
+
   /** Opens a path and records it as recent. A file that has gone is dropped
    *  from the list rather than reported: the list is a convenience, and an
    *  error dialog for a stale entry is not what the user asked for. */
@@ -193,6 +209,82 @@ function Shell({ editor }: { editor: EditorHandle }) {
   }, [editor, saveAs])
 
   const closeTab = useCloseTab(editor)
+  const [picking, setPicking] = useState(false)
+
+  /** A file under an open tab was written by somebody else. Works out what that
+   *  actually means for this tab, and asks only when it has to.
+   *
+   *  Three cases, and only one of them is a question:
+   *
+   *  - The bytes match what the tab is holding. Nothing happened as far as
+   *    anybody is concerned — a sync client rewriting an unchanged file, or a
+   *    save in another editor with nothing typed. Silence is the right answer,
+   *    and asking here is how an editor teaches people to dismiss its dialogs
+   *    without reading them.
+   *  - The tab has no unsaved changes. The file is the truth (ADR 0002) and the
+   *    tab is simply behind it; it takes the new text without a word. Asking
+   *    would be asking whether you meant to edit the file you just edited.
+   *  - The tab has unsaved changes and the file moved under them. That is the
+   *    only real conflict, and it is the one thing this version must never
+   *    resolve on its own — either answer silently destroys somebody's writing.
+   */
+  const reconcile = useCallback(
+    async (id: number) => {
+      const tab = editor.tabs().find((candidate) => candidate.id === id)
+      if (!tab || tab.path === null) return
+
+      // What is on screen, not what was last saved: the question is whether the
+      // file differs from what this person is looking at.
+      const onScreen = tab.id === editor.active().id ? editor.view.state.doc.toString() : tab.state.doc.toString()
+
+      let differs = true
+      try {
+        differs = await fileDiffers(tab.path, onScreen)
+      } catch {
+        // Unreadable now. Whatever happened, re-reading it is what finds out,
+        // and the reload below reports the failure honestly if it is gone.
+      }
+      if (!differs) {
+        // Identical bytes. If the tab thought it was dirty, it was dirty
+        // against an older file — somebody else has since typed the same thing,
+        // or saved our text for us. Either way the dot goes.
+        editor.acceptAsSaved(tab.id, onScreen)
+        return
+      }
+
+      if (!editor.isDirty(tab.id)) {
+        await editor.reload(tab.id).catch(() => {
+          // The file changed and then went. `orphan` is what says so, and the
+          // watcher will have sent that too.
+        })
+        return
+      }
+
+      // The real conflict, and the only place the person is asked. Both
+      // versions are named, neither is called the right one, and the dialog
+      // never runs on its own: an editor that silently picks a side here is an
+      // editor that loses writing.
+      const takeTheirs = await ask(
+        `${tabLabel(tab)} was changed by another program, and you have unsaved changes here.`,
+        {
+          title: 'This file changed outside scheda',
+          kind: 'warning',
+          okLabel: 'Load theirs (lose yours)',
+          cancelLabel: 'Keep mine (overwrite on save)',
+        },
+      )
+      if (takeTheirs) {
+        await editor.reload(tab.id).catch(() => {})
+      } else {
+        // Theirs is on disk, mine is on screen, and mine wins when I save. What
+        // must not happen is being asked about this same change again — the
+        // person has answered, and a dialog that returns is a dialog that
+        // trained them to click it away.
+        editor.acceptAsSaved(tab.id, onScreen)
+      }
+    },
+    [editor],
+  )
 
   useEffect(() => {
     // The file the window opened with counts as recently opened; the core read
@@ -235,6 +327,11 @@ function Shell({ editor }: { editor: EditorHandle }) {
       } else if (key === 'w') {
         event.preventDefault()
         void closeTab(editor.active().id)
+      } else if (key === 'p' && !event.shiftKey) {
+        // Go to file. `Ctrl+P` is what every editor with this feature uses, and
+        // a notepad that printed on it would be a notepad nobody expects.
+        event.preventDefault()
+        setPicking(true)
       } else if (key === 'tab') {
         // Ctrl+Tab walks the strip in order, wrapping at the end.
         event.preventDefault()
@@ -297,6 +394,53 @@ function Shell({ editor }: { editor: EditorHandle }) {
   }, [editor])
 
   useEffect(() => {
+    // The watch follows whatever tab is in front of you. Pointed again on every
+    // change because switching to a tab in another vault has to move it — and
+    // the core answers cheaply when the root is already the one being watched.
+    void watchVault(editor.active().path).catch(() => {
+      // A folder that cannot be watched is a folder whose changes we will not
+      // hear about. The window still works; it is simply as stale as it was
+      // before this version existed, and a dialog about it would be a dialog
+      // nobody can act on.
+    })
+  }, [editor, revision])
+
+  useEffect(() => {
+    // Somebody else wrote in the folder. Three questions, and they are asked of
+    // different things: does an open tab show a file that changed, has a tab
+    // lost its file, and is the picker's list of the vault out of date.
+    const unlisten = onVaultChanged((changes) => {
+      // The picker's list always, whatever else happened: a note created in
+      // Obsidian that Ctrl+P cannot find is exactly the staleness this version
+      // is about.
+      void forgetFileIndex()
+
+      for (const path of changes.removed) {
+        editor.orphan(path)
+        void forgetRecent(path)
+      }
+
+      for (const path of changes.changed) {
+        const tab = editor.tabs().find((candidate) => candidate.path !== null && samePath(candidate.path, path))
+        if (tab) void reconcile(tab.id)
+      }
+      // A file that appeared where a tab's file used to be is that tab's file
+      // coming back — a sync client restoring it, or an editor that saves by
+      // writing a new file over the old one on a platform that reports it that
+      // way. The tab stops being orphaned and takes the text.
+      for (const path of changes.added) {
+        const tab = editor
+          .tabs()
+          .find((candidate) => candidate.orphaned && candidate.path !== null && samePath(candidate.path, path))
+        if (tab) void reconcile(tab.id)
+      }
+    })
+    return () => {
+      void unlisten.then((stop) => stop())
+    }
+  }, [editor, reconcile])
+
+  useEffect(() => {
     // Closing the window with unsaved work asks first. Tauri lets us take the
     // close request back, which is the only reason this can be honest.
     const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
@@ -333,7 +477,17 @@ function Shell({ editor }: { editor: EditorHandle }) {
     }
   }, [editor])
 
-  return <StatusBar editor={editor} />
+  return (
+    <>
+      <StatusBar editor={editor} />
+      <Palette
+        documentPath={editor.active().path}
+        visible={picking}
+        onPick={(path) => void openPath(path)}
+        onClose={() => setPicking(false)}
+      />
+    </>
+  )
 }
 
 /** The outline, and the key that shows it.
@@ -473,6 +627,79 @@ export function mountShell(editor: EditorHandle) {
   )
 }
 
+/** The button that hands this note to Obsidian.
+ *
+ *  scheda reads Obsidian's conventions and never writes its folder; this is the
+ *  other half of that. The graph, the plugins and the daily note are over there,
+ *  and the honest shape of "we are not competing with it" is a button that opens
+ *  the file you are looking at in the program that has them.
+ *
+ *  It appears only for a note in a vault, because that is the only case where
+ *  Obsidian has a vault to open it in — and a button that is there but does
+ *  nothing is worse than one that is not. */
+function OpenInObsidian({ editor }: { editor: EditorHandle }) {
+  useEditor(editor)
+  const path = editor.active().path
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let current = true
+    if (path === null) {
+      queueMicrotask(() => {
+        if (current) setUrl(null)
+      })
+      return () => {
+        current = false
+      }
+    }
+    void obsidianUrl(path)
+      .then((found) => {
+        if (current) setUrl(found)
+      })
+      .catch(() => {
+        if (current) setUrl(null)
+      })
+    return () => {
+      current = false
+    }
+  }, [path])
+
+  if (url === null) return null
+
+  return (
+    <button
+      type="button"
+      className="titlebar-action"
+      title="Open in Obsidian"
+      aria-label="Open in Obsidian"
+      onClick={() => {
+        // Through the opener rather than a shell command. On Windows
+        // `cmd /c start` cuts a URL at its first ampersand and runs the tail as
+        // a command, and every URL this builds has `&file=` in it.
+        void openUrl(url).catch(() => {
+          // Obsidian is not installed, or nothing handles the scheme. The note
+          // is open here either way, and a dialog saying somebody else's
+          // program is missing is not something this window can help with.
+        })
+      }}
+    >
+      {/* The obsidian stone: a cut gem, which is what the name says. Drawn
+          rather than imported so the bar carries no second asset for one
+          button. */}
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path
+          d="M8 1.5 13 6l-2 8.5H5L3 6z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+        <path d="M8 1.5 6 14.5M8 1.5l3 13M3 6h10" fill="none" stroke="currentColor" strokeWidth="0.9" />
+      </svg>
+    </button>
+  )
+}
+
 /** The title bar: the mark, the tabs, the window buttons — plus the recent list
  *  an empty window shows and the edges a frameless window is resized by. */
 function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: string) => void }) {
@@ -494,6 +721,7 @@ function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: str
         {/* The gap between the tabs and the buttons is the part of the bar that
             is only there to be dragged. */}
         <div className="titlebar-drag" />
+        <OpenInObsidian editor={editor} />
         <WindowButtons
           onClose={() => {
             // Ask the window to close rather than closing it: the unsaved-work
