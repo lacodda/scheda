@@ -1,6 +1,6 @@
 [package]
 name = "scheda"
-version = "0.5.0"
+version = "0.6.0"
 description = "A markdown notepad that turns into a vault when there is a folder around it."
 authors = ["Kirill Lakhtachev <lahtachev@gmail.com>"]
 license = "MIT"
@@ -32,6 +32,20 @@ dirs = "6"
 trash = "5"
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-single-instance = "2.4.4"
+# Watching a folder is one API per platform — ReadDirectoryChangesW, inotify,
+# FSEvents — and each has its own way of coalescing a burst. `notify` is the
+# whole job on all three, which is when the line takes a dependency. The
+# debouncer on top is not a convenience: an editor saving a file produces
+# several raw events, and acting on each would ask the same question three
+# times.
+notify = "8"
+notify-debouncer-full = "0.7"
+# Handing a note to Obsidian means asking the system to open an
+# `obsidian://` URL. The plugin does that through the platform's own opener;
+# the alternative on Windows is `cmd /c start`, which cuts a URL at its first
+# ampersand and then RUNS the tail as a command — and every URL scheda builds
+# has `&file=` in it.
+tauri-plugin-opener = "2.5.5"
 
 # File associations are a Windows-shell concern and nothing else needs them.
 [target.'cfg(windows)'.dependencies]
