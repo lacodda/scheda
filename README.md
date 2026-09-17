@@ -29,6 +29,10 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 - **Manages the files in front of you.** Make, rename and remove notes and folders from the tree. Deleting goes to the recycle bin, never straight out; a rename carries the open tab with it; a refusal from the filesystem says which file and what is wrong, not an error number.
 - **Keeps a draft you never named.** `Ctrl+N` opens a tab with no file. Text in it survives closing the window and comes back next launch — written to scheda's own directory, never into your vault. Unsaved edits to a *named* file are not shadowed anywhere: one copy of every note, in the vault where you put it.
 - **Takes a screenshot straight into a note.** `Ctrl+V` writes the picture into the vault's attachment folder and links it. Which folder that is comes from `attachmentFolderPath` in the vault's own `.obsidian/app.json`, so scheda and Obsidian never disagree about where pictures live.
+- **Keeps up with the folder.** A note edited in Obsidian or arriving from a sync client is picked up in the tree and in the open tab. If you had unsaved edits to the same file, scheda asks — naming both versions and calling neither the right one. If the file came back identical, it says nothing, because nothing happened.
+- **Goes to a file by name.** `Ctrl+P`, matching letters that need not be adjacent, ordered so that initials and whole words win over letters that merely happen to be in the name. The letters that matched are shown, so you can see why a row is in the list.
+- **Works as your `$EDITOR`.** `scheda --wait notes.md` returns when the tab closes, with an exit code that tells the caller whether the edit happened. `export EDITOR="scheda --wait"` and `git commit` opens here.
+- **Hands the note to Obsidian.** A button in the title bar opens the file you are looking at over there, where the graph and the plugins are. It adds; it takes nothing away.
 - **Says what it is holding.** The status bar reports the line endings and the encoding it will write, before you save.
 
 ## What it will do
@@ -49,7 +53,8 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 | 0.4.0 | **Released.** The vault as a tree: the root rule in the interface, the branch holding the open file revealed. |
 | 0.4.1 | **Released.** Table columns lined up by decoration — 1.4 ms against 39.5 for rendering one, and the file untouched. |
 | 0.5.0 | **Released.** File operations from the tree, deletion to the recycle bin, tabs that follow a rename, drafts that survive a restart, pictures pasted from the clipboard. |
-| 0.6 – 0.9 | Watching the folder, `scheda --wait` as `$EDITOR`, links and backlinks, renaming across a vault, search and index. |
+| 0.6.0 | **Released.** The folder watched: external edits reach the tree and the tabs, an honest question when both sides changed a file, `Ctrl+P`, `scheda --wait` as `$EDITOR`, and a way over to Obsidian. |
+| 0.7 – 0.9 | Links and backlinks, renaming across a vault, search and index. |
 | 0.10 – 0.12 | Writing comforts, a lived-in window, and the editor packaged for the rest of the line. |
 | 1.0 | Desktop complete; the index and settings formats are frozen. |
 | 1.x | Sync between desktops via efema, then the Android replica. |

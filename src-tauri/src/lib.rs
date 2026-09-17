@@ -6,11 +6,15 @@ pub mod associations;
 pub mod attachments;
 pub mod document;
 pub mod files;
+pub mod obsidian;
+pub mod quick;
 pub mod root;
 pub mod scratch;
 mod settings;
 pub mod startup;
-mod tree;
+pub mod tree;
+pub mod wait;
+pub mod watch;
 
 use document::{Document, DocumentShape};
 use serde::Serialize;
@@ -37,6 +41,10 @@ pub struct OpenFile {
     /// True when the bytes could not be decoded as UTF-8. Such a file is shown
     /// but never written back (ADR 0002).
     pub read_only: bool,
+    /// True when a process is blocked on this file, because it was opened by
+    /// `scheda --wait`. The tab carries the flag and lets the waiter go when it
+    /// closes; a tab without it is an ordinary tab.
+    pub awaited: bool,
 }
 
 impl OpenFile {
@@ -46,6 +54,7 @@ impl OpenFile {
             text: doc.text,
             shape: doc.shape,
             read_only: false,
+            awaited: false,
         }
     }
 }
@@ -383,6 +392,149 @@ fn forget_recent(path: String) -> Result<Vec<String>, CommandError> {
     Ok(current.recent)
 }
 
+/// Points the folder watcher at the vault of a document, so edits made
+/// somewhere else reach the window.
+///
+/// Called by the window as tabs change rather than once at startup: the watch
+/// follows what is on screen, and a window showing a note that is not in a
+/// vault watches nothing at all. Starting it here rather than in `run` also
+/// keeps the promise about ordering — nothing that is not the text happens
+/// before the text is on screen (ADR 0001).
+#[tauri::command]
+fn watch_vault(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, watch::Watch>,
+    document: Option<String>,
+) -> Result<(), CommandError> {
+    let Some(root) = document
+        .map(PathBuf::from)
+        .as_deref()
+        .and_then(root::for_vault)
+    else {
+        // No vault, nothing to watch. Stopping rather than leaving the previous
+        // watch running: a tab switched to a lone note should not go on
+        // reporting changes in a folder the window is no longer showing.
+        state.stop();
+        return Ok(());
+    };
+
+    state
+        .point_at(&root, move |changes| {
+            let _ = app.emit(watch::CHANGED_EVENT, changes);
+        })
+        .map_err(|error| CommandError {
+            message: format!("this folder cannot be watched for changes: {error}"),
+            read_only: false,
+        })
+}
+
+/// Re-reads a file that changed under an open tab.
+///
+/// A plain read, but through its own name so the window's intent is legible and
+/// so the shape comes back with it: a file rewritten by a sync client may have
+/// arrived with different line endings, and saving it back with the shape it
+/// had *before* would rewrite every line of somebody else's file.
+#[tauri::command]
+fn reread_file(path: String) -> Result<OpenFile, CommandError> {
+    open_file(path)
+}
+
+/// Whether the file at `path` still holds the text the tab was last in step
+/// with.
+///
+/// Asked before the window says a word about an external change. A file
+/// rewritten with identical bytes — which is what a sync client does constantly,
+/// and what saving in another editor without typing does — is not a change
+/// anybody wants to be told about, and an editor that asks "reload?" when
+/// nothing differs teaches people to dismiss the question without reading it.
+#[tauri::command]
+fn file_differs(path: String, text: String) -> Result<bool, CommandError> {
+    match document::read(Path::new(&path)) {
+        Ok(doc) => Ok(doc.text != text),
+        // Unreadable now means it differs from anything we are holding; the
+        // window finds out what actually happened when it tries to re-read.
+        Err(_) => Ok(true),
+    }
+}
+
+/// Everything the picker needs to find a file by name, for the vault a document
+/// belongs to.
+///
+/// The whole list, once, rather than a query per keystroke: the matching is the
+/// core's (`quick`), and the window asks it through [`find_files`] without the
+/// paths ever crossing the boundary.
+#[tauri::command]
+fn find_files(
+    state: tauri::State<'_, QuickIndex>,
+    document: String,
+    query: String,
+) -> Vec<quick::Hit> {
+    let document = PathBuf::from(document);
+    let Some(root) = root::for_vault(&document) else {
+        return Vec::new();
+    };
+
+    let mut held = state.0.lock().expect("index lock");
+    // Read once per root and kept: a vault of a few thousand notes is a
+    // directory walk, and doing one on every keystroke would make the picker
+    // slower the more there is to find.
+    let index = match held.as_ref() {
+        Some(index) if index.root == root => index,
+        _ => {
+            let entries = tree::read(&root);
+            *held = Some(Index {
+                candidates: quick::candidates(&root, &entries),
+                root,
+            });
+            held.as_ref().expect("just filled")
+        }
+    };
+
+    quick::search(&index.candidates, &query)
+}
+
+/// Throws the picker's list away, so the next search reads the vault again.
+///
+/// Called when the watcher says the vault changed. Without it, a note created
+/// in Obsidian is invisible to `Ctrl+P` until the window is restarted — which
+/// is exactly the staleness this whole version is about.
+#[tauri::command]
+fn forget_file_index(state: tauri::State<'_, QuickIndex>) {
+    *state.0.lock().expect("index lock") = None;
+}
+
+/// The picker's flattened view of one vault.
+#[derive(Default)]
+struct QuickIndex(Mutex<Option<Index>>);
+
+struct Index {
+    root: PathBuf,
+    candidates: Vec<quick::Candidate>,
+}
+
+/// The URL that opens a document in Obsidian, or nothing when it is not in a
+/// vault and Obsidian would have no vault to open it in.
+#[tauri::command]
+fn obsidian_url(document: String) -> Option<String> {
+    let document = PathBuf::from(document);
+    let root = root::for_vault(&document)?;
+    obsidian::open_url(&root, &document)
+}
+
+/// Lets every process waiting on this file go.
+///
+/// Called when a tab opened by `scheda --wait` closes. The path is the tab's
+/// own, and `wait::release` turns it into a name in scheda's own directory —
+/// nothing from here becomes a path to delete.
+#[tauri::command]
+fn release_waiter(path: String) -> Result<(), CommandError> {
+    wait::release(Path::new(&path)).map_err(|error| CommandError {
+        message: error.to_string(),
+        read_only: false,
+    })?;
+    Ok(())
+}
+
 pub fn run() {
     startup::mark_process_start();
 
@@ -394,15 +546,48 @@ pub fn run() {
         std::process::exit(code);
     }
 
+    let invocation = wait::parse(std::env::args().skip(1));
+
+    // `--wait` puts this process in a different job entirely: it starts a
+    // scheda that is not waiting, and then does nothing but watch for the tab
+    // to close. It never builds a window of its own — see `wait` for why that
+    // separation is the only arrangement that survives being the second launch.
+    if invocation.wait {
+        let code = match invocation.file.as_deref() {
+            // Resolved before anything is derived from it: the caller may have
+            // typed a relative path, and the window will be comparing against
+            // what the filesystem returned.
+            Some(path) => {
+                let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+                wait::run_as_waiter(&path)
+            }
+            // Nothing to wait for. Opening a window would be reasonable, but
+            // the caller is blocked on this process and would stay blocked
+            // until somebody closed it — for a file they never named.
+            None => {
+                eprintln!("scheda --wait needs a file to wait for");
+                1
+            }
+        };
+        std::process::exit(code);
+    }
+
     // Read the file before anything else exists. A window that opens with the
     // text already in hand is the whole point of the ordering (ADR 0001); a
     // window that opens and then asks for a file has already lost the frame.
-    let preloaded = std::env::args_os()
-        .nth(1)
-        .map(PathBuf::from)
+    let preloaded = invocation
+        .file
+        .as_deref()
         .filter(|path| path.is_file())
-        .and_then(|path| match document::read(&path) {
-            Ok(doc) => Some(OpenFile::new(path, doc)),
+        .and_then(|path| match document::read(path) {
+            Ok(doc) => {
+                let mut file = OpenFile::new(path.to_path_buf(), doc);
+                // Asked of the disk rather than of the command line: the
+                // process that is waiting started this one *without* the flag,
+                // so the sentinel is the only evidence a promise was made.
+                file.awaited = wait::is_awaited(path);
+                Some(file)
+            }
             // A file we cannot decode still opens — read-only, with its bytes
             // shown as best we can — rather than starting to an empty window.
             Err(document::DocumentError::NotUtf8) => None,
@@ -415,33 +600,52 @@ pub fn run() {
         // its file to the running window and get out of the way, not build a
         // second one. Everything below this line belongs to the first instance.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            let Some(path) = argv.get(1).map(PathBuf::from).filter(|p| p.is_file()) else {
+            let handover = wait::parse(argv.iter().skip(1).cloned());
+
+            let Some(path) = handover.file.filter(|p| p.is_file()) else {
                 // A bare second launch means "show me the window I have".
                 focus_main_window(app);
                 return;
             };
+            let path = std::fs::canonicalize(&path).unwrap_or(path);
 
             // The core reads it, the way it reads the first one — the webview
             // is handed text, never a path to open for itself (ADR 0001).
             match document::read(&path) {
                 Ok(doc) => {
-                    let file = OpenFile::new(path, doc);
+                    let mut file = OpenFile::new(path.clone(), doc);
+                    // The sentinel, not the command line: whoever is waiting
+                    // started this launch without the flag.
+                    file.awaited = wait::is_awaited(&path);
                     let _ = app.emit(OPEN_FILE_EVENT, file);
                 }
                 Err(error) => {
+                    // Unreadable. Anybody blocked on it is let go now rather
+                    // than left waiting for a tab that will never exist.
+                    let _ = wait::release(&path);
                     let _ = app.emit(OPEN_FAILED_EVENT, error.to_string());
                 }
             }
             focus_main_window(app);
         }))
+        .plugin(tauri_plugin_opener::init())
         // The dialog only ever returns a path; reading and writing it stays in
         // the core, so the webview still never touches the disk.
         .plugin(tauri_plugin_dialog::init())
         .manage(Preloaded(Mutex::new(preloaded)))
+        .manage(watch::Watch::default())
+        .manage(QuickIndex::default())
         .invoke_handler(tauri::generate_handler![
             take_preloaded,
             open_file,
             save_file,
+            reread_file,
+            file_differs,
+            watch_vault,
+            find_files,
+            forget_file_index,
+            obsidian_url,
+            release_waiter,
             resolve_asset,
             read_tree,
             create_file,
