@@ -6,8 +6,6 @@
 
 Double-click a `.md` file and the text is on screen before you notice the window. Headings, emphasis, code and links are drawn over the source as you type; the source itself never changes shape. Open a folder — or a file inside an Obsidian vault — and the same window grows a file tree, `[[wikilinks]]`, backlinks and search. Close it and the folder is exactly as you found it.
 
-> **Status: `v0.5.0` — files you can actually manage.** Everything below, plus making, renaming and removing notes from the tree — into the recycle bin, never an unlink — a tab that follows its file through a rename, drafts that survive being closed, and a screenshot pasted straight into a note. `[[links]]` and search come next; see the [roadmap](#roadmap).
-
 <img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/screenshot.png" alt="scheda showing a markdown file with headings, emphasis and inline code drawn over the source" width="880">
 
 ## Why another editor
@@ -35,30 +33,6 @@ scheda is the notepad with a lean towards markdown: the speed of the third, the 
 - **Hands the note to Obsidian.** A button in the title bar opens the file you are looking at over there, where the graph and the plugins are. It adds; it takes nothing away.
 - **Says what it is holding.** The status bar reports the line endings and the encoding it will write, before you save.
 
-## What it will do
-
-- **Become a vault by walking up.** A file's folder is its root; an `.obsidian/` directory above it moves the root there; an explicitly opened folder is the root. Tree, quick switcher, `[[links]]`, backlinks and full-text search follow from the root.
-- **Leave the vault clean.** The index, the session and the settings live in the application's own data directory. scheda reads Obsidian's conventions and writes none of its files.
-- **Reach a second machine, then a phone.** Sync arrives after 1.0 through [efema](https://github.com/lacodda/efema), a relay that cannot read what it carries; the Android build is a replica of the vault, not a folder on the phone.
-
-## Roadmap
-
-| Version | Promise |
-| --- | --- |
-| 0.1 | **Released.** A file on screen: open, decorate, save byte for byte. Cold start measured at 440 ms against the 0.5 s threshold. |
-| 0.2 | **Released.** The notepad: installer, file associations, tabs in a custom title bar, recent files, find and replace, themes. |
-| 0.3.0 | **Released.** Block markup: lists with hanging indents, checkboxes that edit the file, quotes, callouts, tables, fenced code with highlighting, rules and highlights. |
-| 0.3.1 | **Released.** Embedded pictures over a scoped protocol, front matter folded into a header, and a reading mode. |
-| 0.3.2 | **Released.** An outline panel, folded sections, and the list edits Enter, Tab and Backspace should make. |
-| 0.4.0 | **Released.** The vault as a tree: the root rule in the interface, the branch holding the open file revealed. |
-| 0.4.1 | **Released.** Table columns lined up by decoration — 1.4 ms against 39.5 for rendering one, and the file untouched. |
-| 0.5.0 | **Released.** File operations from the tree, deletion to the recycle bin, tabs that follow a rename, drafts that survive a restart, pictures pasted from the clipboard. |
-| 0.6.0 | **Released.** The folder watched: external edits reach the tree and the tabs, an honest question when both sides changed a file, `Ctrl+P`, `scheda --wait` as `$EDITOR`, and a way over to Obsidian. |
-| 0.7 – 0.9 | Links and backlinks, renaming across a vault, search and index. |
-| 0.10 – 0.12 | Writing comforts, a lived-in window, and the editor packaged for the rest of the line. |
-| 1.0 | Desktop complete; the index and settings formats are frozen. |
-| 1.x | Sync between desktops via efema, then the Android replica. |
-
 ## Install
 
 Grab the build for your platform from the [releases page](https://github.com/lacodda/scheda/releases). The Windows installer registers scheda as a markdown handler — it appears under *Open with*, and making it the default is one click in Settings, because Windows does not let a program take that decision for you.
@@ -70,13 +44,11 @@ pnpm install
 pnpm tauri build
 ```
 
-Full documentation is at [lacodda.github.io/scheda](https://lacodda.github.io/scheda/).
+Full documentation is at [lacodda.github.io/scheda](https://lacodda.github.io/scheda/). Architecture decisions live in [docs/adr](https://github.com/lacodda/scheda/tree/main/docs/adr).
 
-## Built with
+## Status
 
-[Tauri v2](https://v2.tauri.app/) · Rust · [CodeMirror 6](https://codemirror.net/) · React
-
-Architecture decisions live in [docs/adr](https://github.com/lacodda/scheda/tree/main/docs/adr).
+`v0.6.0`: everything under "What it does today" works, including file management from the tree — into the recycle bin, never an unlink — folder watching with an honest question on conflicting edits, and use as `$EDITOR`. Checked on every build against a corpus of deliberately awkward files, plus the owner's own 5000-note vault before release. See the [CHANGELOG](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md) for what landed in each version.
 
 ## License
 
