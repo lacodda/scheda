@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.7.0] - 2026-09-18
+
+### Features
+- Read the vault's own settings in one place
+- Resolve `[[wikilinks]]` the way Obsidian resolves them
+- Draw a wikilink as what it means, and follow it when clicked
+- Offer a note while a link is being typed, and a heading after the `#`
+- Show a note or a picture in place with `![[embeds]]`
+- Look into a link without leaving the note
+
+### Documentation
+- Describe links between notes
+
 ## [0.6.0] - 2026-09-17
 
 ### Features
