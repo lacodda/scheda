@@ -74,6 +74,20 @@ A folded section shows `⋯` in place of what it holds. There is no arrow column
 beside the text: folding is a thing you do now and then, and a permanent strip
 for it costs more than it gives.
 
+## Links between notes
+
+| Keys | What it does |
+| --- | --- |
+| Click a link, or `Enter` on a focused one | Opens the note it points at |
+| `[[` then letters | Offers the notes that match, ranked like `Ctrl+P` |
+| `#` inside a link | Offers that note's headings; `[[#` offers this note's |
+| `Ctrl+Space` | Opens the list on a bare `[[`, before anything is typed |
+| `Enter` | Takes the highlighted note |
+| `Escape` | Closes the list |
+
+Following a link to a note that does not exist yet offers to create it. See
+[Links between notes](/scheda/reference/links/).
+
 ## Finding
 
 | Keys | What it does |

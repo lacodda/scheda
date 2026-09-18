@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/banner.svg" alt="scheda - a markdown notepad that grows into a vault" width="720"></p>
 
-> Double-click a `.md` file and the text is on screen before you notice the window. Open a folder around it and the same window grows a file tree, wikilinks, backlinks and search.
+> Double-click a `.md` file and the text is on screen before you notice the window. Open a folder around it and the same window grows a file tree and links between notes.
 
 <p align="center">
   <a href="https://github.com/lacodda/scheda/releases/latest"><img src="https://img.shields.io/github/v/release/lacodda/scheda?style=flat-square" alt="Release"></a>
@@ -32,8 +32,12 @@ against a 500 ms gate on every build.
   by line. A file that is not UTF-8 opens read-only rather than being guessed
   at.
 - **A vault when there is one.** A folder - or a file inside an Obsidian vault -
-  brings a file tree, `[[wikilinks]]`, backlinks and search. Close it and the
-  folder is exactly as you found it.
+  brings a file tree and `[[wikilinks]]`. Close it and the folder is exactly as
+  you found it.
+- **Links that lead somewhere.** `[[a note]]` resolves against the whole vault
+  the way Obsidian resolves it, completes as you type, and shows the note's
+  opening when you hover it. A link to a note you have not written yet offers to
+  write it. `![[embeds]]` show the picture or the note's first lines.
 - **Tabs in the title bar**, with their own undo history, so one strip of screen
   does the work of two. A second launch hands its file to the window you have.
 - **A draft you never named.** `Ctrl+N` opens a tab with no file; its text

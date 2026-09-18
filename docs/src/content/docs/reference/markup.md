@@ -154,6 +154,24 @@ images: a note cannot load `https://…`, so it cannot report that you opened it
 A link pointing at nothing shows no picture and no broken-image icon. The line
 above it already says what was meant.
 
+In a vault a picture can also be embedded by name — `![[diagram.png]]` — which
+finds it wherever it sits rather than relative to the note. See
+[Links between notes](/scheda/reference/links/).
+
+## Links between notes
+
+```markdown
+[[plan]]  [[plan|the plan]]  [[plan#Risks]]  ![[plan]]
+```
+
+Inside a vault, double brackets link notes to each other. The whole construction
+is drawn as the words you meant to read, underlined — which is what tells it from
+a markdown link to the web — and typing `[[` offers the notes that match.
+
+A link to a note that does not exist yet is dashed and dimmer, and following it
+offers to write that note. The full rules are on
+[Links between notes](/scheda/reference/links/).
+
 ## Front matter
 
 ```markdown
