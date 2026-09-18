@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  A page to look at `[[wikilinks]]` with.
+
+  Same reason as `palette-preview.html`: a Tauri window cannot be screenshotted on
+  this machine — both `CopyFromScreen` and `PrintWindow(PW_RENDERFULLCONTENT)`
+  come back with the window *behind* scheda, confirmed against a positive control.
+  So the drawing is looked at here, in a browser, against the real stylesheet and
+  the real editor extensions.
+
+  The one thing a unit test cannot answer is on this page: whether the link, the
+  missing link, the embedded note and the embedded picture read as what they are
+  when a person looks at them. Every assertion in `wikilinks.test.ts` is about
+  which class or which text; none of them is about whether it looks right.
+
+  Not shipped and not imported by anything in `src/`; it lives beside the layout
+  check, which is the other tool that renders the product to measure it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scheda — links (preview)</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/scrollbar.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+      }
+      .frame {
+        max-width: 46rem;
+        margin: 0 auto 2rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      h2 {
+        max-width: 46rem;
+        margin: 0 auto 0.5rem;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Links, as drawn</h2>
+    <div class="frame" id="drawn"></div>
+
+    <h2>The same lines, with the caret on one of them</h2>
+    <div class="frame" id="editing"></div>
+
+    <script type="module">
+      // What the vault holds, as far as this page is concerned.
+      const VAULT = {
+        plan: '/vault/projects/plan.md',
+        'projects/plan': '/vault/projects/plan.md',
+        'shot.png': '/vault/assets/shot.png',
+      }
+
+      // The picture an embed draws. Inline rather than fetched: the asset
+      // protocol belongs to the core, and the core is not here.
+      const PICTURE =
+        'data:image/svg+xml;base64,' +
+        btoa(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120">
+             <rect width="320" height="120" fill="#d9704a" opacity="0.18"/>
+             <text x="160" y="66" text-anchor="middle" font-family="system-ui"
+                   font-size="15" fill="#8a5a44">an embedded picture</text>
+           </svg>`,
+        )
+
+      // Stubbed at the boundary itself rather than at the module, the way the
+      // palette preview does it: an ES module export cannot be reassigned, and
+      // the boundary is where the real thing would answer anyway. Tauri routes
+      // every `invoke` through this hook when it is present.
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: (callback) => {
+          const id = Math.random()
+          window[`_${id}`] = callback
+          return id
+        },
+        convertFileSrc: (path) => path,
+        invoke: async (command, args) => {
+          switch (command) {
+            case 'resolve_wikilinks':
+              return args.targets.map((target) => ({
+                path: VAULT[target] ?? null,
+                target: null,
+              }))
+            case 'peek_note':
+              return args.path.endsWith('plan.md')
+                ? {
+                    name: 'plan',
+                    text:
+                      'The plan for the week, in the order it has to happen. ' +
+                      'Nothing here is a commitment yet.',
+                  }
+                : null
+            case 'resolve_asset':
+              return PICTURE
+            case 'read_headings':
+              return ['Risks']
+            case 'complete_wikilink':
+              return []
+            default:
+              return null
+          }
+        },
+      }
+
+      const { EditorState } = await import('@codemirror/state')
+      const { EditorView } = await import('@codemirror/view')
+      const { schedaSetup } = await import('/src/editor/setup.ts')
+      const { documentPath } = await import('/src/editor/images.ts')
+
+      const DOC = [
+        'A link to [[plan]], one with an alias [[plan|the week ahead]],',
+        'and one into a heading [[plan#Risks]].',
+        '',
+        'A note not written yet: [[the idea]].',
+        '',
+        'In a code span it stays text: `[[not a link]]`.',
+        '',
+        '![[plan]]',
+        '',
+        '![[shot.png]]',
+        '',
+      ].join('\n')
+
+      function mount(host, cursor) {
+        new EditorView({
+          state: EditorState.create({
+            doc: DOC,
+            extensions: [...schedaSetup(), documentPath.init(() => '/vault/note.md')],
+            selection: { anchor: cursor },
+          }),
+          parent: host,
+        })
+      }
+
+      // The caret parked past everything, so every construction is drawn.
+      mount(document.getElementById('drawn'), DOC.length)
+      // And with the caret on the first line, where the source has to come back.
+      mount(document.getElementById('editing'), 12)
+    </script>
+  </body>
+</html>
