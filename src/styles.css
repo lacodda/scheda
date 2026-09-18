@@ -29,6 +29,9 @@
   /* Markup. The quote rule and the highlight stay in the product's own two
      colours; the callouts need their own, because their whole job is to say
      "this one is a warning" at a glance. */
+  /* A link to a note that has not been written yet: dimmer than the accent,
+     because it is an invitation rather than a destination. */
+  --link-missing: #b08a76;
   --quote-rule: #d8cec2;
   --quote-text: #6a635b;
   --highlight-bg: #fbe6a8;
@@ -75,6 +78,9 @@
   --status-bg: #1c1b21;
   --match: #3d3524;
   --match-active: #5c4a24;
+  /* A link to a note that has not been written yet: dimmer than the accent,
+     because it is an invitation rather than a destination. */
+  --link-missing: #a38878;
   --quote-rule: #3a3742;
   --quote-text: #a49c93;
   --highlight-bg: #4a3f1e;
@@ -118,6 +124,9 @@
   --status-bg: #1c1b21;
   --match: #3d3524;
   --match-active: #5c4a24;
+  /* A link to a note that has not been written yet: dimmer than the accent,
+     because it is an invitation rather than a destination. */
+  --link-missing: #a38878;
   --quote-rule: #3a3742;
   --quote-text: #a49c93;
   --highlight-bg: #4a3f1e;
@@ -916,4 +925,56 @@ body {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The card that appears when a `[[link]]` is hovered.
+ *
+ * In the body rather than inside the editor: a card inside a scrolling,
+ * line-wrapped document is clipped by it, and fixed positioning in the body is
+ * the arrangement that survives both. The editor's own stylesheet is the theme;
+ * this element is not in it, so it belongs here.
+ *
+ * dowel's PreviewCard is not used and its reasons are in `peek.ts`. What is kept
+ * from it: the card is a shortcut for the person who can see it, so it is out of
+ * the accessibility tree and everything in it is also in the note it quotes. */
+.cm-md-peek {
+  position: fixed;
+  z-index: 70;
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: 14rem;
+  overflow: hidden;
+  padding: 0.6rem 0.8rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 26%);
+  /* The pointer travels from the link onto the card and has to be able to rest
+     there, which is the whole trick of a hover card — so it takes the pointer
+     rather than letting it through. */
+  pointer-events: auto;
+}
+
+.cm-md-peek[hidden] {
+  display: none;
+}
+
+.cm-md-peek-title {
+  margin-bottom: 0.35rem;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cm-md-peek-body {
+  /* The note's opening as text, not as markup: rendering it would mean a second
+     renderer for the same format, and two renderers disagree. The source is
+     recognisable enough to tell you which note this is, which is all a card is
+     for. */
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  /* The core sends four hundred characters; this is the guard for a note whose
+     opening is four hundred characters of one word. */
+  overflow-wrap: break-word;
 }
