@@ -23,6 +23,7 @@ import {
 } from '../core'
 import { isInside, samePath } from '../paths'
 import { documentPath, forgetAssets, setDocumentPath } from './images'
+import { forgetEmbeds, forgetLinks } from './wikilinks'
 import { schedaSetup } from './setup'
 
 /** A document with a filename, or an unnamed buffer that has never been saved. */
@@ -304,6 +305,12 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       // now — and the state carrying the old path has to be told, whether it is
       // the live one or a stashed one.
       forgetAssets(from)
+      // Its wikilinks too. A wikilink resolves against the vault rather than
+      // against the note, so most of them still land where they did — but the
+      // answers are filed under the old path, and a cache nobody can reach is a
+      // cache that only grows.
+      forgetLinks(from)
+      forgetEmbeds(from)
       if (tab.id === activeId) {
         view.dispatch({ effects: setDocumentPath.of(to) })
       } else {
@@ -424,7 +431,11 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       // Whatever it was before, this tab now names a file that exists.
       tab.orphaned = false
       // The document moved, so its relative links point somewhere else now.
-      if (previous) forgetAssets(previous)
+      if (previous) {
+        forgetAssets(previous)
+        forgetLinks(previous)
+        forgetEmbeds(previous)
+      }
       view.dispatch({ effects: setDocumentPath.of(path) })
       // A file saved under a new name is no longer the read-only thing it may
       // have been opened as: the bytes just written are ours and are UTF-8.

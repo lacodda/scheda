@@ -119,6 +119,76 @@ export const schedaTheme = EditorView.theme({
   },
   '.cm-md-link': { color: 'var(--accent)' },
 
+  // ----------------------------------------------------------- wikilinks --
+
+  // A wikilink is drawn as its label, brackets and all replaced by a widget: the
+  // label of `[[plan|the plan]]` is not a substring of the source in the place it
+  // has to appear, so there is nothing for a mark to style.
+  //
+  // Underlined rather than only coloured. The accent is already the colour of an
+  // ordinary markdown link, and a reader should be able to tell a link that goes
+  // to a note in this vault from one that goes to the web — the underline is what
+  // says "this one is inside".
+  '.cm-md-wikilink': {
+    color: 'var(--accent)',
+    textDecoration: 'underline',
+    textDecorationStyle: 'solid',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '0.18em',
+    cursor: 'pointer',
+    borderRadius: '2px',
+  },
+  '.cm-md-wikilink:hover': {
+    textDecorationThickness: '2px',
+  },
+  // Reachable by keyboard, so the focus has to be visible. The same ring the
+  // rest of the window uses.
+  '.cm-md-wikilink:focus-visible, .cm-md-embed-head:focus-visible': {
+    outline: '2px solid var(--accent)',
+    outlineOffset: '1px',
+  },
+  // A link to a note that has not been written yet. Dashed and dimmer, the way
+  // Obsidian draws one — not because it is broken but because it is an
+  // invitation: clicking it offers to write the note.
+  '.cm-md-wikilink-missing': {
+    color: 'var(--link-missing)',
+    textDecorationStyle: 'dashed',
+  },
+
+  // ------------------------------------------------------------- embeds --
+
+  // `![[note]]` shown as a card in the flow of the text: the note's name along
+  // the top, its opening under it. The whole line is replaced, like a picture's
+  // is, because a hidden line keeps its height and leaves a blank band above
+  // every embed.
+  '.cm-md-embed': {
+    margin: '0.4rem 1rem 0.6rem',
+    padding: '0.5rem 0.8rem 0.6rem',
+    background: 'var(--status-bg)',
+    border: '1px solid var(--border)',
+    borderLeft: '3px solid var(--accent)',
+    borderRadius: '5px',
+  },
+  '.cm-md-embed-head': {
+    display: 'block',
+    marginBottom: '0.3rem',
+    fontSize: '0.85em',
+    color: 'var(--accent)',
+    textDecoration: 'underline',
+    textUnderlineOffset: '0.18em',
+    cursor: 'pointer',
+    borderRadius: '2px',
+  },
+  // The quoted text, dimmer than the note it sits in: it belongs to another
+  // note, and the reader should be able to see the join.
+  '.cm-md-embed-body': {
+    color: 'var(--quote-text)',
+    whiteSpace: 'pre-wrap',
+    // No scrollbar and no height limit fought over: the core sends an opening,
+    // not a note, so there is nothing here to overflow.
+    fontSize: '0.95em',
+  },
+
   '.cm-md-highlight': {
     backgroundColor: 'var(--highlight-bg)',
     color: 'var(--highlight-text)',

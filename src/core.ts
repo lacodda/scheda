@@ -277,3 +277,81 @@ export function onFileHandedOver(handler: (file: OpenFile) => void): Promise<Unl
 export function onHandoverFailed(handler: (message: string) => void): Promise<UnlistenFn> {
   return listen<string>('scheda://open-failed', (event) => handler(event.payload))
 }
+
+/** Where a wikilink leads. */
+export interface LinkTarget {
+  /** The file it resolves to, or null when the vault holds no such note. */
+  path: string | null
+  /** What to write between the brackets for a link to this file, in the vault's
+   *  own format. Filled only where the caller asked for one target. */
+  target: string | null
+}
+
+/** Where a single wikilink written in `document` leads.
+ *
+ *  The target arrives as written — `folder/note` — with the alias and the
+ *  heading already taken off: that split is the only part of a wikilink the
+ *  window owns, because it is a question about the text on screen. Everything
+ *  after it is Obsidian's resolution rules, which live in the core. */
+export function resolveWikilink(document: string, target: string): Promise<LinkTarget> {
+  return invoke<LinkTarget>('resolve_wikilink', { document, target })
+}
+
+/** Where several wikilinks lead, in one call.
+ *
+ *  One round trip for a note rather than one per link: a note of a hundred
+ *  wikilinks is ordinary in a vault, and the core answers all of them from the
+ *  one list it already holds. */
+export function resolveWikilinks(document: string, targets: string[]): Promise<LinkTarget[]> {
+  return invoke<LinkTarget[]>('resolve_wikilinks', { document, targets })
+}
+
+/** Creates the note a wikilink points at, and answers with its path.
+ *
+ *  Following a link to a note that is not there yet is how notes get written in
+ *  a vault, not an error. Where the file lands is the vault's own setting unless
+ *  the link named a folder itself. */
+export function createFromWikilink(document: string, target: string): Promise<string> {
+  return invoke<string>('create_from_wikilink', { document, target })
+}
+
+/** One note offered while a wikilink is being typed. */
+export interface WikilinkCompletion {
+  /** What to put between the brackets: the vault's own link format. */
+  target: string
+  name: string
+  folder: string
+  path: string
+}
+
+/** The notes a half-typed wikilink could be completed to, best first.
+ *
+ *  Ranked by the same scorer `Ctrl+P` uses, because it is the same question —
+ *  "which file did you mean by these letters" — and a second ranking here would
+ *  drift from the first. */
+export function completeWikilink(
+  document: string,
+  query: string,
+): Promise<WikilinkCompletion[]> {
+  return invoke<WikilinkCompletion[]>('complete_wikilink', { document, query })
+}
+
+/** The headings of a note, for completing `[[note#` and for going to one. */
+export function readHeadings(path: string): Promise<string[]> {
+  return invoke<string[]>('read_headings', { path })
+}
+
+/** The opening of a note: what the hover card shows. */
+export interface NotePeek {
+  name: string
+  text: string
+}
+
+/** The first lines of a note, or null when it cannot be read.
+ *
+ *  Short by design. The card is a glance at where a link goes — everything in it
+ *  is also in the note it points at, so it is a shortcut rather than the only
+ *  place anything appears. */
+export function peekNote(path: string): Promise<NotePeek | null> {
+  return invoke<NotePeek | null>('peek_note', { path })
+}

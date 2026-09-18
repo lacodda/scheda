@@ -4,8 +4,8 @@
 // strikethrough come with it, so GFM is not listed again here — a mutation test
 // caught the duplicate by removing it and changing nothing.
 //
-// What is added is Obsidian's `==highlight==`, which is in no standard, and the
-// grammars for fenced code below.
+// What is added is Obsidian's own: `==highlight==` and `[[wikilinks]]`, neither
+// of which is in any standard, plus the grammars for fenced code below.
 //
 // Nothing in this file changes the document. A dialect is what the parser
 // *recognises*; the bytes on disk are the same either way (ADR 0002).
@@ -41,6 +41,99 @@ const Highlight: MarkdownConfig = {
   ],
 }
 
+
+/** `[[note]]`, `[[note|shown]]`, `[[note#heading]]` and `![[embedded]]`.
+ *
+ *  A block parser would be wrong and a regular expression over the text would be
+ *  worse; this is an inline parser, so a `[[` inside a code span or a fence is
+ *  left alone by the same machinery that leaves `**bold**` alone there. That is
+ *  the whole reason it is here rather than in the decoration layer: `` `[[not a
+ *  link]]` `` in a note about wikilinks must not become one.
+ *
+ *  Parsed as one node with its parts inside it, rather than through
+ *  `addDelimiter`. A delimiter pair would let other inline markup nest inside —
+ *  `[[a **b** c]]` would carry bold — and the target of a wikilink is a file
+ *  name, where asterisks are characters rather than emphasis.
+ *
+ *  The nodes are named so the decoration layer can tell the halves apart:
+ *  `WikiMark` for the brackets and the `!`, `WikiTarget` for what is between
+ *  them, and `WikiAlias` for the part after `|` which is the only part a reader
+ *  is meant to see.
+ */
+const WIKI_OPEN = 91 /* [ */
+const WIKI_BANG = 33 /* ! */
+
+/** How far a wikilink may run.
+ *
+ *  Unclosed `[[` happens while somebody is typing one, and without a ceiling the
+ *  parser would scan to the end of the document on every keystroke looking for a
+ *  `]]` that is not there yet. A file name is not three hundred characters long,
+ *  and a note is. */
+const WIKI_LIMIT = 300
+
+const Wikilink: MarkdownConfig = {
+  defineNodes: [
+    { name: 'Wikilink' },
+    { name: 'WikiEmbed' },
+    { name: 'WikiMark' },
+    { name: 'WikiTarget' },
+    { name: 'WikiAlias' },
+  ],
+  parseInline: [
+    {
+      name: 'Wikilink',
+      parse(cx, next, pos) {
+        // `![[` or `[[`. The `!` belongs to the link — an embed is not a
+        // different construction, it is this one shown in place.
+        const embed = next === WIKI_BANG && cx.char(pos + 1) === WIKI_OPEN
+        const start = embed ? pos + 1 : pos
+        if (cx.char(start) !== WIKI_OPEN || cx.char(start + 1) !== WIKI_OPEN) return -1
+        if (!embed && next !== WIKI_OPEN) return -1
+
+        // The closing `]]`, within reach.
+        let at = start + 2
+        let end = -1
+        const ceiling = Math.min(cx.end, at + WIKI_LIMIT)
+        while (at < ceiling) {
+          const here = cx.char(at)
+          // A newline ends the search: a wikilink does not span lines, and a
+          // `[[` at the end of a paragraph must not swallow the next one.
+          if (here === 10 /* newline */) break
+          if (here === 93 /* ] */ && cx.char(at + 1) === 93) {
+            end = at
+            break
+          }
+          at += 1
+        }
+        if (end === -1) return -1
+        // `[[]]` is not a link to anything.
+        if (end === start + 2) return -1
+
+        const inner = cx.slice(start + 2, end)
+        const bar = inner.indexOf('|')
+        const parts = [
+          cx.elt('WikiMark', pos, start + 2),
+          bar === -1
+            ? cx.elt('WikiTarget', start + 2, end)
+            : cx.elt('WikiTarget', start + 2, start + 2 + bar),
+        ]
+        if (bar !== -1) {
+          // The bar is a marker; what follows it is the part a reader sees.
+          parts.push(cx.elt('WikiMark', start + 2 + bar, start + 3 + bar))
+          parts.push(cx.elt('WikiAlias', start + 3 + bar, end))
+        }
+        parts.push(cx.elt('WikiMark', end, end + 2))
+
+        return cx.addElement(
+          cx.elt(embed ? 'WikiEmbed' : 'Wikilink', pos, end + 2, parts),
+        )
+      },
+      // Before the base link parser, which would otherwise read the outer
+      // brackets of `[[note]]` as an empty link with `[note]` inside it.
+      before: 'Link',
+    },
+  ],
+}
 
 /** YAML front matter: a `---` fence at the very top of the file.
  *
@@ -88,7 +181,7 @@ const FrontMatter: MarkdownConfig = {
 export function schedaMarkdown(): Extension {
   return markdown({
     base: markdownLanguage,
-    extensions: [Highlight, FrontMatter],
+    extensions: [Highlight, Wikilink, FrontMatter],
     // Fenced code is highlighted by `codeLanguages`, resolved lazily so no
     // grammar is parsed before it is on screen (ADR 0001).
     codeLanguages: loadCodeLanguage,

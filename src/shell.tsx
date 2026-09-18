@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { EditorView } from '@codemirror/view'
 import {
   fileDiffers,
   forgetFileIndex,
@@ -26,8 +27,11 @@ import { Palette } from './palette'
 import { basename, samePath } from './paths'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
+import { outlineOf } from './editor/outline'
 import { FileTree } from './tree'
 import { setBracketClosing } from './editor/edits'
+import { forgetPeeks } from './editor/peek'
+import { forgetAllEmbeds, forgetAllLinks, setFollowLink } from './editor/wikilinks'
 import { RecentFiles } from './recent'
 import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
 import type { EditorHandle, Tab } from './editor/mount'
@@ -394,6 +398,38 @@ function Shell({ editor }: { editor: EditorHandle }) {
   }, [editor])
 
   useEffect(() => {
+    // How the editor follows a `[[link]]`. Registered here because every one of
+    // these four things is the shell's: opening a tab, scrolling the document,
+    // putting a question on screen, and saying that something went wrong.
+    setFollowLink({
+      open: (path) => void openPath(path),
+      goToHeading: (heading) => {
+        // `[[#Somewhere]]` — a link inside the note already on screen. The
+        // outline knows where every heading is, so the answer is a scroll rather
+        // than an open.
+        const found = outlineOf(editor.view.state).find((entry) => entry.text === heading)
+        if (!found) return
+        editor.view.dispatch({
+          selection: { anchor: found.from },
+          effects: EditorView.scrollIntoView(found.from, { y: 'start' }),
+        })
+        editor.view.focus()
+      },
+      confirmCreate: (target) =>
+        ask(`“${target}” does not exist yet in this vault.`, {
+          title: 'Create this note?',
+          kind: 'info',
+          okLabel: 'Create',
+          cancelLabel: 'Cancel',
+        }),
+      report: (message) => {
+        void ask(message, { title: 'That link goes nowhere', kind: 'error', okLabel: 'OK' })
+      },
+    })
+    return () => setFollowLink(null)
+  }, [editor, openPath])
+
+  useEffect(() => {
     // The watch follows whatever tab is in front of you. Pointed again on every
     // change because switching to a tab in another vault has to move it — and
     // the core answers cheaply when the root is already the one being watched.
@@ -414,6 +450,14 @@ function Shell({ editor }: { editor: EditorHandle }) {
       // Obsidian that Ctrl+P cannot find is exactly the staleness this version
       // is about.
       void forgetFileIndex()
+      // And what every open note's links resolved to. Thrown away wholesale
+      // rather than per path: a note that appeared may be the target of a
+      // `[[link]]` in any open tab, and the window cannot know which without
+      // resolving them all again — which is what dropping the answers makes
+      // happen, lazily, on the next draw.
+      forgetAllLinks()
+      forgetAllEmbeds()
+      forgetPeeks()
 
       for (const path of changes.removed) {
         editor.orphan(path)
