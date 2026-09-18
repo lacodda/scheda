@@ -15,7 +15,7 @@
 use std::path::{Component, Path, PathBuf};
 
 /// The marker Obsidian leaves in a vault. Read, never written.
-const VAULT_MARKER: &str = ".obsidian";
+pub const VAULT_MARKER: &str = ".obsidian";
 
 /// The root for a document at `path`.
 ///

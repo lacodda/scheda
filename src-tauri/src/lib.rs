@@ -6,6 +6,8 @@ pub mod associations;
 pub mod attachments;
 pub mod document;
 pub mod files;
+pub mod links;
+pub mod notes;
 pub mod obsidian;
 pub mod quick;
 pub mod root;
@@ -13,6 +15,7 @@ pub mod scratch;
 mod settings;
 pub mod startup;
 pub mod tree;
+pub mod vault;
 pub mod wait;
 pub mod watch;
 
@@ -246,7 +249,9 @@ fn paste_image(
     };
 
     let root = root::for_file(&document);
-    let folder = attachments::folder_for(&root).resolve(&root, &document);
+    let folder = vault::config_for(&root)
+        .attachment_folder
+        .resolve(&root, &document);
     std::fs::create_dir_all(&folder).map_err(|error| CommandError {
         message: format!(
             "the attachment folder “{}” could not be created: {error}",
@@ -465,51 +470,297 @@ fn file_differs(path: String, text: String) -> Result<bool, CommandError> {
 /// paths ever crossing the boundary.
 #[tauri::command]
 fn find_files(
-    state: tauri::State<'_, QuickIndex>,
+    state: tauri::State<'_, VaultIndex>,
     document: String,
     query: String,
 ) -> Vec<quick::Hit> {
-    let document = PathBuf::from(document);
-    let Some(root) = root::for_vault(&document) else {
-        return Vec::new();
-    };
-
-    let mut held = state.0.lock().expect("index lock");
-    // Read once per root and kept: a vault of a few thousand notes is a
-    // directory walk, and doing one on every keystroke would make the picker
-    // slower the more there is to find.
-    let index = match held.as_ref() {
-        Some(index) if index.root == root => index,
-        _ => {
-            let entries = tree::read(&root);
-            *held = Some(Index {
-                candidates: quick::candidates(&root, &entries),
-                root,
-            });
-            held.as_ref().expect("just filled")
-        }
-    };
-
-    quick::search(&index.candidates, &query)
+    with_index(&state, &PathBuf::from(document), |index| {
+        quick::search(&index.picker, &query)
+    })
+    .unwrap_or_default()
 }
 
-/// Throws the picker's list away, so the next search reads the vault again.
+/// Throws the vault's file list away, so the next question reads it again.
 ///
-/// Called when the watcher says the vault changed. Without it, a note created
-/// in Obsidian is invisible to `Ctrl+P` until the window is restarted — which
-/// is exactly the staleness this whole version is about.
+/// Called when the watcher says the vault changed. Without it, a note created in
+/// Obsidian is invisible to `Ctrl+P` and to every wikilink pointing at it until
+/// the window is restarted.
 #[tauri::command]
-fn forget_file_index(state: tauri::State<'_, QuickIndex>) {
+fn forget_file_index(state: tauri::State<'_, VaultIndex>) {
     *state.0.lock().expect("index lock") = None;
 }
 
-/// The picker's flattened view of one vault.
+/// The vault's files, flattened the two ways they are asked about.
+///
+/// One cache, not two. The picker and the wikilinks both want "every file in
+/// this vault", and reading the tree twice for the two of them would mean two
+/// directory walks, two moments of staleness and two things for the watcher to
+/// remember to invalidate.
 #[derive(Default)]
-struct QuickIndex(Mutex<Option<Index>>);
+struct VaultIndex(Mutex<Option<Index>>);
 
 struct Index {
     root: PathBuf,
-    candidates: Vec<quick::Candidate>,
+    /// The vault's own settings, read with the tree. They live in a file the
+    /// user edits in Obsidian rather than here, so they are dropped and re-read
+    /// whenever the list is — which the watcher already does on any change under
+    /// the root, `.obsidian/` included.
+    config: vault::VaultConfig,
+    picker: Vec<quick::Candidate>,
+    links: Vec<links::Candidate>,
+}
+
+/// Runs `job` against the index for a document's vault, reading the vault if
+/// this is the first question about it.
+///
+/// `None` when the document is not in a vault: wikilinks and the picker are both
+/// vault features, and a lone note on the Desktop has no vault for them to
+/// search (decision 2026-09-05).
+fn with_index<T>(
+    state: &tauri::State<'_, VaultIndex>,
+    document: &Path,
+    job: impl FnOnce(&Index) -> T,
+) -> Option<T> {
+    let root = root::for_vault(document)?;
+    let mut held = state.0.lock().expect("index lock");
+
+    // Read once per root and kept: a vault of a few thousand notes is a
+    // directory walk, and doing one per keystroke or per link would make the
+    // feature slower the more there is to find.
+    let fresh = !matches!(held.as_ref(), Some(index) if index.root == root);
+    if fresh {
+        let entries = tree::read(&root);
+        *held = Some(Index {
+            config: vault::config_for(&root),
+            picker: quick::candidates(&root, &entries),
+            links: links::candidates(&root, &entries),
+            root,
+        });
+    }
+    Some(job(held.as_ref().expect("just filled")))
+}
+
+/// What a wikilink points at.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkTarget {
+    /// The file it resolves to, or null when the vault holds no such note.
+    path: Option<String>,
+    /// What to write in the document for a link to this file — filled only when
+    /// the target resolved, and used by the completion rather than by the click.
+    target: Option<String>,
+}
+
+/// Where a wikilink written in `document` leads.
+///
+/// The target arrives as written — `folder/note`, with the alias and the heading
+/// already taken off by the window, which is the only part of a wikilink that is
+/// the window's business. What comes back is a path or nothing; the rules that
+/// decide which are Obsidian's and live in `links`.
+#[tauri::command]
+fn resolve_wikilink(
+    state: tauri::State<'_, VaultIndex>,
+    document: String,
+    target: String,
+) -> LinkTarget {
+    let document = PathBuf::from(document);
+    with_index(&state, &document, |index| {
+        let path = links::resolve(&index.links, &target);
+        LinkTarget {
+            target: path.as_ref().map(|found| {
+                links::target_for(&index.config, &index.links, &index.root, &document, found)
+            }),
+            path: path.map(|found| found.to_string_lossy().into_owned()),
+        }
+    })
+    .unwrap_or(LinkTarget {
+        path: None,
+        target: None,
+    })
+}
+
+/// Resolves several wikilinks in one call.
+///
+/// One round trip for a note rather than one per link. A note of a hundred
+/// wikilinks is ordinary in a vault, and a hundred calls to answer a question the
+/// core answers from one list is the round-trip-per-item shape this product keeps
+/// refusing (the same reason `quick` matches in the core).
+#[tauri::command]
+fn resolve_wikilinks(
+    state: tauri::State<'_, VaultIndex>,
+    document: String,
+    targets: Vec<String>,
+) -> Vec<LinkTarget> {
+    let document = PathBuf::from(document);
+    with_index(&state, &document, |index| {
+        targets
+            .iter()
+            .map(|target| {
+                let path = links::resolve(&index.links, target);
+                LinkTarget {
+                    target: None,
+                    path: path.map(|found| found.to_string_lossy().into_owned()),
+                }
+            })
+            .collect()
+    })
+    .unwrap_or_else(|| {
+        targets
+            .iter()
+            .map(|_| LinkTarget {
+                path: None,
+                target: None,
+            })
+            .collect()
+    })
+}
+
+/// Creates the note a wikilink points at, and answers with its path.
+///
+/// Called when somebody follows a link to a note that is not there yet — which
+/// is how notes get written in a vault, not an error. Where the file goes is the
+/// vault's answer (`newFileLocation`) unless the link itself named a folder, in
+/// which case the person already said where.
+#[tauri::command]
+fn create_from_wikilink(
+    state: tauri::State<'_, VaultIndex>,
+    document: String,
+    target: String,
+) -> Result<String, CommandError> {
+    let document = PathBuf::from(document);
+    let refusal = || CommandError {
+        message: format!("“{target}” is not a name this vault can hold"),
+        read_only: false,
+    };
+
+    let path = with_index(&state, &document, |index| {
+        links::file_for_missing(&index.config, &index.root, &document, &target)
+    })
+    .ok_or_else(|| CommandError {
+        message: "this note is not in a vault, so there is nowhere to put a new one".into(),
+        read_only: false,
+    })?
+    .ok_or_else(refusal)?;
+
+    // The folders the target named, if any. `create_dir_all` rather than a
+    // refusal: `[[projects/2027/plan]]` in a vault with no `2027` yet is a
+    // person saying where the note goes, not a mistake.
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| CommandError {
+            message: format!("“{}” could not be created: {error}", parent.display()),
+            read_only: false,
+        })?;
+    }
+
+    // Only if it is not there. The resolver said the vault holds no such note,
+    // but a note may have appeared since — from a sync client, or from the
+    // person creating it in Obsidian — and truncating it would cost writing.
+    if !path.is_file() {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| CommandError {
+                message: format!("“{}” could not be created: {error}", path.display()),
+                read_only: false,
+            })?;
+    }
+
+    // The list the resolver reads is now a file out of date. Dropped rather than
+    // amended: the watcher is about to say the same thing, and one way of going
+    // stale is easier to reason about than two.
+    *state.0.lock().expect("index lock") = None;
+
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// The notes a wikilink could be completed to, for what has been typed so far.
+///
+/// Ranked by the picker's own scorer, because the question is the same one:
+/// "which file did you mean by these letters". A separate ranking here would be
+/// a second answer to it, and the two would drift.
+#[tauri::command]
+fn complete_wikilink(
+    state: tauri::State<'_, VaultIndex>,
+    document: String,
+    query: String,
+) -> Vec<WikilinkCompletion> {
+    let document = PathBuf::from(document);
+    with_index(&state, &document, |index| {
+        quick::search(&index.picker, &query)
+            .into_iter()
+            .filter_map(|hit| {
+                let path = PathBuf::from(&hit.path);
+                // A note links to itself with `[[#heading]]`, not by name, and
+                // offering the open note as a completion of its own link is an
+                // offer nobody takes.
+                if path == document {
+                    return None;
+                }
+                Some(WikilinkCompletion {
+                    target: links::target_for(
+                        &index.config,
+                        &index.links,
+                        &index.root,
+                        &document,
+                        &path,
+                    ),
+                    name: hit.name,
+                    folder: hit.folder,
+                    path: hit.path,
+                })
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// One note offered while a wikilink is being typed.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikilinkCompletion {
+    /// What to put between the brackets: the vault's own link format.
+    target: String,
+    /// The file's name, which is what the row leads with.
+    name: String,
+    /// The folders above it — the dimmer half of the row.
+    folder: String,
+    path: String,
+}
+
+/// The headings of a note, for completing `[[note#` and for following a link
+/// into one.
+#[tauri::command]
+fn read_headings(path: String) -> Vec<String> {
+    let Ok(doc) = document::read(Path::new(&path)) else {
+        return Vec::new();
+    };
+    notes::headings_in(&doc.text)
+}
+
+/// The first lines of a note, for the card that appears when a link is hovered.
+///
+/// Short on purpose: the card is a glance at where a link goes, and a card
+/// holding a whole note is the note, read in a box that cannot be scrolled. Front
+/// matter comes off — it is the note's machinery, not its opening.
+#[tauri::command]
+fn peek_note(path: String) -> Option<NotePeek> {
+    let doc = document::read(Path::new(&path)).ok()?;
+    Some(NotePeek {
+        text: notes::opening_of(&doc.text),
+        name: Path::new(&path)
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    })
+}
+
+/// The opening of a note: what the card shows.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotePeek {
+    name: String,
+    text: String,
 }
 
 /// The URL that opens a document in Obsidian, or nothing when it is not in a
@@ -634,7 +885,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Preloaded(Mutex::new(preloaded)))
         .manage(watch::Watch::default())
-        .manage(QuickIndex::default())
+        .manage(VaultIndex::default())
         .invoke_handler(tauri::generate_handler![
             take_preloaded,
             open_file,
@@ -644,6 +895,12 @@ pub fn run() {
             watch_vault,
             find_files,
             forget_file_index,
+            resolve_wikilink,
+            resolve_wikilinks,
+            create_from_wikilink,
+            complete_wikilink,
+            read_headings,
+            peek_note,
             obsidian_url,
             release_waiter,
             resolve_asset,
