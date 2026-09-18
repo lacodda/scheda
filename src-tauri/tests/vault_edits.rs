@@ -10,7 +10,7 @@
 //! handle and a window. The commands are a line each over these functions, and
 //! the line worth testing is the one underneath.
 
-use scheda_lib::{attachments, document, files, root};
+use scheda_lib::{attachments, document, files, root, vault as vault_config};
 use std::path::{Path, PathBuf};
 
 /// A vault with `.obsidian/app.json` in it, like the real thing.
@@ -32,7 +32,9 @@ fn vault(attachment_setting: Option<&str>) -> tempfile::TempDir {
 /// called. The same two calls the `paste_image` command makes.
 fn attachment_folder(document: &Path) -> PathBuf {
     let root = root::for_file(document);
-    attachments::folder_for(&root).resolve(&root, document)
+    vault_config::config_for(&root)
+        .attachment_folder
+        .resolve(&root, document)
 }
 
 #[test]
