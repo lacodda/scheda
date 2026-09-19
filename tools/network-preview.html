@@ -1,0 +1,267 @@
+<!doctype html>
+<!--
+  A page to look at the network panel and the rename preview with.
+
+  Same reason as `links-preview.html` and `palette-preview.html`: a Tauri window
+  cannot be screenshotted on this machine — both `CopyFromScreen` and
+  `PrintWindow(PW_RENDERFULLCONTENT)` come back with the window *behind* scheda,
+  confirmed against a positive control. So the drawing is looked at here, in a
+  browser, against the real stylesheet and the real components.
+
+  The one thing the unit tests cannot answer is on this page. `network.test.tsx`
+  asserts which text and which handler; none of it asks whether a row of two
+  clamped lines is readable, whether a strike-through line and an accented one
+  read as "was" and "will be" rather than as an error and a success, or whether
+  the dialog fits on a small window with six files in it. Two of this project's
+  worst defects were found by eye on a page like this while thirty-five tests
+  were green.
+
+  Not shipped and not imported by anything in `src/`; it lives beside the layout
+  check, which is the other tool that renders the product to measure it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scheda — network and rename (preview)</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/scrollbar.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+      }
+      /* The page's own captions. Scoped to direct children of the body, or the
+         rule reaches into the components it is meant to be looking at — which it
+         did: `.rename-title` is an `h2`, and this page was uppercasing the file
+         name inside the product's own dialog. */
+      body > h2 {
+        max-width: 52rem;
+        margin: 1.6rem auto 0.5rem;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      body > h2:first-of-type {
+        margin-top: 0;
+      }
+      /* The panel is a column in a row beside the editor, so it is shown in one
+         here — a panel measured outside the layout it lives in is a panel
+         measured wrong, which is exactly how the outline's first screenshot
+         came out. */
+      .beside {
+        display: flex;
+        max-width: 52rem;
+        height: 22rem;
+        margin: 0 auto 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .pretend-editor {
+        flex: 1;
+        padding: 1rem 1.2rem;
+        background: var(--bg);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      .beside > .network-host {
+        display: flex;
+      }
+      /* The dialog is fixed-position, so it is given a box of its own to sit in
+         rather than covering the page. */
+      /* Tall enough to hold a dialog that sizes itself against the *viewport*
+         (`max-height: 78vh`). A shorter box would cut the buttons off and look
+         like a defect in the dialog, which is a thing this page exists to avoid
+         claiming. */
+      .stage {
+        position: relative;
+        max-width: 52rem;
+        height: 78vh;
+        min-height: 40rem;
+        margin: 0 auto 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--status-bg);
+      }
+      .stage .rename-backdrop,
+      .stage .undo-bar {
+        position: absolute;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>The panel, with backlinks and holes</h2>
+    <div class="beside">
+      <div class="pretend-editor">the note being read</div>
+      <div class="network-host" id="full"></div>
+    </div>
+
+    <h2>The panel with nothing in it</h2>
+    <div class="beside">
+      <div class="pretend-editor">the note being read</div>
+      <div class="network-host" id="empty"></div>
+    </div>
+
+    <h2>Renaming, with the lines to approve</h2>
+    <div class="stage" id="dialog"></div>
+
+    <h2>Renaming a note the vault leans on</h2>
+    <div class="stage" id="big"></div>
+
+    <h2>The offer to take it back</h2>
+    <div class="stage" id="undo"></div>
+
+    <script type="module">
+      import { createRoot } from 'react-dom/client'
+      import { createElement as h } from 'react'
+
+      // Stubbed at the boundary itself rather than at the module, the way the
+      // other previews do it: an ES module export cannot be reassigned, and the
+      // boundary is where the real thing would answer anyway.
+      const ANSWERS = {}
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: (callback) => {
+          const id = Math.random()
+          window[`_${id}`] = callback
+          return id
+        },
+        convertFileSrc: (path) => path,
+        invoke: async (command) => ANSWERS[command] ?? null,
+      }
+
+      const { NetworkPanel } = await import('/src/network.tsx')
+      const { RenamePreview, UndoBar } = await import('/src/rename.tsx')
+
+      const editor = (path) => ({ active: () => ({ id: 1, path }) })
+      const noop = () => {}
+
+      // A vault's answer, with the shapes a real one produces: a long path, a
+      // sentence that runs past two lines, a note that mentions this one twice,
+      // and a name in Cyrillic.
+      ANSWERS.read_network = {
+        backlinks: [
+          {
+            path: '/v/a.md',
+            relative: 'notes/one.md',
+            line: 3,
+            context: 'we follow [[plan]] closely, and the shape of it decides most of what the rest of this note argues for',
+            target: 'plan',
+          },
+          {
+            path: '/v/b.md',
+            relative: 'projects/deeply/nested/folder/a rather long note name.md',
+            line: 12,
+            context: 'see [[plan]]',
+            target: 'plan',
+          },
+          {
+            path: '/v/c.md',
+            relative: 'заметки/план работ.md',
+            line: 1,
+            context: 'ссылка на [[plan]] в начале заметки',
+            target: 'plan',
+          },
+          { path: '/v/d.md', relative: 'notes/two.md', line: 4, context: 'first mention', target: 'plan' },
+          { path: '/v/d.md', relative: 'notes/two.md', line: 40, context: 'and again, later', target: 'projects/plan' },
+        ],
+        unresolved: [
+          { target: 'the thing that is not written yet', line: 7, context: 'todo: [[the thing that is not written yet]]' },
+          { target: 'roadmap 2027', line: 19, context: 'see [[roadmap 2027]] once it exists' },
+        ],
+      }
+
+      createRoot(document.getElementById('full')).render(
+        h(NetworkPanel, { editor: editor('/v/plan.md'), visible: true, revision: 0, onOpen: noop, onCreate: noop }),
+      )
+
+      // The same panel with nothing to say. Its own component instance, because
+      // the stub answers one thing per command.
+      const emptyWindow = { ...window.__TAURI_INTERNALS__ }
+      const EmptyPanel = () =>
+        h(NetworkPanel, { editor: editor(null), visible: true, revision: 0, onOpen: noop, onCreate: noop })
+      createRoot(document.getElementById('empty')).render(h(EmptyPanel))
+
+      const plan = {
+        from: '/v/plan.md',
+        to: '/v/roadmap.md',
+        links: 2,
+        unreadable: [],
+        files: [
+          {
+            path: '/v/notes/one.md',
+            relative: 'notes/one.md',
+            edits: [
+              {
+                line: 3,
+                before: 'plan',
+                after: 'roadmap',
+                lineBefore: 'see [[plan]] for the shape of what we are doing this quarter',
+                lineAfter: 'see [[roadmap]] for the shape of what we are doing this quarter',
+              },
+            ],
+          },
+          {
+            path: '/v/заметки/план.md',
+            relative: 'заметки/план работ.md',
+            edits: [
+              {
+                line: 1,
+                before: 'plan',
+                after: 'roadmap',
+                lineBefore: 'ссылка на [[plan|тот самый план]] в самом начале заметки',
+                lineAfter: 'ссылка на [[roadmap|тот самый план]] в самом начале заметки',
+              },
+            ],
+          },
+        ],
+      }
+
+      ANSWERS.plan_rename = plan
+      createRoot(document.getElementById('dialog')).render(
+        h(RenamePreview, { path: '/v/plan.md', name: 'roadmap.md', onDone: noop, onFailure: noop }),
+      )
+
+      // The case that decides whether the dialog holds up: a note the whole
+      // vault points at. If this does not scroll inside a window, the feature is
+      // unusable exactly when it matters most.
+      const many = {
+        ...plan,
+        links: 24,
+        unreadable: ['archive/old-export.md'],
+        files: Array.from({ length: 8 }, (_, file) => ({
+          path: `/v/notes/${file}.md`,
+          relative: `notes/chapter-${file + 1}.md`,
+          edits: Array.from({ length: 3 }, (_, at) => ({
+            line: at * 17 + 4,
+            before: 'plan',
+            after: 'roadmap',
+            lineBefore: `paragraph ${at + 1} mentioning [[plan]] in passing`,
+            lineAfter: `paragraph ${at + 1} mentioning [[roadmap]] in passing`,
+          })),
+        })),
+      }
+      const BigPreview = () => {
+        window.__TAURI_INTERNALS__.invoke = async (command) =>
+          command === 'plan_rename' ? many : ANSWERS[command] ?? null
+        return h(RenamePreview, { path: '/v/plan.md', name: 'roadmap.md', onDone: noop, onFailure: noop })
+      }
+      createRoot(document.getElementById('big')).render(h(BigPreview))
+
+      createRoot(document.getElementById('undo')).render(
+        h(UndoBar, {
+          applied: { from: '/v/plan.md', to: '/v/roadmap.md', links: 24, files: many.files },
+          onUndo: noop,
+          onDismiss: noop,
+        }),
+      )
+    </script>
+  </body>
+</html>

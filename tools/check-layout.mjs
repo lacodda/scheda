@@ -31,7 +31,21 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'application/octet-stream' })
   res.end(fs.readFileSync(file))
 })
-await new Promise((resolve) => server.listen(port, resolve))
+// A port already in use is the one failure here that lies. `listen` would fail,
+// the promise would never settle or would settle anyway, and Playwright would
+// load whatever the *other* process serves — so the gate reports "the editor
+// never appeared" about a page it never fetched. A leftover server from an
+// interrupted run is exactly how that happens.
+await new Promise((resolve, reject) => {
+  server.once('error', (error) => {
+    reject(
+      error.code === 'EADDRINUSE'
+        ? new Error(`port ${port} is already in use — another run left a server behind`)
+        : error,
+    )
+  })
+  server.listen(port, resolve)
+})
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1200, height: 800 } })
@@ -92,6 +106,10 @@ await page.addInitScript((text) => {
       if (command === 'restore_drafts') return []
       if (command === 'keep_draft') return 'draft-1'
       if (command === 'discard_draft') return null
+      // The network panel asks for these the moment it is opened. `null` would
+      // reach the panel as a missing shape rather than an empty one, and the
+      // failure would be about the stub rather than the page.
+      if (command === 'read_network') return { backlinks: [], unresolved: [] }
       if (command === 'read_tree') {
         return {
           root: '/vault',
