@@ -10,6 +10,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { EditorView } from '@codemirror/view'
 import {
+  createFromWikilink,
   fileDiffers,
   forgetFileIndex,
   forgetRecent,
@@ -29,6 +30,9 @@ import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
 import { outlineOf } from './editor/outline'
 import { FileTree } from './tree'
+import { NetworkPanel } from './network'
+import { RenamePreview, UndoBar } from './rename'
+import { undoRename, type RenameApplied } from './core'
 import { setBracketClosing } from './editor/edits'
 import { forgetPeeks } from './editor/peek'
 import { forgetAllEmbeds, forgetAllLinks, setFollowLink } from './editor/wikilinks'
@@ -534,6 +538,100 @@ function Shell({ editor }: { editor: EditorHandle }) {
   )
 }
 
+/** How many times the vault has been written to, as something the panels in
+ *  different React roots can all watch.
+ *
+ *  The panels are separate roots — the tree on the left, the network on the
+ *  right — because React cannot render one component into two places, and a
+ *  root cannot pass state to another root. So the one fact they share lives
+ *  outside React and is read with `useSyncExternalStore`, which is the same way
+ *  every panel already watches the editor.
+ *
+ *  It counts writes rather than describing them: what the network panel does
+ *  with the news is re-read, and it would re-read for any of them. */
+const vaultWrites = {
+  count: 0,
+  listeners: new Set<() => void>(),
+  bump() {
+    vaultWrites.count += 1
+    for (const listener of vaultWrites.listeners) listener()
+  },
+  subscribe(listener: () => void) {
+    vaultWrites.listeners.add(listener)
+    return () => {
+      vaultWrites.listeners.delete(listener)
+    }
+  },
+}
+
+function useVaultWrites(): number {
+  return useSyncExternalStore(vaultWrites.subscribe, () => vaultWrites.count)
+}
+
+/** The network panel, and the key that shows it.
+ *
+ *  `Ctrl+Shift+B` — for backlinks, which is what the panel is mostly about. Like
+ *  the outline and the tree, the state belongs to the window rather than to the
+ *  document: switching tabs should not close a panel that was open. */
+function NetworkHost({ editor }: { editor: EditorHandle }) {
+  const [visible, setVisible] = useState(false)
+  const revision = useVaultWrites()
+  useEditor(editor)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 'b') return
+      event.preventDefault()
+      setVisible((was) => !was)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  return (
+    <NetworkPanel
+      editor={editor}
+      visible={visible}
+      revision={revision}
+      onOpen={(path, line) => {
+        void editor.open(path).then(
+          () => {
+            rememberRecent(path)
+            // The line the link is on, not the top of the note: a backlink that
+            // opens a long note at its first paragraph has answered "which
+            // note" and dropped "where in it".
+            const at = editor.view.state.doc.line(
+              Math.min(Math.max(line, 1), editor.view.state.doc.lines),
+            )
+            editor.view.dispatch({
+              selection: { anchor: at.from },
+              effects: EditorView.scrollIntoView(at.from, { y: 'center' }),
+            })
+            editor.view.focus()
+          },
+          () => {
+            // A note that will not open leaves the panel as it was.
+          },
+        )
+      }}
+      onCreate={(target) => {
+        const path = editor.active().path
+        if (path === null) return
+        void createFromWikilink(path, target)
+          .then((made) => {
+            vaultWrites.bump()
+            return editor.open(made).then(() => rememberRecent(made))
+          })
+          .catch(() => {
+            // The core refuses a target that cannot be a file; the note is open
+            // either way and the row is still there to try again.
+          })
+      }}
+    />
+  )
+}
+
 /** The outline, and the key that shows it.
  *
  *  The state lives here rather than in the editor: it is a property of the
@@ -562,8 +660,20 @@ function OutlinePanel({ editor }: { editor: EditorHandle }) {
  *  document: switching tabs should not close a panel that was open. The path
  *  it reads from does follow the tabs, because the tree is the vault of
  *  whatever is being edited. */
-function TreePanel({ editor }: { editor: EditorHandle }) {
+function TreePanel({
+  editor,
+  onVaultWritten,
+}: {
+  editor: EditorHandle
+  onVaultWritten: () => void
+}) {
   const [visible, setVisible] = useState(false)
+  // The rename being asked about, and the one just done. Both live here because
+  // the tree hands a rename up rather than performing it: a rename in a vault
+  // may rewrite other people's notes, and the dry run, the approval and the
+  // undo are the window's business rather than a panel's.
+  const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null)
+  const [undoable, setUndoable] = useState<RenameApplied | null>(null)
   useEditor(editor)
 
   useEffect(() => {
@@ -577,35 +687,83 @@ function TreePanel({ editor }: { editor: EditorHandle }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const refuse = useCallback((message: string) => {
+    // The core's own words: "“notes.md” already exists", "“note.md” is open in
+    // another program". A dialog nobody can act on is the same as none.
+    void ask(message, { title: 'That did not work', kind: 'error', okLabel: 'OK' })
+  }, [])
+
   return (
-    <FileTree
-      documentPath={editor.active().path}
-      visible={visible}
-      onOpen={(path) => {
-        void editor.open(path).then(
-          () => rememberRecent(path),
-          () => {
-            // A file that will not open leaves the tree as it was; the banner in
-            // main.tsx is what says why.
-          },
-        )
-      }}
-      onRenamed={(from, to) => {
-        editor.follow(from, to)
-        void forgetRecent(from)
-        void rememberRecent(to)
-      }}
-      onDeleted={(path) => {
-        editor.orphan(path)
-        void forgetRecent(path)
-      }}
-      onFailure={(message) => {
-        // The core's own words: "“notes.md” already exists", "“note.md” is open
-        // in another program". A dialog nobody can act on is the same as none.
-        void ask(message, { title: 'That did not work', kind: 'error', okLabel: 'OK' })
-      }}
-    />
+    <>
+      <FileTree
+        documentPath={editor.active().path}
+        visible={visible}
+        onOpen={(path) => {
+          void editor.open(path).then(
+            () => rememberRecent(path),
+            () => {
+              // A file that will not open leaves the tree as it was; the banner
+              // in main.tsx is what says why.
+            },
+          )
+        }}
+        onRename={(path, name) => setRenaming({ path, name })}
+        onDeleted={(path) => {
+          editor.orphan(path)
+          void forgetRecent(path)
+        }}
+        onFailure={refuse}
+      />
+      {renaming && (
+        <RenamePreview
+          path={renaming.path}
+          name={renaming.name}
+          onFailure={refuse}
+          onDone={(applied) => {
+            setRenaming(null)
+            if (!applied) return
+            // The tab showing the file follows it, and the recent list learns
+            // the new name — the same three things the tree used to do itself.
+            editor.follow(applied.from, applied.to)
+            void forgetRecent(applied.from)
+            void rememberRecent(applied.to)
+            onVaultWritten()
+            // The offer to take it back, but only when there was more to it
+            // than moving one file. An undo bar for an ordinary rename is a bar
+            // in the way of a thing that worked.
+            if (applied.links > 0) setUndoable(applied)
+          }}
+        />
+      )}
+      {undoable && (
+        <UndoBar
+          applied={undoable}
+          onDismiss={() => setUndoable(null)}
+          onUndo={() => {
+            const taken = undoable
+            setUndoable(null)
+            void undoRename()
+              .then((undone) => {
+                if (!undone) return
+                editor.follow(taken.to, taken.from)
+                void forgetRecent(taken.to)
+                void rememberRecent(taken.from)
+                onVaultWritten()
+              })
+              .catch((error: unknown) => refuse(messageOf(error)))
+          }}
+        />
+      )}
+    </>
   )
+}
+
+/** The core's own words for a refusal, when there are any. */
+function messageOf(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message)
+  }
+  return String(error)
 }
 
 /** Mounts the title bar above the editor and the status bar below it. */
@@ -634,8 +792,11 @@ export function mountShell(editor: EditorHandle) {
   treeHost.className = 'tree-host'
   const outlineHost = document.createElement('div')
   outlineHost.className = 'outline-host'
+  const networkHost = document.createElement('div')
+  networkHost.className = 'network-host'
   middle.appendChild(treeHost)
   middle.appendChild(editorHost)
+  middle.appendChild(networkHost)
   middle.appendChild(outlineHost)
 
   // The title bar and the status bar are separate roots so the first can sit
@@ -651,9 +812,14 @@ export function mountShell(editor: EditorHandle) {
       <OutlinePanel editor={editor} />
     </StrictMode>,
   )
+  createRoot(networkHost).render(
+    <StrictMode>
+      <NetworkHost editor={editor} />
+    </StrictMode>,
+  )
   createRoot(treeHost).render(
     <StrictMode>
-      <TreePanel editor={editor} />
+      <TreePanel editor={editor} onVaultWritten={() => vaultWrites.bump()} />
     </StrictMode>,
   )
   createRoot(stripHost).render(

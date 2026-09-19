@@ -32,6 +32,14 @@
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
   --link-missing: #b08a76;
+  /* The two halves of a previewed change. Not red and green: the line that goes
+     away is not an error and the one that arrives is not a success, and a
+     product whose only strong colour is one accent should not grow a traffic
+     light for a preview. Muted for what was, the accent for what will be. */
+  --was: #8a8279;
+  --was-bg: #f0ebe5;
+  --will-be: #a8452a;
+  --will-be-bg: #f7e8e2;
   --quote-rule: #d8cec2;
   --quote-text: #6a635b;
   --highlight-bg: #fbe6a8;
@@ -81,6 +89,10 @@
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
   --link-missing: #a38878;
+  --was: #8c857c;
+  --was-bg: #2a2723;
+  --will-be: #e0906f;
+  --will-be-bg: #33241e;
   --quote-rule: #3a3742;
   --quote-text: #a49c93;
   --highlight-bg: #4a3f1e;
@@ -127,6 +139,10 @@
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
   --link-missing: #a38878;
+  --was: #8c857c;
+  --was-bg: #2a2723;
+  --will-be: #e0906f;
+  --will-be-bg: #33241e;
   --quote-rule: #3a3742;
   --quote-text: #a49c93;
   --highlight-bg: #4a3f1e;
@@ -977,4 +993,350 @@ body {
   /* The core sends four hundred characters; this is the guard for a note whose
      opening is four hundred characters of one word. */
   overflow-wrap: break-word;
+}
+
+/* ------------------------------------------------------------- network -- */
+
+/* The React root the panel renders into: a flex box, or the panel would shrink
+   to its content and leave the editor's background showing under it — the same
+   thing the outline's first screenshot showed. */
+.network-host {
+  display: flex;
+  min-height: 0;
+}
+
+.network {
+  flex: 0 0 auto;
+  width: 19rem;
+  overflow-y: auto;
+  padding: 0.6rem 0 1rem;
+  border-left: 1px solid var(--border);
+  background: var(--status-bg);
+  font-size: 12px;
+}
+
+/* On a narrow window the panel would leave the text no room, so it takes a
+   share instead of a fixed width. */
+@media (max-width: 60rem) {
+  .network {
+    width: 45%;
+    min-width: 11rem;
+  }
+}
+
+.network-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0.5rem 0 0.3rem;
+  padding: 0 0.9rem;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.network-count {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.network-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.network-empty,
+.network-note {
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  color: var(--muted);
+}
+
+.network-note {
+  padding-top: 0.8rem;
+  line-height: 1.5;
+}
+
+.network-item {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.9rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.network-item:hover {
+  border-left-color: var(--accent);
+  background: var(--active-line);
+}
+
+/* Which note it is: one line, cut rather than wrapped, so the rows stay the
+   same height and the list stays scannable. */
+.network-where {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* And what it says. Two lines at most: enough to recognise the sentence the
+   link sits in, not enough to read the note from the sidebar. */
+.network-context {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.15rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* A link to a note that is not written yet. The same colour the editor draws
+   one in, so the panel and the text agree about what "missing" looks like. */
+.network-missing .network-where {
+  color: var(--link-missing);
+  font-size: 12px;
+}
+
+/* -------------------------------------------------------------- rename -- */
+
+.rename-backdrop {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 8vh;
+  background: rgb(0 0 0 / 28%);
+}
+
+.rename-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(44rem, calc(100vw - 4rem));
+  max-height: 78vh;
+  overflow: hidden;
+  padding: 1.1rem 1.2rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 34%);
+}
+
+.rename-title {
+  margin: 0 0 0.35rem;
+  color: var(--heading);
+  font-size: 15px;
+  font-weight: 600;
+  /* Stated rather than left to inherit: the heading carries a file name, and a
+     name is its own case. An ancestor sheet that uppercases headings — the
+     preview page has exactly that rule — would turn `roadmap.md` into
+     `ROADMAP.MD` and show the person a name that is not the one being written. */
+  text-transform: none;
+}
+
+.rename-name {
+  color: var(--accent);
+}
+
+.rename-summary {
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rename-reading {
+  margin: 0;
+  padding: 1.4rem 0.4rem;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* The list scrolls; the dialog does not grow past the window. What is being
+   approved is a write to somebody's notes, so every line is here rather than a
+   count — a number is not something a person can check. */
+.rename-files {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin: 0 -0.3rem;
+  padding: 0 0.3rem;
+}
+
+.rename-file {
+  margin-bottom: 0.9rem;
+}
+
+.rename-file-name {
+  margin: 0 0 0.3rem;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.rename-edits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rename-edit {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+}
+
+.rename-line-number {
+  flex: 0 0 2.2rem;
+  color: var(--muted);
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  text-align: right;
+}
+
+.rename-lines {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rename-before,
+.rename-after {
+  overflow-x: auto;
+  padding: 0.12rem 0.35rem;
+  border-radius: 3px;
+  font-family: var(--mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rename-before {
+  background: var(--was-bg);
+  color: var(--was);
+  text-decoration: line-through;
+  text-decoration-color: rgb(138 130 121 / 45%);
+}
+
+.rename-after {
+  background: var(--will-be-bg);
+  color: var(--will-be);
+}
+
+.rename-unreadable {
+  margin: 0.2rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 4px;
+  background: var(--was-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.rename-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.9rem;
+}
+
+.rename-cancel,
+.rename-confirm {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--status-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: default;
+}
+
+.rename-confirm {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.rename-cancel:hover {
+  background: var(--active-line);
+}
+
+.rename-confirm:hover {
+  filter: brightness(1.06);
+}
+
+/* ------------------------------------------------------------ undo bar -- */
+
+/* A bar, not a dialog: the rename worked, and a modal asking whether the thing
+   that just worked should be kept is a modal in the way. */
+.undo-bar {
+  position: fixed;
+  z-index: 65;
+  right: 1.1rem;
+  bottom: 2.4rem;
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  max-width: min(30rem, calc(100vw - 2.2rem));
+  padding: 0.5rem 0.6rem 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 26%);
+  font-size: 12px;
+}
+
+.undo-text {
+  overflow: hidden;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.undo-action {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--status-bg);
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.undo-action:hover {
+  background: var(--active-line);
+}
+
+.undo-close {
+  flex: 0 0 auto;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
+}
+
+.undo-close:hover {
+  color: var(--text);
 }

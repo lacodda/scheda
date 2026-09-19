@@ -355,3 +355,102 @@ export interface NotePeek {
 export function peekNote(path: string): Promise<NotePeek | null> {
   return invoke<NotePeek | null>('peek_note', { path })
 }
+
+/** One place a note is linked from. */
+export interface Reference {
+  path: string
+  /** The path from the vault root, which is what the panel lists. */
+  relative: string
+  line: number
+  /** The line the link sits on. What makes a backlink useful is the sentence
+   *  around it: a list of file names says which notes mention this one, a list
+   *  of sentences says what they say about it. */
+  context: string
+  /** The target as written, so `[[plan]]` and `[[notes/plan]]` are told apart
+   *  in a list where both resolve here. */
+  target: string
+}
+
+/** A link in the open note that points at nothing. */
+export interface Unresolved {
+  target: string
+  line: number
+  context: string
+}
+
+export interface Network {
+  backlinks: Reference[]
+  unresolved: Unresolved[]
+}
+
+/** What points at this note, and what it points at in vain.
+ *
+ *  One call for both: both are answered by reading the vault's notes, and asking
+ *  twice would read every file twice. Empty for a note that is not in a vault —
+ *  there is no vault whose links could point at it. */
+export function readNetwork(document: string): Promise<Network> {
+  return invoke<Network>('read_network', { document })
+}
+
+/** One link a rename would rewrite. */
+export interface RenameEdit {
+  line: number
+  before: string
+  after: string
+  /** The whole line as it reads now and as it would read. The line is what a
+   *  person recognises a link by; the target alone is not. */
+  lineBefore: string
+  lineAfter: string
+}
+
+export interface RenameFileEdits {
+  path: string
+  relative: string
+  edits: RenameEdit[]
+}
+
+/** Everything a rename would do, before any of it is done. */
+export interface RenamePlan {
+  from: string
+  to: string
+  files: RenameFileEdits[]
+  links: number
+  /** Notes that could not be read. Named rather than silently skipped: one of
+   *  them may hold a link that is about to break, and only the person can go
+   *  and look. */
+  unreadable: string[]
+}
+
+/** What a rename actually did. */
+export interface RenameApplied {
+  from: string
+  to: string
+  files: RenameFileEdits[]
+  links: number
+}
+
+/** What renaming this file would change, without changing any of it.
+ *
+ *  The dry run. Nothing on disk is touched — the vault's notes are read, the
+ *  links that would break are worked out, and the list comes back for the person
+ *  to look at. Only `applyRename` writes anything. */
+export function planRename(path: string, name: string): Promise<RenamePlan> {
+  return invoke<RenamePlan>('plan_rename', { path, name })
+}
+
+/** Performs a plan: moves the file, then rewrites the links it listed.
+ *
+ *  The plan goes back rather than being recomputed, so what happens is what was
+ *  shown. A note that changed between the showing and the doing is skipped
+ *  rather than written at offsets that no longer mean anything. */
+export function applyRename(plan: RenamePlan): Promise<RenameApplied> {
+  return invoke<RenameApplied>('apply_rename', { plan })
+}
+
+/** Puts back the last rename — the files' exact bytes, then the name.
+ *
+ *  Null when there is nothing to undo. One rename, not a stack: the bytes held
+ *  are only the right ones while nothing else has been written over them. */
+export function undoRename(): Promise<RenameApplied | null> {
+  return invoke<RenameApplied | null>('undo_rename')
+}

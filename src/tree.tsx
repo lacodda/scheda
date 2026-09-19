@@ -22,7 +22,6 @@ import {
   createFolder,
   deleteEntry,
   readTree,
-  renameEntry,
   type TreeEntry,
   type Vault,
 } from './core'
@@ -136,15 +135,21 @@ export function FileTree({
   documentPath,
   visible,
   onOpen,
-  onRenamed,
+  onRename,
   onDeleted,
   onFailure,
 }: {
   documentPath: string | null
   visible: boolean
   onOpen: (path: string) => void
-  /** A file moved: the tab showing it follows. */
-  onRenamed: (from: string, to: string) => void
+  /** Asks for a file to be renamed.
+   *
+   *  The tree asks rather than performing it. A rename in a vault may rewrite
+   *  links in other people's notes, and what that takes — a dry run, a list to
+   *  approve, an offer to undo — belongs where the window's other dialogs live
+   *  rather than inside a panel. The tree's job ends at "this file, this name".
+   */
+  onRename: (path: string, name: string) => void
   /** A file went to the recycle bin: the tab showing it has to know. */
   onDeleted: (path: string) => void
   /** A refusal from the filesystem, in the words the core put it in. */
@@ -210,12 +215,12 @@ export function FileTree({
           await createFolder(request.parent, name)
           reveal([request.parent])
         } else {
-          const moved = await renameEntry(request.path, name)
-          onRenamed(moved.from, moved.to)
+          // Handed up rather than done here: see `onRename`.
+          onRename(request.path, name)
         }
       })
     },
-    [pending, attempt, reveal, onOpen, onRenamed],
+    [pending, attempt, reveal, onOpen, onRename],
   )
 
   const remove = useCallback(
