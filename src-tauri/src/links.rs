@@ -129,23 +129,32 @@ fn collect(root: &Path, entries: &[crate::tree::Entry], out: &mut Vec<Candidate>
     for entry in entries {
         match &entry.children {
             Some(children) => collect(root, children, out),
-            None => {
-                let path = PathBuf::from(&entry.path);
-                let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
-                let relative_lower = slashed(&relative).to_lowercase();
-                let name_lower = entry.name.to_lowercase();
-                let stem_lower = path
-                    .file_stem()
-                    .map(|stem| stem.to_string_lossy().to_lowercase())
-                    .unwrap_or_else(|| name_lower.clone());
-                out.push(Candidate {
-                    path,
-                    relative_lower,
-                    stem_lower,
-                    name_lower,
-                });
-            }
+            None => out.push(candidate_for(root, PathBuf::from(&entry.path))),
         }
+    }
+}
+
+/// One file, in the three forms every comparison here is made against.
+///
+/// Public because a rename has to ask what the vault would look like *after*
+/// it: the same list with one path replaced. Building that list means building
+/// candidates for paths that are not on disk yet, which is exactly this.
+pub fn candidate_for(root: &Path, path: PathBuf) -> Candidate {
+    let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
+    let relative_lower = slashed(&relative).to_lowercase();
+    let name_lower = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let stem_lower = path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_lowercase())
+        .unwrap_or_else(|| name_lower.clone());
+    Candidate {
+        path,
+        relative_lower,
+        stem_lower,
+        name_lower,
     }
 }
 
@@ -443,10 +452,370 @@ pub fn file_for_missing(
     Some(base.join(file_name))
 }
 
+/// A wikilink found in a file's text, with where in the bytes it sits.
+///
+/// The ranges are byte offsets, because that is what a rewrite needs: the text
+/// is spliced by them, and a character index would have to be turned into one
+/// anyway. `target_from`/`target_to` cover the path alone — not the brackets,
+/// not the heading, not the alias — since renaming a file changes only that
+/// part, and replacing the whole construction would throw away an alias
+/// somebody wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Found {
+    /// The whole construction, `[[` or `![[` through `]]`.
+    pub from: usize,
+    pub to: usize,
+    /// The path as written, trimmed the way [`parse_target`] trims it.
+    pub target: String,
+    /// Where the written path sits in the text. Replacing this range replaces
+    /// the path and nothing else.
+    pub target_from: usize,
+    pub target_to: usize,
+    pub heading: Option<String>,
+    pub alias: Option<String>,
+    pub embed: bool,
+    /// The 1-based line the link is on, for reporting a change to a person.
+    pub line: usize,
+}
+
+/// How far a wikilink may run before it is not one.
+///
+/// The same ceiling the window's parser uses, and for the same reason: an
+/// unclosed `[[` is what half a typed link looks like, and without a limit every
+/// one of them would scan to the end of the note.
+const SCAN_LIMIT: usize = 300;
+
+/// Every wikilink in `text`, in the order they appear.
+///
+/// This is the core's own reading of the dialect, deliberately separate from the
+/// window's inline parser. The window parses a document it holds in a CodeMirror
+/// state; this reads files nobody opened — every note in the vault when
+/// backlinks are asked for, and every note holding a link when one is renamed.
+/// Putting those through the window would mean either a state per note or the
+/// whole vault's text crossing the boundary.
+///
+/// What it has to get right is what makes a `[[` *not* a link:
+///
+/// - a code span and a fenced block, because a note about wikilinks writes them
+///   without meaning them — and a rename that rewrote the example in the
+///   documentation would be rewriting prose;
+/// - a newline inside the brackets, so an unclosed `[[` at the end of a
+///   paragraph does not swallow the next one;
+/// - `[[]]`, which points at nothing.
+pub fn scan(text: &str) -> Vec<Found> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut fenced = false;
+    let mut line_start = 0usize;
+    let mut line = 1usize;
+
+    loop {
+        let line_end = newline_at(bytes, line_start).unwrap_or(bytes.len());
+
+        // A fence opens and closes a block in which nothing is a link. Checked
+        // per line rather than inside the inline scan, because that is what a
+        // fence is: a property of lines, not of characters.
+        if is_fence(&text[line_start..line_end]) {
+            fenced = !fenced;
+        } else if !fenced {
+            scan_line(text, line_start, line_end, line, &mut out);
+        }
+
+        if line_end == bytes.len() {
+            break;
+        }
+        line_start = line_end + 1;
+        line += 1;
+    }
+    out
+}
+
+/// The offset of the newline ending the line that starts at `from`.
+fn newline_at(bytes: &[u8], from: usize) -> Option<usize> {
+    bytes[from..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map(|at| from + at)
+}
+
+/// Whether a line opens or closes a fenced code block.
+///
+/// Three backticks or three tildes after at most three spaces of indent — the
+/// CommonMark rule without the info string, which does not change whether the
+/// line is a fence.
+fn is_fence(line: &str) -> bool {
+    let trimmed = line.trim_start_matches(' ');
+    if line.len() - trimmed.len() > 3 {
+        return false;
+    }
+    let trimmed = trimmed.trim_end_matches(['\r', ' ']);
+    trimmed.starts_with("```") || trimmed.starts_with("~~~")
+}
+
+/// Finds the links on one line, skipping whatever sits inside a code span.
+fn scan_line(text: &str, line_start: usize, line_end: usize, line: usize, out: &mut Vec<Found>) {
+    let bytes = text.as_bytes();
+    let mut at = line_start;
+
+    while at < line_end {
+        match bytes[at] {
+            // A code span runs to its matching run of backticks. What is between
+            // them is text *about* code, and a wikilink written there is an
+            // example of one rather than one.
+            b'`' => at = past_code_span(bytes, at, line_end),
+            b'[' | b'!' => match at_link(text, at, line_end, line) {
+                Some(found) => {
+                    at = found.to;
+                    out.push(found);
+                }
+                None => at += 1,
+            },
+            _ => at += 1,
+        }
+    }
+}
+
+/// Where to carry on after the code span opening at `at`.
+///
+/// An unclosed run of backticks is backticks, not a span: the rest of the line
+/// is ordinary text and may hold links, so the scan resumes just past the run.
+fn past_code_span(bytes: &[u8], at: usize, line_end: usize) -> usize {
+    let run = run_of_backticks(bytes, at, line_end);
+    let mut probe = at + run;
+    while probe < line_end {
+        if bytes[probe] == b'`' {
+            let here = run_of_backticks(bytes, probe, line_end);
+            if here == run {
+                return probe + here;
+            }
+            probe += here;
+            continue;
+        }
+        probe += 1;
+    }
+    at + run
+}
+
+/// How many backticks in a row start at `at`.
+fn run_of_backticks(bytes: &[u8], at: usize, line_end: usize) -> usize {
+    bytes[at..line_end]
+        .iter()
+        .take_while(|byte| **byte == b'`')
+        .count()
+}
+
+/// A wikilink starting at `at`, if one does.
+fn at_link(text: &str, at: usize, line_end: usize, line: usize) -> Option<Found> {
+    let bytes = text.as_bytes();
+    let embed = bytes[at] == b'!';
+    let open = if embed { at + 1 } else { at };
+    if bytes.get(open) != Some(&b'[') || bytes.get(open + 1) != Some(&b'[') {
+        return None;
+    }
+
+    let inner_from = open + 2;
+    let ceiling = line_end.min(inner_from + SCAN_LIMIT);
+    let mut probe = inner_from;
+    let close = loop {
+        if probe + 1 >= ceiling {
+            return None;
+        }
+        if bytes[probe] == b']' && bytes[probe + 1] == b']' {
+            break probe;
+        }
+        probe += 1;
+    };
+    // `[[]]` is not a link to anything.
+    if close == inner_from {
+        return None;
+    }
+
+    // Not a `get` on a byte range that could split a character: the brackets and
+    // the bar are ASCII, so every offset found above is a boundary, but the
+    // slice is taken through `get` anyway so a malformed guess cannot panic.
+    let inner = text.get(inner_from..close)?;
+    let parsed = parse_target(inner);
+
+    // Where the path sits in the text, so a rename can replace exactly it. The
+    // written path may carry spaces the parse trimmed — `[[ note ]]` — and the
+    // range has to cover the characters rather than the trimming.
+    let before_alias = inner.split_once('|').map_or(inner, |(before, _)| before);
+    let written = before_alias
+        .split_once('#')
+        .map_or(before_alias, |(path, _)| path);
+    let lead = written.len() - written.trim_start().len();
+    let target_from = inner_from + lead;
+    let target_to = target_from + written.trim().len();
+
+    Some(Found {
+        from: at,
+        to: close + 2,
+        target: parsed.path,
+        target_from,
+        target_to,
+        heading: parsed.heading,
+        alias: parsed.alias,
+        embed,
+        line,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::vault::{LinkFormat, NewFileLocation, VaultConfig};
+
+    // The scanner: what counts as a link in a file nobody opened.
+
+    fn targets(text: &str) -> Vec<String> {
+        scan(text).into_iter().map(|found| found.target).collect()
+    }
+
+    #[test]
+    fn a_link_is_found_with_its_line() {
+        let found = scan("first\nsee [[plan]] for more\nlast");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].target, "plan");
+        assert_eq!(found[0].line, 2, "lines are 1-based");
+        assert!(!found[0].embed);
+    }
+
+    #[test]
+    fn the_parts_come_apart_the_way_they_do_in_the_window() {
+        let found = scan("[[plan#Risks|what could go wrong]]");
+        assert_eq!(found[0].target, "plan");
+        assert_eq!(found[0].heading.as_deref(), Some("Risks"));
+        assert_eq!(found[0].alias.as_deref(), Some("what could go wrong"));
+    }
+
+    #[test]
+    fn an_embed_is_the_same_construction_with_a_bang() {
+        let found = scan("![[shot.png]]");
+        assert!(found[0].embed);
+        assert_eq!(found[0].target, "shot.png");
+        // The `!` belongs to the link, so replacing `from..to` replaces all of it.
+        assert_eq!(found[0].from, 0);
+        assert_eq!(found[0].to, 13);
+    }
+
+    #[test]
+    fn the_target_range_covers_the_path_and_nothing_else() {
+        let text = "![[folder/plan#Risks|the plan]]";
+        let found = scan(text);
+        assert_eq!(
+            &text[found[0].target_from..found[0].target_to],
+            "folder/plan",
+            "the heading and the alias are not the rename's business"
+        );
+    }
+
+    #[test]
+    fn a_padded_target_keeps_its_padding_outside_the_range() {
+        // `[[ plan ]]` is a link to `plan`, and the spaces are the person's.
+        let text = "[[  plan  ]]";
+        let found = scan(text);
+        assert_eq!(found[0].target, "plan");
+        assert_eq!(&text[found[0].target_from..found[0].target_to], "plan");
+    }
+
+    #[test]
+    fn a_link_in_a_code_span_is_an_example_of_one() {
+        // The whole reason the scanner is not a regular expression. A note
+        // explaining wikilinks writes them without meaning them, and a rename
+        // that rewrote the documentation would be rewriting prose.
+        assert!(targets("write `[[plan]]` to link").is_empty());
+        assert_eq!(targets("`[[a]]` but [[plan]] means it"), vec!["plan"]);
+    }
+
+    #[test]
+    fn a_link_in_a_fenced_block_is_not_one() {
+        let text = "before [[one]]\n```\n[[two]]\n```\nafter [[three]]";
+        assert_eq!(targets(text), vec!["one", "three"]);
+    }
+
+    #[test]
+    fn a_tilde_fence_closes_a_tilde_fence() {
+        assert_eq!(targets("~~~\n[[hidden]]\n~~~\n[[shown]]"), vec!["shown"]);
+    }
+
+    #[test]
+    fn an_unclosed_backtick_is_a_backtick() {
+        // Half a code span is not a code span: the rest of the line is prose.
+        assert_eq!(targets("a ` stray tick and [[plan]]"), vec!["plan"]);
+    }
+
+    #[test]
+    fn a_link_does_not_span_lines() {
+        // An unclosed `[[` at the end of a paragraph must not swallow the next.
+        assert!(targets("[[open\nplan]]").is_empty());
+    }
+
+    #[test]
+    fn an_empty_link_points_at_nothing() {
+        assert!(targets("[[]]").is_empty());
+    }
+
+    #[test]
+    fn a_heading_only_link_has_no_path() {
+        let found = scan("[[#Risks]]");
+        assert_eq!(found[0].target, "");
+        assert_eq!(found[0].heading.as_deref(), Some("Risks"));
+    }
+
+    #[test]
+    fn two_links_on_a_line_are_both_found() {
+        let found = scan("[[one]] and [[two]]");
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[1].line, 1);
+    }
+
+    #[test]
+    fn a_single_bracket_is_an_ordinary_link() {
+        assert!(targets("[text](url) and [ref][1]").is_empty());
+    }
+
+    #[test]
+    fn a_link_past_the_ceiling_is_not_one() {
+        // An unclosed `[[` would otherwise scan the rest of a long line on every
+        // read of every note in the vault.
+        let long = "x".repeat(SCAN_LIMIT + 10);
+        assert!(targets(&format!("[[{long}]]")).is_empty());
+    }
+
+    #[test]
+    fn offsets_are_bytes_and_survive_characters_that_are_not_ascii() {
+        // A note in Cyrillic is the ordinary case for this vault's owner, and a
+        // splice at a character index would cut a letter in half.
+        let text = "заметка про [[план]] тут";
+        let found = scan(text);
+        assert_eq!(found[0].target, "план");
+        assert_eq!(&text[found[0].target_from..found[0].target_to], "план");
+        assert_eq!(&text[found[0].from..found[0].to], "[[план]]");
+    }
+
+    #[test]
+    fn a_fence_indented_four_spaces_is_code_not_a_fence() {
+        // Four spaces is an indented code block, and its ``` is content. If it
+        // were read as a fence it would flip the state and hide the rest of the
+        // note from the scan.
+        let text = "    ```\n[[plan]]";
+        assert_eq!(targets(text), vec!["plan"]);
+    }
+
+    #[test]
+    fn a_fence_with_an_info_string_still_closes() {
+        let text = "```rust\n[[hidden]]\n```\n[[shown]]";
+        assert_eq!(targets(text), vec!["shown"]);
+    }
+
+    #[test]
+    fn a_crlf_file_scans_the_same_as_an_lf_one() {
+        // Text reaches the scanner through `document::decode`, which normalises
+        // endings — but a caller passing raw text should not get a fence that
+        // fails to close because of a stray carriage return.
+        let text = "```\r\n[[hidden]]\r\n```\r\n[[shown]]";
+        assert_eq!(targets(text), vec!["shown"]);
+    }
 
     fn target(inner: &str) -> Target {
         parse_target(inner)
