@@ -53,6 +53,7 @@ read is what you were just editing.
 | --- | --- |
 | `Ctrl+Shift+E` | Show or hide the file tree |
 | `Ctrl+Shift+O` | Show or hide the outline |
+| `Ctrl+Shift+B` | Show or hide what links here |
 | `Ctrl+Shift+[` | Fold the section the caret is in |
 | `Ctrl+Shift+]` | Unfold it |
 | `Ctrl+Alt+[` / `Ctrl+Alt+]` | Fold or unfold every section |

@@ -110,3 +110,10 @@ Read from `.obsidian/app.json`, never written:
 Change them in Obsidian and scheda follows. A vault where the two programs
 disagree about how to write a link is a vault somebody has to tidy up by hand,
 and that somebody is you.
+
+## The other direction
+
+A link is a fact about both notes. For which notes point at the one you are
+reading, which of your own links point at nothing yet, and what happens to all of
+them when you rename a note, see [What links
+here](/scheda/reference/the-network/).

@@ -38,6 +38,10 @@ against a 500 ms gate on every build.
   the way Obsidian resolves it, completes as you type, and shows the note's
   opening when you hover it. A link to a note you have not written yet offers to
   write it. `![[embeds]]` show the picture or the note's first lines.
+- **Both directions of a link.** A panel shows which notes point at the one you
+  are reading, and which of your links point at nothing yet. Rename a note and
+  scheda lists every link that would break, line by line, before it rewrites a
+  single one - and puts it all back if you change your mind.
 - **Tabs in the title bar**, with their own undo history, so one strip of screen
   does the work of two. A second launch hands its file to the window you have.
 - **A draft you never named.** `Ctrl+N` opens a tab with no file; its text

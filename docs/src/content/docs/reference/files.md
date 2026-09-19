@@ -26,6 +26,11 @@ Renaming offers the current name with everything **before the extension**
 selected, so typing replaces the name and keeps the `.md`. A tab showing the
 file follows it: the same tab, the same undo history, the new name.
 
+In a vault, renaming a note that other notes link to shows you every link that
+would break and offers to rewrite them — see [What links
+here](/scheda/reference/the-network/). Nothing is written until you say so, and
+it can be undone.
+
 ## Moving to the recycle bin
 
 Deleting a note puts it in the operating system's recycle bin — the Windows one,
