@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.8.0] - 2026-09-19
+
+### Features
+- Show what links to this note, with the sentence each link sits in
+- List the links that point at a note nobody has written yet, and offer to write it
+- Rename a note and rewrite the links that would break, after showing every line
+- Take a rename back, restoring the exact bytes of every file it wrote
+- Find wikilinks in files nobody opened, without opening them
+
+### Documentation
+- What links here: the panel, and what a rename does and does not touch
+- ADR 0009 — a rename says what it would do before it does it
+
 ## [0.7.0] - 2026-09-18
 
 ### Features

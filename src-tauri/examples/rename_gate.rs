@@ -138,7 +138,9 @@ fn main() {
     // And nothing appeared that was not asked for.
     for path in after.keys() {
         if !before.contains_key(path) && !allowed.contains(path) {
-            failures.push(format!("{path}: appeared, and the plan never said it would"));
+            failures.push(format!(
+                "{path}: appeared, and the plan never said it would"
+            ));
         }
     }
 
