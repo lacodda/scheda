@@ -7,9 +7,11 @@ pub mod attachments;
 pub mod document;
 pub mod files;
 pub mod links;
+pub mod network;
 pub mod notes;
 pub mod obsidian;
 pub mod quick;
+pub mod rename;
 pub mod root;
 pub mod scratch;
 mod settings;
@@ -674,6 +676,111 @@ fn create_from_wikilink(
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// What points at this note, and what it points at in vain.
+///
+/// One call for both, because both are answered by the same walk over the
+/// vault's notes and asking twice would read every file twice. Empty when the
+/// document is not in a vault: a lone note on the Desktop has no vault whose
+/// links could point at it, which is the same answer the picker and the
+/// wikilinks give (decision 2026-09-05).
+#[tauri::command]
+fn read_network(state: tauri::State<'_, VaultIndex>, document: String) -> network::Network {
+    let document = PathBuf::from(document);
+    with_index(&state, &document, |index| {
+        network::around(&index.root, &index.links, &document)
+    })
+    .unwrap_or_default()
+}
+
+/// What renaming a file would change, without changing any of it.
+///
+/// The dry run. Nothing on disk is touched by this call — it reads the vault's
+/// notes, works out which links would break, and answers with the list. The
+/// window shows it, and only a second call performs it.
+#[tauri::command]
+fn plan_rename(
+    state: tauri::State<'_, VaultIndex>,
+    path: String,
+    name: String,
+) -> Result<rename::Plan, CommandError> {
+    let from = PathBuf::from(&path);
+    // The name is checked here rather than at the write: a plan for a name the
+    // filesystem will refuse is a plan the person would approve and then watch
+    // fail.
+    files::check_name(&name)?;
+    let parent = from.parent().ok_or_else(|| CommandError {
+        message: "that file has nowhere to be renamed in".into(),
+        read_only: false,
+    })?;
+    let to = parent.join(name.trim());
+
+    with_index(&state, &from, |index| {
+        rename::plan(&index.config, &index.links, &index.root, &from, &to)
+    })
+    .ok_or_else(|| CommandError {
+        message: "this file is not in a vault, so there are no links to follow".into(),
+        read_only: false,
+    })
+}
+
+/// Performs a plan: moves the file, then rewrites the links.
+///
+/// The plan comes back from the window rather than being recomputed here, so
+/// what is performed is what was shown. It is recomputed against each file's
+/// text at the moment of writing all the same — a note that changed between the
+/// showing and the doing is skipped rather than spliced at offsets that no
+/// longer mean anything.
+#[tauri::command]
+fn apply_rename(
+    state: tauri::State<'_, VaultIndex>,
+    plan: rename::Plan,
+) -> Result<rename::Applied, CommandError> {
+    let applied = rename::apply(&plan)?;
+    // The vault's file list now names a file that has moved, and every link
+    // answer in it was computed against the old name.
+    *state.0.lock().expect("index lock") = None;
+    // Held so the window can undo it with a word rather than a second plan.
+    *LAST_RENAME.lock().expect("rename lock") = Some(applied.clone());
+    Ok(applied)
+}
+
+/// Puts back the last rename: the files' exact bytes, then the name.
+///
+/// The window offers this while the tab is alive, which is what "undo" means
+/// for something that touched other people's files: an offer with a horizon,
+/// not a stack. What is put back is the bytes that were read before the write,
+/// so the undo is a restore rather than a second rewrite that has to be right
+/// about a vault that has moved on.
+#[tauri::command]
+fn undo_rename(
+    state: tauri::State<'_, VaultIndex>,
+) -> Result<Option<rename::Applied>, CommandError> {
+    let held = LAST_RENAME.lock().expect("rename lock").take();
+    let Some(applied) = held else {
+        return Ok(None);
+    };
+    rename::undo(&applied)?;
+    *state.0.lock().expect("index lock") = None;
+    Ok(Some(applied))
+}
+
+/// The rename that may still be undone.
+///
+/// One, not a stack. Undoing a rename means putting back the bytes that were
+/// read before it, and those are only the right bytes while nothing else has
+/// been written over them — which a second rename may well have done. A single
+/// slot says exactly what is true: the last one, until something else happens.
+static LAST_RENAME: std::sync::Mutex<Option<rename::Applied>> = std::sync::Mutex::new(None);
+
+impl From<rename::RenameError> for CommandError {
+    fn from(error: rename::RenameError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
 /// The notes a wikilink could be completed to, for what has been typed so far.
 ///
 /// Ranked by the picker's own scorer, because the question is the same one:
@@ -895,6 +1002,10 @@ pub fn run() {
             watch_vault,
             find_files,
             forget_file_index,
+            read_network,
+            plan_rename,
+            apply_rename,
+            undo_rename,
             resolve_wikilink,
             resolve_wikilinks,
             create_from_wikilink,
