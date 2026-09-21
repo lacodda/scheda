@@ -1,0 +1,73 @@
+<!doctype html>
+<!--
+  The splash on a page of its own, so `chrome-preview.html` can show it in both
+  themes at once.
+
+  A frame rather than a box, because every colour in `styles.css` is defined on
+  `:root` and nowhere else — the window is themed whole, which is the right
+  shape for the product and the reason a `data-theme` on a div selects nothing.
+  An iframe has a root of its own, so the attribute lands where the stylesheet
+  is looking.
+
+  The theme comes from the query string: `?theme=dark`. Nothing else on the page
+  is styled, so what is seen is the splash as the product draws it.
+
+  Not shipped and not imported by anything in `src/`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scheda — splash (frame)</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        font-family: system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash" role="status" aria-live="polite">
+      <svg class="splash-mark" width="56" height="56" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="splash-frame-mark" gradientUnits="userSpaceOnUse" x1="11" y1="5" x2="89" y2="95">
+            <stop offset="0" stop-color="#D9704A" />
+            <stop offset="1" stop-color="#2FAF8C" />
+          </linearGradient>
+        </defs>
+        <polygon
+          points="50,5 89,27.5 89,72.5 50,95 11,72.5 11,27.5"
+          fill="url(#splash-frame-mark)"
+          stroke="url(#splash-frame-mark)"
+          stroke-width="9"
+          stroke-linejoin="round"
+        />
+        <text
+          x="50"
+          y="66"
+          text-anchor="middle"
+          font-family='"Cascadia Code","JetBrains Mono",Consolas,ui-monospace,monospace'
+          font-weight="800"
+          font-size="46"
+          fill="#F7F8F4"
+        >
+          sc
+        </text>
+      </svg>
+      <div class="splash-name">scheda</div>
+      <div class="splash-tagline">A notepad that knows markdown.</div>
+      <div class="splash-version">v0.9.0</div>
+      <div class="splash-track"><div class="splash-sweep"></div></div>
+      <p class="splash-status">Opening</p>
+    </div>
+    <script type="module">
+      // The theme this frame was asked for, stamped where `styles.css` looks for
+      // it. Absent means "follow the system", exactly as in the product.
+      const theme = new URLSearchParams(location.search).get('theme')
+      if (theme) document.documentElement.setAttribute('data-theme', theme)
+    </script>
+  </body>
+</html>

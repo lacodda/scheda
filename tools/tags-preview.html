@@ -1,0 +1,132 @@
+<!doctype html>
+<!--
+  A page to look at the tags panel with.
+
+  Same reason as the other preview pages: a Tauri window cannot be screenshotted
+  on this machine, so the drawing is looked at here, against the real stylesheet.
+
+  What no test can answer is on this page. `tags.test.tsx` proves the list is
+  ordered, the open note's tags are marked and the count is notes rather than
+  mentions — and all of that would pass if the panel were unreadable. Whether a
+  long tag name is cut sensibly, whether the mark reads as "this note carries
+  it", whether an opened tag's places look like children of it rather than more
+  tags, is a thing somebody has to look at.
+
+  The page's own captions are scoped to `body > h2`, or the rule would reach
+  into the panel it is meant to be looking at — which is what this page's
+  predecessor did, uppercasing a file name inside the product's own dialog and
+  then reporting the defect it had introduced.
+
+  Not shipped and not imported by anything in `src/`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>scheda — tags (preview)</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/scrollbar.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 2rem;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+      }
+      body > h2 {
+        max-width: 52rem;
+        margin: 1.6rem auto 0.5rem;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      body > h2:first-of-type {
+        margin-top: 0;
+      }
+      /* The panel is a column in a row beside the editor, so it is shown in one
+         here — a panel measured outside the layout it lives in is a panel
+         measured wrong. */
+      .beside {
+        display: flex;
+        max-width: 52rem;
+        height: 24rem;
+        margin: 0 auto 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .pretend-editor {
+        flex: 1;
+        padding: 1rem 1.2rem;
+        background: var(--bg);
+        color: var(--muted);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>The tags panel, with a tag opened</h2>
+    <div class="beside">
+      <div class="pretend-editor">the note, which is what the window is for</div>
+      <aside class="tags" aria-label="Tags">
+        <h2 class="tags-heading">Tags<span class="tags-count">6</span></h2>
+        <input type="search" class="tags-filter" placeholder="Filter tags" aria-label="Filter tags" />
+        <ol class="tags-list">
+          <li>
+            <button type="button" class="tags-item tags-item--here" aria-expanded="true">
+              <span class="tags-name">#projects/scheda</span>
+              <span class="tags-notes">24</span>
+            </button>
+            <ol class="tags-places">
+              <li>
+                <button type="button" class="tags-place">
+                  <span class="tags-where">Projects/scheda/README.md</span>
+                  <span class="tags-context">a notepad that knows markdown, filed under #projects/scheda</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="tags-place">
+                  <span class="tags-where">Projects/scheda/План.md</span>
+                  <span class="tags-context"></span>
+                </button>
+              </li>
+            </ol>
+          </li>
+          <li>
+            <button type="button" class="tags-item tags-item--here">
+              <span class="tags-name">#rust</span>
+              <span class="tags-notes">18</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="tags-item">
+              <span class="tags-name">#a-very-long-tag-name-that-has-to-be-cut-somewhere</span>
+              <span class="tags-notes">7</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="tags-item">
+              <span class="tags-name">#inbox</span>
+              <span class="tags-notes">3</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="tags-item">
+              <span class="tags-name">#q4-2026</span>
+              <span class="tags-notes">1</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="tags-item">
+              <span class="tags-name">#прочитать</span>
+              <span class="tags-notes">1</span>
+            </button>
+          </li>
+        </ol>
+      </aside>
+    </div>
+  </body>
+</html>
