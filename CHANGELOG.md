@@ -2,33 +2,60 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.8.0] - 2026-09-19
+## [0.9.0] - 2026-09-21
 
-### Features
-- Show what links to this note, with the sentence each link sits in
-- List the links that point at a note nobody has written yet, and offer to write it
-- Rename a note and rewrite the links that would break, after showing every line
-- Take a rename back, restoring the exact bytes of every file it wrote
-- Find wikilinks in files nobody opened, without opening them
+### Bug Fixes
+- Walk front matter by bytes that exist
 
 ### Documentation
-- What links here: the panel, and what a rename does and does not touch
-- ADR 0009 — a rename says what it would do before it does it
+- Describe the tags panel and how the chrome is shared
+
+### Features
+- Draw the window's frame in the line's own measurements
+- Show the product only when there is nothing else to show
+- List every tag in the vault, and the notes carrying each
+
+### Testing
+- Add pages to look at the chrome and the tags panel with
+
+## [0.8.0] - 2026-09-19
+
+### Documentation
+- Describe both directions of a link
+
+### Features
+- Find wikilinks in files nobody opened
+- Answer what links here, and what links nowhere
+- Plan a rename before performing it
+- Expose the network and the rename to the window
+- Show both directions of a link, and rename without breaking them
+
+### Testing
+- Check what the panel and the preview put on screen
+- Add a page to look at the panel and the preview with
 
 ## [0.7.0] - 2026-09-18
 
-### Features
-- Read the vault's own settings in one place
-- Resolve `[[wikilinks]]` the way Obsidian resolves them
-- Draw a wikilink as what it means, and follow it when clicked
-- Offer a note while a link is being typed, and a heading after the `#`
-- Show a note or a picture in place with `![[embeds]]`
-- Look into a link without leaving the note
-
 ### Documentation
+- Make the readme a shopfront
+- Give the readme the line's header
 - Describe links between notes
 
+### Features
+- Read the vault's own settings in one place
+- Resolve wikilinks the way Obsidian resolves them
+- Draw a wikilink as what it means, and follow it when clicked
+- Offer a note while a link is typed, and a heading after the hash
+- Look into a link without leaving the note
+
+### Testing
+- Measure the cost of aligning by counting work, not by the clock
+- Add a page to look at links with
+
 ## [0.6.0] - 2026-09-17
+
+### Documentation
+- Add the changelog for v0.6.0
 
 ### Features
 - Watch the vault and report what changed
