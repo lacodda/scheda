@@ -80,13 +80,35 @@ fn identifier(text: &str) -> String {
 
 /// Finds every window command called in one source file.
 ///
-/// Two spellings reach the same window, and both have to be seen. The direct
-/// chain `getCurrentWindow().close()`, and the handle held in a local first —
-/// `const window = getCurrentWindow()` followed by `window.isMaximized()`,
-/// which is how the title bar reads the maximised state. A scanner that knew
-/// only the chain would call that file clean.
+/// Three spellings reach the same window, and all three have to be seen:
+///
+/// - the direct chain, `getCurrentWindow().close()`;
+/// - the handle held in a local first — `const window = getCurrentWindow()`
+///   followed by `window.isMaximized()`;
+/// - the handle behind a guard function, `currentWindow()?.minimize()`, where
+///   `currentWindow` is a wrapper returning the window or null outside Tauri.
+///   That is what dowel's `window-frame` primitive does and what scheda's title
+///   bar took from it, and adding it is what this comment is now for: the
+///   wrapper was written, every call moved behind it, and the scanner went
+///   quietly blind — it kept finding `close` (from a different file) and so kept
+///   the permission check passing on a set of one. Only `the_calls_the_title_bar
+///   _makes_are_seen` noticed, which is the whole reason that test exists.
+///
+/// A scanner that knew only some of these would call the file clean and let the
+/// permission check pass over commands nobody granted — refused at runtime with
+/// `not allowed by ACL`, in a released build with no console to read it in.
 fn calls_in(text: &str, into: &mut BTreeSet<String>) {
     const FACTORY: &str = "getCurrentWindow()";
+
+    // A local function whose body returns the window: every call on its result
+    // is a call on the window. Found by name so the scanner does not have to
+    // parse: a function whose body mentions `getCurrentWindow()` and whose name
+    // is called with `()` before a `.` or a `?.`.
+    for wrapper in wrappers_returning_the_window(text) {
+        for call in calls_through(text, &wrapper) {
+            into.insert(call);
+        }
+    }
 
     for (offset, _) in text.match_indices(FACTORY) {
         let after = &text[offset + FACTORY.len()..];
@@ -160,6 +182,97 @@ fn calls_on(text: &str, name: &str) -> BTreeSet<String> {
     calls
 }
 
+/// The names of local functions that hand back the Tauri window.
+///
+/// `function currentWindow() { ... getCurrentWindow() ... }` — the guard dowel's
+/// primitive uses so the chrome renders outside Tauri instead of throwing.
+fn wrappers_returning_the_window(text: &str) -> BTreeSet<String> {
+    const FACTORY: &str = "getCurrentWindow()";
+    let mut names = BTreeSet::new();
+
+    for (offset, _) in text.match_indices("function ") {
+        let after = &text[offset + "function ".len()..];
+        let name = identifier(after);
+        if name.is_empty() {
+            continue;
+        }
+        // The body is the block that opens after the name, up to its close.
+        let Some(open) = after.find('{') else {
+            continue;
+        };
+        let body = &after[open + 1..];
+        let mut depth = 1i32;
+        let mut end = body.len();
+        for (at, ch) in body.char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = at;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if body[..end].contains(FACTORY) {
+            names.insert(name);
+        }
+    }
+
+    names
+}
+
+/// Calls made on the result of `name()`, through `?.` or `.`.
+fn calls_through(text: &str, name: &str) -> BTreeSet<String> {
+    let needle = format!("{name}()");
+    let mut calls = BTreeSet::new();
+
+    for (offset, _) in text.match_indices(&needle) {
+        // A bare name only, so `myCurrentWindow()` cannot answer for
+        // `currentWindow()`.
+        let preceding = text[..offset].chars().next_back();
+        if preceding.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') {
+            continue;
+        }
+        let after = &text[offset + needle.len()..];
+        if let Some(rest) = after.strip_prefix("?.").or_else(|| after.strip_prefix('.')) {
+            let call = identifier(rest);
+            if !call.is_empty() && !NOT_A_COMMAND.contains(&call.as_str()) {
+                calls.insert(call);
+            }
+            continue;
+        }
+        // Not a chain, so the result is being bound to a name — the shape the
+        // maximised-state hook uses: `const target = currentWindow()` and then
+        // `target.isMaximized()`. Same walk back over `const <name> = ` the
+        // factory's own binding gets, because a guarded handle is bound exactly
+        // as often as an unguarded one.
+        let before = text[..offset].trim_end();
+        let Some(before) = before.strip_suffix('=') else {
+            continue;
+        };
+        let bound: String = before
+            .trim_end()
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if bound.is_empty() {
+            continue;
+        }
+        for call in calls_on(&text[offset..], &bound) {
+            calls.insert(call);
+        }
+    }
+
+    calls
+}
+
 /// Every window command the frontend calls, however it spells the call.
 fn window_calls() -> BTreeSet<String> {
     let mut files = Vec::new();
@@ -215,6 +328,36 @@ fn every_window_call_is_allowed_by_the_capability_file() {
          Add them to src-tauri/capabilities/default.json.",
         missing.join("\n  ")
     );
+}
+
+#[test]
+fn the_scanner_sees_a_call_through_a_guard_function() {
+    // The shape dowel's `window-frame` introduced and scheda's title bar
+    // adopted, checked against text of its own rather than only against the
+    // real file: the guard was added, every call moved behind it, and the
+    // scanner silently stopped finding them — while still reporting `close`
+    // from elsewhere, so the permission check went on passing. A scanner is a
+    // thing that can go blind without anything looking different.
+    let source = r#"
+        function currentWindow() {
+          return '__TAURI_INTERNALS__' in window ? getCurrentWindow() : null
+        }
+        function buttons() {
+          void currentWindow()?.minimize()
+          void currentWindow().toggleMaximize()
+          const target = currentWindow()
+          target.isMaximized().then(read)
+        }
+    "#;
+    let mut calls = BTreeSet::new();
+    calls_in(source, &mut calls);
+
+    for expected in ["minimize", "toggleMaximize", "isMaximized"] {
+        assert!(
+            calls.contains(expected),
+            "a call through a guard function was missed: {expected} not in {calls:?}"
+        );
+    }
 }
 
 #[test]

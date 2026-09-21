@@ -12,6 +12,25 @@
   --editor-font-size: 15px;
   --column-width: 46rem;
 
+  /* The window's chrome, in the line's numbers rather than this product's.
+     A window's chrome is the part of a product meant to look like the
+     operating system and not like the product, so it is the last place where
+     two products of one line should differ — and by the fourth one the bar was
+     40px in one and 2.4rem here. Neither was wrong; having two was.
+
+     These are dowel's `--spacing-titlebar`, `--spacing-window-button`,
+     `--spacing-resize-edge` and `--spacing-resize-corner`, written as plain
+     CSS because scheda has no Tailwind to read a token namespace. They are not
+     copied by hand and left to rot: `src/chrome.test.ts` reads them back out of
+     dowel's own `theme.css` and fails when the two part. */
+  --titlebar-height: 40px;
+  --window-button-width: 46px;
+  /* Five is the smallest that can be hit reliably and the largest that does not
+     steal a click meant for the first line of text; the corner is double,
+     because it is aimed at less precisely and resizes both axes at once. */
+  --resize-edge: 5px;
+  --resize-corner: 10px;
+
   --bg: #fdfcfa;
   --text: #24211e;
   --heading: #16130f;
@@ -291,7 +310,7 @@ body {
 .titlebar {
   display: flex;
   align-items: stretch;
-  height: 2.4rem;
+  height: var(--titlebar-height);
   border-bottom: 1px solid var(--border);
   background: var(--status-bg);
   user-select: none;
@@ -351,7 +370,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
+  width: var(--window-button-width);
   border: 0;
   background: none;
   color: var(--muted);
@@ -381,17 +400,17 @@ body {
 
 .resize-edge--north,
 .resize-edge--south {
-  left: 4px;
-  right: 4px;
-  height: 4px;
+  left: var(--resize-corner);
+  right: var(--resize-corner);
+  height: var(--resize-edge);
   cursor: ns-resize;
 }
 
 .resize-edge--east,
 .resize-edge--west {
-  top: 4px;
-  bottom: 4px;
-  width: 4px;
+  top: var(--resize-corner);
+  bottom: var(--resize-corner);
+  width: var(--resize-edge);
   cursor: ew-resize;
 }
 
@@ -415,8 +434,8 @@ body {
 .resize-edge--northeast,
 .resize-edge--southwest,
 .resize-edge--southeast {
-  width: 8px;
-  height: 8px;
+  width: var(--resize-corner);
+  height: var(--resize-corner);
 }
 
 .resize-edge--northwest {
@@ -1108,6 +1127,178 @@ body {
   font-size: 12px;
 }
 
+/* ---------------------------------------------------------------- tags -- */
+
+/* The tags panel is the one sidebar about the VAULT rather than about the open
+   note, so it keeps its list when the note has no tags — the open note's own
+   are marked in it instead. Otherwise it is the network panel's shape, because
+   two sidebars that answer the same kind of question should not be two
+   different sidebars. */
+.tags-host {
+  display: flex;
+  min-height: 0;
+}
+
+.tags {
+  flex: 0 0 auto;
+  width: 17rem;
+  overflow-y: auto;
+  padding: 0.6rem 0 1rem;
+  border-left: 1px solid var(--border);
+  background: var(--status-bg);
+  font-size: 12px;
+}
+
+@media (max-width: 60rem) {
+  .tags {
+    width: 45%;
+    min-width: 10rem;
+  }
+}
+
+.tags-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0.5rem 0 0.3rem;
+  padding: 0 0.9rem;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tags-count {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.tags-filter {
+  width: calc(100% - 1.8rem);
+  margin: 0.2rem 0.9rem 0.4rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.tags-filter:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.tags-list,
+.tags-places {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags-empty {
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  color: var(--muted);
+}
+
+.tags-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.35rem 0.9rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.tags-item:hover {
+  border-left-color: var(--accent);
+  background: var(--active-line);
+}
+
+/* A tag the open note carries. Marked by the rule the rest of the window marks
+   "this one" with — the accent on the left edge — rather than by a colour on
+   the text: the list is scanned for a name, and a name in two colours is two
+   things to read. */
+.tags-item--here {
+  border-left-color: var(--accent);
+}
+
+.tags-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* How many NOTES carry it, not how many times it is written. */
+.tags-notes {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* The places a tag is carried, drawn as its children.
+   Measured rather than eyeballed: at 1.6rem of padding against the row's 0.9
+   the indent came out 9px, and the context line was full-strength --text at the
+   same 12px as the tag name — so a place read as HEAVIER than the tag it
+   belongs to, and the list looked like tags interleaved with prose. A rule
+   down the left edge is what says "these belong to the row above" without
+   spending more width, and the indent is now a step rather than a nudge. */
+.tags-places {
+  margin-left: 1.5rem;
+  padding-bottom: 0.2rem;
+  border-left: 1px solid var(--border);
+}
+
+.tags-place {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.9rem 0.3rem 0.6rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.tags-place:hover {
+  background: var(--active-line);
+}
+
+/* The file is what a place is identified by, so it is the line that carries the
+   ink; the sentence around the tag is context and is drawn quieter. That is the
+   opposite of the network panel, where the sentence IS the answer — here the
+   answer is "this note", and the sentence only confirms it. */
+.tags-where {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tags-context {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 /* -------------------------------------------------------------- rename -- */
 
 .rename-backdrop {
@@ -1339,4 +1530,100 @@ body {
 
 .undo-close:hover {
   color: var(--text);
+}
+
+/* ---------------------------------------------------------------- splash -- */
+
+/* What the window shows while there is nothing to show.
+   Only ever on a cold start with no file: the whole point of the product is
+   that a note is on screen before anything else, so covering that note with a
+   picture of the product would hide the one thing worth seeing. The rules are
+   in `src/splash.tsx`; the geometry is dowel's, in the line's proportions. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  background: var(--bg);
+  color: var(--text);
+  user-select: none;
+}
+
+.splash-mark {
+  margin-bottom: 0.375rem;
+}
+
+.splash-name {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.splash-tagline {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* dowel draws the version in `faint`, a step below `dim`. scheda has no such
+   colour — its secondary text is all `--muted` — and the way to get one here
+   would be an opacity on top, which is what the first draft did: 11px at 0.75
+   measured 2.51:1 against the light background, where small text needs 4.5.
+   A version nobody can read is not a quieter version, it is a missing one, so
+   it is drawn in `--muted` like the rest and set apart by the mono face
+   instead. */
+.splash-version {
+  margin-top: 0.375rem;
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.splash-track {
+  position: relative;
+  margin-top: 1rem;
+  width: 10rem;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.splash-sweep {
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: splash-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes splash-sweep {
+  to {
+    left: 100%;
+  }
+}
+
+/* Under reduced motion the bar is drawn full and still rather than simply
+   stopped: an animation halted where it stands leaves the sweep parked off the
+   end of its own track, so the window would show an empty groove and look
+   broken in exactly the moment it is trying to say "still working". */
+@media (prefers-reduced-motion: reduce) {
+  .splash-sweep {
+    left: 0;
+    width: 100%;
+    animation: none;
+  }
+}
+
+.splash-status {
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
 }
