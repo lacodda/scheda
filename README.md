@@ -42,6 +42,10 @@ against a 500 ms gate on every build.
   are reading, and which of your links point at nothing yet. Rename a note and
   scheda lists every link that would break, line by line, before it rewrites a
   single one - and puts it all back if you change your mind.
+- **Every tag in the vault, in one list.** Read from `#inline` hashes and from
+  front matter, counted by notes rather than by mentions, with the tags of the
+  note you are reading marked. A heading, a colour and a fragment are not tags,
+  which is most of what a tag panel gets wrong.
 - **Tabs in the title bar**, with their own undo history, so one strip of screen
   does the work of two. A second launch hands its file to the window you have.
 - **A draft you never named.** `Ctrl+N` opens a tab with no file; its text
