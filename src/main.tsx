@@ -49,7 +49,12 @@ async function start() {
   // written one.
   try {
     const { mountShell } = await import('./shell')
-    mountShell(editor)
+    // Whether anything was handed over is known here and nowhere later: the
+    // editor will have a tab either way, and a blank tab a person typed into
+    // looks exactly like a blank tab the launcher produced. A splash decided
+    // downstream would therefore have to guess, and the one thing it must
+    // never do is appear over a file (see `src/splash.tsx`).
+    mountShell(editor, { launchedBare: file === null })
   } catch (error) {
     reportFailure('the status bar failed to load', error)
   }

@@ -145,6 +145,27 @@ await page.waitForSelector('.status', { timeout: 10_000 }).catch(() => {
   failures.push('the status bar never appeared')
 })
 
+// The splash must not exist on this page at all.
+//
+// The stub above hands over a file, which is the case the splash is forbidden
+// in: scheda paints the note before React is loaded, and covering it with a
+// picture of the product would hide the one thing the ordering exists to
+// deliver. `mountShell` never creates the host on this path, so the check is
+// for the element's absence rather than for it being hidden — a splash that is
+// merely transparent is still a splash that could come back.
+//
+// Measured after the shell has mounted and after the delay it would have
+// waited: asking too early would pass against a splash that simply had not
+// appeared yet, which is the way this promise would rot without anyone
+// noticing.
+await page.waitForTimeout(600)
+const splashed = await page.evaluate(
+  () => document.querySelectorAll('.splash, .splash-host').length,
+)
+if (splashed > 0) {
+  failures.push('the splash appeared over a file the window was launched with')
+}
+
 const layout = await page.evaluate(() => {
   const box = (selector) => {
     const element = document.querySelector(selector)
@@ -563,6 +584,34 @@ check(treeAgain === 0, 'Ctrl+Shift+E did not close the file tree again')
 
 await browser.close()
 server.close()
+
+// Nothing the window shows *instead* of the text may be in the chunk that
+// paints the text.
+//
+// The splash and the frame are the line's common chrome, and both live in the
+// shell, which is imported after the first paint on purpose (ADR 0001). That is
+// an ordering nothing in the running page can demonstrate: a splash bundled
+// into the entry chunk would still never appear — it would simply have been
+// downloaded, parsed and executed in front of the first character, and the only
+// symptom would be a slower start that gets blamed on the machine. The stage
+// asked for the first-paint measure not to get worse, and the honest way to
+// hold that is the build's shape rather than a stopwatch on a busy laptop
+// (task 1379 is about how little that stopwatch is worth here).
+const entry = /src="([^"]*\/assets\/index-[^"]*\.js)"/.exec(
+  fs.readFileSync(path.join(dist, 'index.html'), 'utf8'),
+)
+if (!entry) {
+  failures.push('could not tell which chunk the page loads first')
+} else {
+  const code = fs.readFileSync(path.join(dist, entry[1]), 'utf8')
+  // The class names, because they survive minification while function names do
+  // not. `splash-sweep` is the keyframe, `window-buttons` the frame's controls.
+  for (const mark of ['splash-sweep', 'splash-track', 'window-buttons']) {
+    if (code.includes(mark)) {
+      failures.push(`the first chunk carries "${mark}" — the chrome is in front of the text`)
+    }
+  }
+}
 
 if (failures.length > 0) {
   console.error('layout check failed:')
