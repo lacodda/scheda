@@ -16,6 +16,7 @@ pub mod root;
 pub mod scratch;
 mod settings;
 pub mod startup;
+pub mod tags;
 pub mod tree;
 pub mod vault;
 pub mod wait;
@@ -692,6 +693,26 @@ fn read_network(state: tauri::State<'_, VaultIndex>, document: String) -> networ
     .unwrap_or_default()
 }
 
+/// Every tag in the vault, most-used first, with the notes carrying each.
+///
+/// Read on the same terms as the network: the vault's notes are read when the
+/// panel is opened and again when the watcher says something changed, rather
+/// than kept in an index that would be a second truth about a folder Obsidian
+/// also writes to (`tags.rs`). The candidate list is the one the index already
+/// holds, so the directory walk is not repeated for this panel.
+///
+/// Empty when the document is not in a vault: a lone note on the Desktop has no
+/// vault whose tags could be collected, which is the same answer the picker, the
+/// wikilinks and the network give (decision 2026-09-05).
+#[tauri::command]
+fn read_tags(state: tauri::State<'_, VaultIndex>, document: String) -> Vec<tags::Tag> {
+    let document = PathBuf::from(document);
+    with_index(&state, &document, |index| {
+        tags::read(&index.root, &index.links)
+    })
+    .unwrap_or_default()
+}
+
 /// What renaming a file would change, without changing any of it.
 ///
 /// The dry run. Nothing on disk is touched by this call — it reads the vault's
@@ -1025,6 +1046,7 @@ pub fn run() {
             discard_draft,
             restore_drafts,
             report_first_paint,
+            read_tags,
             load_settings,
             save_settings,
             remember_recent,

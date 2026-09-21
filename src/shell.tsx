@@ -38,7 +38,12 @@ import { forgetPeeks } from './editor/peek'
 import { forgetAllEmbeds, forgetAllLinks, setFollowLink } from './editor/wikilinks'
 import { RecentFiles } from './recent'
 import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
+import { Splash, useSlowStart } from './splash'
+import { TagsPanel } from './tags'
 import type { EditorHandle, Tab } from './editor/mount'
+
+/** The version the build was made from, for the splash to show. */
+const VERSION = __APP_VERSION__
 
 const LINE_ENDING_LABEL = { lf: 'LF', crlf: 'CRLF', mixed: 'mixed' } as const
 
@@ -573,6 +578,62 @@ function useVaultWrites(): number {
  *  `Ctrl+Shift+B` — for backlinks, which is what the panel is mostly about. Like
  *  the outline and the tree, the state belongs to the window rather than to the
  *  document: switching tabs should not close a panel that was open. */
+/** Opens a note at a line, for a panel that lists places rather than files.
+ *
+ *  Shared by the network and the tags panels: both answer "here, on this line",
+ *  and a note opened at its first paragraph has answered "which note" and
+ *  dropped "where in it". Two copies of this would be two ways to drift about
+ *  what a row does when it is clicked. */
+function openAt(editor: EditorHandle, path: string, line: number) {
+  void editor.open(path).then(
+    () => {
+      rememberRecent(path)
+      const at = editor.view.state.doc.line(
+        Math.min(Math.max(line, 1), editor.view.state.doc.lines),
+      )
+      editor.view.dispatch({
+        selection: { anchor: at.from },
+        effects: EditorView.scrollIntoView(at.from, { y: 'center' }),
+      })
+      editor.view.focus()
+    },
+    () => {
+      // A note that will not open leaves the panel as it was.
+    },
+  )
+}
+
+/** The tags panel, and the key that shows it.
+ *
+ *  `Ctrl+Shift+T` — the same shape as the tree's `E`, the network's `B` and the
+ *  outline's `O`: hidden until asked for, because a notepad that opens with
+ *  four sidebars is not a notepad. */
+function TagsHost({ editor }: { editor: EditorHandle }) {
+  const [visible, setVisible] = useState(false)
+  const revision = useVaultWrites()
+  useEditor(editor)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 't') return
+      event.preventDefault()
+      setVisible((was) => !was)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  return (
+    <TagsPanel
+      editor={editor}
+      visible={visible}
+      revision={revision}
+      onOpen={(path, line) => openAt(editor, path, line)}
+    />
+  )
+}
+
 function NetworkHost({ editor }: { editor: EditorHandle }) {
   const [visible, setVisible] = useState(false)
   const revision = useVaultWrites()
@@ -594,27 +655,7 @@ function NetworkHost({ editor }: { editor: EditorHandle }) {
       editor={editor}
       visible={visible}
       revision={revision}
-      onOpen={(path, line) => {
-        void editor.open(path).then(
-          () => {
-            rememberRecent(path)
-            // The line the link is on, not the top of the note: a backlink that
-            // opens a long note at its first paragraph has answered "which
-            // note" and dropped "where in it".
-            const at = editor.view.state.doc.line(
-              Math.min(Math.max(line, 1), editor.view.state.doc.lines),
-            )
-            editor.view.dispatch({
-              selection: { anchor: at.from },
-              effects: EditorView.scrollIntoView(at.from, { y: 'center' }),
-            })
-            editor.view.focus()
-          },
-          () => {
-            // A note that will not open leaves the panel as it was.
-          },
-        )
-      }}
+      onOpen={(path, line) => openAt(editor, path, line)}
       onCreate={(target) => {
         const path = editor.active().path
         if (path === null) return
@@ -766,8 +807,14 @@ function messageOf(error: unknown): string {
   return String(error)
 }
 
+export interface ShellOptions {
+  /** Whether the window came up with nothing to open. The splash belongs to
+   *  this case and to no other — see `src/splash.tsx`. */
+  launchedBare: boolean
+}
+
 /** Mounts the title bar above the editor and the status bar below it. */
-export function mountShell(editor: EditorHandle) {
+export function mountShell(editor: EditorHandle, options: ShellOptions = { launchedBare: false }) {
   const root = document.getElementById('root')!
   const editorHost = root.querySelector('.editor-host')!
 
@@ -794,8 +841,11 @@ export function mountShell(editor: EditorHandle) {
   outlineHost.className = 'outline-host'
   const networkHost = document.createElement('div')
   networkHost.className = 'network-host'
+  const tagsHost = document.createElement('div')
+  tagsHost.className = 'tags-host'
   middle.appendChild(treeHost)
   middle.appendChild(editorHost)
+  middle.appendChild(tagsHost)
   middle.appendChild(networkHost)
   middle.appendChild(outlineHost)
 
@@ -817,6 +867,11 @@ export function mountShell(editor: EditorHandle) {
       <NetworkHost editor={editor} />
     </StrictMode>,
   )
+  createRoot(tagsHost).render(
+    <StrictMode>
+      <TagsHost editor={editor} />
+    </StrictMode>,
+  )
   createRoot(treeHost).render(
     <StrictMode>
       <TreePanel editor={editor} onVaultWritten={() => vaultWrites.bump()} />
@@ -835,6 +890,51 @@ export function mountShell(editor: EditorHandle) {
       />
     </StrictMode>,
   )
+
+  // The splash gets a host only when the window came up with nothing to open.
+  // Not a hidden one, not one that renders null: the element is never created,
+  // so a launch with a file cannot grow a splash through any later bug. The
+  // cheapest guarantee is the one that has nothing to go wrong.
+  if (options.launchedBare) {
+    const splashHost = document.createElement('div')
+    splashHost.className = 'splash-host'
+    root.appendChild(splashHost)
+    createRoot(splashHost).render(
+      <StrictMode>
+        <OpeningScreen />
+      </StrictMode>,
+    )
+  }
+}
+
+/** The splash and the work it is waiting on.
+ *
+ *  On a bare launch there is no file to read and no vault to walk, so what is
+ *  left is the application's own state: the settings and the drafts from the
+ *  previous run. Both are ordinarily instant, which is the point — the splash
+ *  has a delay in front of it and a fast start never reaches it. What it covers
+ *  is the slow one: a cold disk, a scanner reading the data directory, a folder
+ *  of drafts that has grown. */
+function OpeningScreen() {
+  const [busy, setBusy] = useState(true)
+  const shown = useSlowStart(busy)
+
+  useEffect(() => {
+    let current = true
+    const done = () => {
+      if (current) setBusy(false)
+    }
+    // Settled rather than resolved: a draft folder that cannot be read is a
+    // window that opens empty, not a window that shows a sweeping bar forever.
+    // A splash that outlives its own failure is the blank window it replaced.
+    void Promise.allSettled([restoreDrafts(), loadSettings()]).then(done)
+    return () => {
+      current = false
+    }
+  }, [])
+
+  if (!shown) return null
+  return <Splash status="Opening" version={VERSION} />
 }
 
 /** The button that hands this note to Obsidian.

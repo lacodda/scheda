@@ -392,6 +392,33 @@ export function readNetwork(document: string): Promise<Network> {
   return invoke<Network>('read_network', { document })
 }
 
+/** One note carrying one tag. */
+export interface Tagged {
+  path: string
+  relative: string
+  /** The line it is on, or null when the tag came from the front matter, which
+   *  is a property of the note rather than of a place in it. */
+  line: number | null
+  context: string
+}
+
+/** A tag and the notes that carry it. */
+export interface Tag {
+  name: string
+  /** How many notes carry it — not how many times it is written. */
+  notes: number
+  places: Tagged[]
+}
+
+/** Every tag in the vault, most-used first.
+ *
+ *  Read on the same terms as the network, and empty for a note that is not in a
+ *  vault: a lone file on the Desktop has no vault whose tags could be collected.
+ */
+export function readTags(document: string): Promise<Tag[]> {
+  return invoke<Tag[]>('read_tags', { document })
+}
+
 /** One link a rename would rewrite. */
 export interface RenameEdit {
   line: number
