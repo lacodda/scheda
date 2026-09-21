@@ -190,22 +190,29 @@ fn is_heading(line: &str) -> bool {
 /// Where the body starts: after a closing `---`, or at the top when there is no
 /// front matter. Only at the very top and only for a bare `---`, the same rule
 /// `notes.rs` applies.
+/// Walked with `split_inclusive` rather than `lines()`, and that is not a
+/// preference. `lines()` hands back the line without its terminator and without
+/// a `\r` before it, so adding `line.len() + 1` to walk the text counts one byte
+/// short on every CRLF line. The offset then drifts into the middle of a
+/// character and slicing panics — which is exactly what a real vault did on its
+/// first note with Cyrillic front matter, after every unit test passed. Keeping
+/// the terminator means the arithmetic is not arithmetic at all: each piece is
+/// as long as it is.
 fn front_matter_end(text: &str) -> usize {
-    let opened = if let Some(rest) = text.strip_prefix("---\n") {
-        4 + (text.len() - 4 - rest.len())
-    } else if text.strip_prefix("---\r\n").is_some() {
+    let opened = if text.starts_with("---\n") {
+        4
+    } else if text.starts_with("---\r\n") {
         5
     } else {
         return 0;
     };
 
     let mut at = opened;
-    for line in text[opened..].lines() {
-        let next = at + line.len() + 1;
-        if line.trim_end() == "---" {
-            return next.min(text.len());
+    for piece in text[opened..].split_inclusive('\n') {
+        at += piece.len();
+        if piece.trim_end() == "---" {
+            return at;
         }
-        at = next;
     }
     // Unterminated front matter is not front matter: the note is all body.
     0
@@ -473,6 +480,36 @@ mod tests {
             names("---\ntitle: A #hash in a title\n---\nbody\n"),
             Vec::<String>::new()
         );
+    }
+
+    #[test]
+    fn crlf_front_matter_with_multibyte_text_does_not_panic() {
+        // The defect a real vault found after every other test passed, taken
+        // from the note that found it: CRLF endings, a long folded description
+        // in Cyrillic, the closing `---` about 1200 bytes in.
+        //
+        // The shape matters more than the content. `lines()` hands back a line
+        // without its `\r`, so walking the text by `line.len() + 1` counts one
+        // byte short on every CRLF line; the offset drifts by one per line
+        // until it lands inside a multi-byte character and the slice panics.
+        // A two-line front matter does not drift far enough to reach one, which
+        // is why the first version of this test passed against the defect.
+        let long_line = "  Ответы на комментарии от имени каналов, перевод и контекст.";
+        let mut text = String::from("---\r\nname: atlas-comment-reply\r\ndescription: >\r\n");
+        for _ in 0..12 {
+            text.push_str(long_line);
+            text.push_str("\r\n");
+        }
+        text.push_str("tags: [комментарии, youtube]\r\n---\r\nТекст #rust здесь.\r\n");
+
+        assert_eq!(names(&text), vec!["комментарии", "youtube", "rust"]);
+    }
+
+    #[test]
+    fn a_crlf_note_counts_its_lines_the_way_an_editor_does() {
+        let found = scan("---\r\ntags: [a]\r\n---\r\nпервая\r\n#b тут\r\n");
+        let inline = found.iter().find(|(name, _, _)| name == "b").unwrap();
+        assert_eq!(inline.1, Some(5));
     }
 
     #[test]
