@@ -46,6 +46,16 @@ notify-debouncer-full = "0.7"
 # ampersand and then RUNS the tail as a command — and every URL scheda builds
 # has `&file=` in it.
 tauri-plugin-opener = "2.5.5"
+# The index keeps a content hash of every note (ADR 0011). A real digest rather
+# than a quick one, because the same hash is what a sync transport will compare
+# across machines, and a collision there costs somebody a note. SHA-256 is the
+# whole job, and the line does not write its own cryptography.
+sha2 = "0.11"
+# Searching a vault takes a regular expression when asked to, and the literal
+# and whole-word modes are the same engine with the pattern escaped. The crate
+# guarantees linear time, which matters for a pattern typed one character at a
+# time against thousands of notes.
+regex = "1"
 
 # File associations are a Windows-shell concern and nothing else needs them.
 [target.'cfg(windows)'.dependencies]
