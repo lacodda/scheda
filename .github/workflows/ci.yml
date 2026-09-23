@@ -67,15 +67,26 @@ jobs:
   # rust-version is a promise to anyone building this. Without a job that
   # actually builds on it, the number silently rots the first time a newer API
   # is used — so read it from the manifest and hold the build to it.
+  #
+  # On Windows as well as Linux: the Windows-only dependencies (the registry
+  # crates behind file associations) declare their own rust-version, and a
+  # Linux-only check kept 1.85 green while the Windows build
+  # needed 1.95.
   msrv:
-    name: msrv
-    runs-on: ubuntu-latest
+    name: msrv (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     defaults:
       run:
         working-directory: src-tauri
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - name: Install Linux build deps (webkit2gtk for Tauri)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf

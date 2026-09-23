@@ -6,7 +6,7 @@ authors = ["Kirill Lakhtachev <lahtachev@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/lacodda/scheda"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 
 [lib]
 name = "scheda_lib"
