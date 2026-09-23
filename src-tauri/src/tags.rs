@@ -1,12 +1,9 @@
 //! The tags a vault's notes carry, and which notes carry each one.
 //!
-//! Read, do not index — the same call `network.rs` makes and for the same
-//! reasons: a vault of a few thousand notes is a few megabytes of markdown,
-//! reading it is tens of milliseconds, and a stored index is a second truth
-//! about the vault that is wrong every time Obsidian writes a note while this
-//! window is closed. The panel asks when it is opened and after the watcher
-//! says something changed. v0.10.0 is where an index earns its keep, and it
-//! will be built on this reading rather than instead of it.
+//! Answered from the index (`index.rs`), which holds what `scan` below found
+//! in every note and is kept current by reconciling on open and by the
+//! watcher. The reading is still this file's: the index stores it, it does not
+//! redo it.
 //!
 //! **Obsidian is the authority on what a tag is**, because scheda reads its
 //! conventions rather than inventing its own (ADR 0002). That means two
@@ -36,7 +33,8 @@
 //!   sharp in `C#` are left alone. Obsidian requires whitespace or a line start
 //!   before the hash and so does this.
 
-use crate::links::Candidate;
+use crate::frontmatter;
+use crate::index::{self, Snapshot};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -73,33 +71,23 @@ pub struct Tag {
 
 /// Every tag in the vault, most-used first.
 ///
+/// Answered from the index, which keeps each note's tags as `scan` found them.
 /// Ties are broken by name so the order is total: a vault where nine tags are
 /// used once each would otherwise shuffle between readings, and a panel that
 /// reorders itself when nothing changed looks broken.
-pub fn read(root: &Path, candidates: &[Candidate]) -> Vec<Tag> {
+pub fn read(root: &Path, snapshot: &Snapshot) -> Vec<Tag> {
     let mut found: BTreeMap<String, Vec<Tagged>> = BTreeMap::new();
 
-    for candidate in candidates {
-        let Ok(text) = std::fs::read_to_string(&candidate.path) else {
-            // A note that cannot be read is left out rather than failing the
-            // whole panel. One unreadable file in a vault of thousands is not a
-            // reason to answer nothing.
-            continue;
-        };
-        let relative = candidate
-            .path
-            .strip_prefix(root)
-            .unwrap_or(&candidate.path)
+    for (relative, note) in &snapshot.notes {
+        let path = index::absolute(root, relative)
             .to_string_lossy()
-            .replace('\\', "/");
-        let path = candidate.path.to_string_lossy().to_string();
-
-        for (name, line, context) in scan(&text) {
-            found.entry(name).or_default().push(Tagged {
+            .into_owned();
+        for tag in &note.tags {
+            found.entry(tag.name.clone()).or_default().push(Tagged {
                 path: path.clone(),
                 relative: relative.clone(),
-                line,
-                context,
+                line: tag.line,
+                context: tag.context.clone(),
             });
         }
     }
@@ -136,7 +124,7 @@ pub fn scan(text: &str) -> Vec<(String, Option<usize>, String)> {
         out.push((name, None, String::new()));
     }
 
-    let body_from = front_matter_end(text);
+    let body_from = frontmatter::end(text);
     let mut fenced = false;
     // The line number counts from the top of the file, not from the end of the
     // front matter: a person looking at line 12 in the panel has to find line 12
@@ -187,92 +175,24 @@ fn is_heading(line: &str) -> bool {
         )
 }
 
-/// Where the body starts: after a closing `---`, or at the top when there is no
-/// front matter. Only at the very top and only for a bare `---`, the same rule
-/// `notes.rs` applies.
-/// Walked with `split_inclusive` rather than `lines()`, and that is not a
-/// preference. `lines()` hands back the line without its terminator and without
-/// a `\r` before it, so adding `line.len() + 1` to walk the text counts one byte
-/// short on every CRLF line. The offset then drifts into the middle of a
-/// character and slicing panics — which is exactly what a real vault did on its
-/// first note with Cyrillic front matter, after every unit test passed. Keeping
-/// the terminator means the arithmetic is not arithmetic at all: each piece is
-/// as long as it is.
-fn front_matter_end(text: &str) -> usize {
-    let opened = if text.starts_with("---\n") {
-        4
-    } else if text.starts_with("---\r\n") {
-        5
-    } else {
-        return 0;
-    };
-
-    let mut at = opened;
-    for piece in text[opened..].split_inclusive('\n') {
-        at += piece.len();
-        if piece.trim_end() == "---" {
-            return at;
-        }
-    }
-    // Unterminated front matter is not front matter: the note is all body.
-    0
-}
-
-/// The tags named in a `tags:` key of the front matter.
+/// The tags named in a `tags:` (or `tag:`) key of the front matter.
 ///
-/// Obsidian accepts three spellings and a vault usually holds all three, so all
-/// three are read: `tags: [a, b]`, `tags: a, b`, and a block of `- a` lines
-/// under a bare `tags:`. The leading `#` is optional there and usually absent.
+/// Obsidian accepts three spellings and a vault usually holds all three:
+/// `tags: [a, b]`, `tags: a, b`, and a block of `- a` lines under a bare
+/// `tags:`. The front matter reader hands back one value per list item and the
+/// scalar whole, so a scalar is split on commas here — for this key only, since
+/// a comma in a title is part of the title. The leading `#` is optional and
+/// usually absent.
 fn front_matter_tags(text: &str) -> Vec<String> {
-    let end = front_matter_end(text);
-    if end == 0 {
-        return Vec::new();
-    }
-
+    let fields = frontmatter::fields(text);
     let mut out = Vec::new();
-    let mut in_block = false;
-
-    for line in text[..end].lines() {
-        let trimmed = line.trim_end();
-        if trimmed == "---" {
-            continue;
-        }
-
-        if in_block {
-            let item = trimmed.trim_start();
-            if let Some(value) = item.strip_prefix("- ") {
-                push_tag(&mut out, value);
-                continue;
+    for key in ["tags", "tag"] {
+        for value in fields.get(key).into_iter().flatten() {
+            for part in value.split(',') {
+                push_tag(&mut out, part);
             }
-            // A line that is not a list item ends the block — the next key has
-            // started, and its values are not tags.
-            if !item.is_empty() {
-                in_block = false;
-            }
-        }
-
-        let Some(value) = trimmed
-            .strip_prefix("tags:")
-            .or_else(|| trimmed.strip_prefix("tag:"))
-        else {
-            continue;
-        };
-
-        let value = value.trim();
-        if value.is_empty() {
-            in_block = true;
-            continue;
-        }
-
-        let inner = value
-            .strip_prefix('[')
-            .and_then(|rest| rest.strip_suffix(']'))
-            .unwrap_or(value);
-        for part in inner.split(',') {
-            push_tag(&mut out, part);
         }
     }
-
     out
 }
 
@@ -315,7 +235,8 @@ fn tags_in_line(line: &str) -> Vec<String> {
                         .find(|c: char| !is_tag_char(c))
                         .unwrap_or(line.len() - at - 1);
                 let name = &line[at + 1..end];
-                if preceded_ok && is_tag_name(name) {
+                let next = line[end..].chars().next();
+                if preceded_ok && is_tag_name(name) && !is_spreadsheet_error(name, next) {
                     out.push(name.to_string());
                 }
                 at = end.max(at + 1);
@@ -325,6 +246,29 @@ fn tags_in_line(line: &str) -> Vec<String> {
     }
 
     out
+}
+
+/// Whether a hash-word is a spreadsheet's error code rather than a tag.
+///
+/// `#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?` and `#N/A` are what a note about
+/// formulas is full of, and each of them fits the tag rules — a hash after a
+/// space, then letters, digits and a slash. The shape tells them apart, not a
+/// list of every code: capitals and digits closed by `!` or `?`, which is how a
+/// spreadsheet writes its errors and how nobody writes a tag. A lowercase
+/// `#urgent!` in a sentence is still a tag with an exclamation after it.
+///
+/// `N/A` is the one code without a closing mark, and it is named on its own:
+/// read as a spreadsheet error or as "not applicable", it is not a tag either
+/// way.
+fn is_spreadsheet_error(name: &str, next: Option<char>) -> bool {
+    if name == "N/A" {
+        return true;
+    }
+    matches!(next, Some('!' | '?'))
+        && name.chars().any(|c| c.is_ascii_uppercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '/')
 }
 
 /// Whether a character may appear in a tag. Obsidian's set: letters, digits,
@@ -531,6 +475,34 @@ mod tests {
     fn keeps_the_line_as_context() {
         let found = scan("  a note about #rust  \n");
         assert_eq!(found[0].2, "a note about #rust");
+    }
+
+    #[test]
+    fn a_spreadsheet_error_is_not_a_tag() {
+        // Taken from a real vault, where these sat above half the real tags.
+        assert_eq!(
+            names(
+                "gives #DIV/0! or #REF! or #VALUE! or #NAME? or #N/A here
+"
+            ),
+            Vec::<String>::new()
+        );
+        // The mark is what decides, not the word: without it `#REF` is a tag,
+        // and a lowercase tag followed by an exclamation is still a tag.
+        assert_eq!(
+            names(
+                "see #REF for that
+"
+            ),
+            vec!["REF"]
+        );
+        assert_eq!(
+            names(
+                "this is #urgent! now
+"
+            ),
+            vec!["urgent"]
+        );
     }
 
     #[test]
