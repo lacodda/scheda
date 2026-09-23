@@ -15,6 +15,9 @@ export default mergeConfig(
       // and a pattern that only matched .test.ts let one sit in the repo
       // without ever running.
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      // The rectangles jsdom does not have and CodeMirror asks for; see the
+      // file for why a missing one fails tests at random.
+      setupFiles: ['src/test/dom.ts'],
     },
   }),
 )
