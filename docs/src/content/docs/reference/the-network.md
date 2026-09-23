@@ -37,9 +37,11 @@ to use, and opens it.
 
 The same missing target written twice is one row: it is one note left to write.
 
-The panel reads the vault when you open it and again when something is written —
-by you, by Obsidian, or by a sync client. The answer is about the files on disk,
-so a link you are in the middle of typing is not in it yet.
+The panel answers from the vault's index and asks again when something is
+written — by you, by Obsidian, or by a sync client. The answer is about the files
+on disk, so a link you are in the middle of typing is not in it yet. Where each
+link lands is worked out at the moment you look, against the files as they are
+then.
 
 ## Renaming a note
 

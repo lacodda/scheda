@@ -10,9 +10,17 @@
 //! plan did not name is identical byte for byte, and every file it did name
 //! differs only in the links it listed.
 
-use scheda_lib::{document, links, network, rename, vault as vault_config};
+use scheda_lib::{document, index, links, network, rename, vault as vault_config};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+/// The vault's index, built the way the window builds it: one reconciling pass
+/// over the disk.
+fn indexed(root: &Path) -> index::Snapshot {
+    let mut snapshot = index::Snapshot::empty(root);
+    index::reconcile(&mut snapshot, root, 0);
+    snapshot
+}
 
 /// A vault with the given files in it, and an `.obsidian/app.json` carrying the
 /// link format.
@@ -507,7 +515,12 @@ fn backlinks_find_the_notes_that_point_here() {
         ],
     );
     let root = vault.path();
-    let found = network::around(root, &candidates(root), &root.join("plan.md"));
+    let found = network::around(
+        root,
+        &candidates(root),
+        &indexed(root),
+        &root.join("plan.md"),
+    );
 
     let rows: Vec<_> = found
         .backlinks
@@ -534,7 +547,12 @@ fn a_backlink_is_counted_by_where_it_lands_not_by_what_it_says() {
         ],
     );
     let root = vault.path();
-    let found = network::around(root, &candidates(root), &root.join("notes/plan.md"));
+    let found = network::around(
+        root,
+        &candidates(root),
+        &indexed(root),
+        &root.join("notes/plan.md"),
+    );
     assert_eq!(found.backlinks.len(), 2);
 }
 
@@ -542,7 +560,12 @@ fn a_backlink_is_counted_by_where_it_lands_not_by_what_it_says() {
 fn a_note_is_not_its_own_backlink() {
     let vault = vault("shortest", &[("plan.md", "this is [[plan]] itself\n")]);
     let root = vault.path();
-    let found = network::around(root, &candidates(root), &root.join("plan.md"));
+    let found = network::around(
+        root,
+        &candidates(root),
+        &indexed(root),
+        &root.join("plan.md"),
+    );
     assert!(found.backlinks.is_empty());
 }
 
@@ -560,7 +583,12 @@ fn unresolved_links_are_the_open_notes_own() {
         ],
     );
     let root = vault.path();
-    let found = network::around(root, &candidates(root), &root.join("plan.md"));
+    let found = network::around(
+        root,
+        &candidates(root),
+        &indexed(root),
+        &root.join("plan.md"),
+    );
 
     let targets: Vec<_> = found
         .unresolved
@@ -577,7 +605,12 @@ fn the_same_missing_target_twice_is_one_note_left_to_write() {
         &[("plan.md", "[[missing]] here\nand [[missing]] again\n")],
     );
     let root = vault.path();
-    let found = network::around(root, &candidates(root), &root.join("plan.md"));
+    let found = network::around(
+        root,
+        &candidates(root),
+        &indexed(root),
+        &root.join("plan.md"),
+    );
     assert_eq!(found.unresolved.len(), 1);
 }
 
@@ -591,7 +624,12 @@ fn a_link_in_a_fence_is_neither_a_backlink_nor_a_hole() {
         ],
     );
     let root = vault.path();
-    let found = network::around(root, &candidates(root), &root.join("plan.md"));
+    let found = network::around(
+        root,
+        &candidates(root),
+        &indexed(root),
+        &root.join("plan.md"),
+    );
     assert!(found.unresolved.is_empty(), "an example is not a hole");
     assert!(found.backlinks.is_empty(), "an example is not a backlink");
 }

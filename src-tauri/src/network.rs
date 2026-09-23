@@ -6,14 +6,11 @@
 //! "what links here" cannot be answered from the note itself — the answer lives
 //! in the other files, and only they know it.
 //!
-//! **Read, do not index.** A vault of a few thousand notes is a few megabytes of
-//! markdown; reading it is tens of milliseconds, and the alternative is a stored
-//! index that is a second truth about the vault and wrong every time Obsidian
-//! writes a note while this window is closed. The panel asks when it is opened
-//! and after the watcher says something changed, which is rarely, and the cost
-//! is paid where the person asked for it rather than at startup (v0.9.0 is where
-//! an index earns its keep, and it will be built on this reading rather than
-//! instead of it).
+//! **Answered from the index.** v0.8 read every note on every ask, which on a
+//! vault of six thousand notes was ~590 ms of disk each time the panel opened.
+//! The index (`index.rs`) holds the same reading — the same `links::scan` — and
+//! is reconciled against the disk on open and fed by the watcher, so the panel
+//! now asks it instead of the files.
 //!
 //! **A link is a target, not a string.** Two notes may link to the same file by
 //! different names — `[[plan]]` and `[[projects/plan]]` both land on one note —
@@ -21,6 +18,7 @@
 //! `links::resolve` the click goes through. Matching the written text would show
 //! a note half its backlinks and call the rest broken.
 
+use crate::index::{self, LinkAt, Snapshot};
 use crate::links::{self, Candidate};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -61,51 +59,28 @@ pub struct Network {
     pub unresolved: Vec<Unresolved>,
 }
 
-/// How many notes are read before the answer is called good enough.
-///
-/// A ceiling rather than a promise of completeness, and it is high enough that
-/// no vault a person edits by hand reaches it. It exists so that pointing scheda
-/// at a folder of a hundred thousand generated files does not freeze the window:
-/// a panel that is slow the first time teaches people not to open it.
-const MAX_NOTES_READ: usize = 20_000;
-
 /// Every note in the vault that links to `note`, plus the links in `note`
 /// itself that go nowhere.
 ///
-/// Both in one walk, because both need the same thing — every note's text — and
-/// reading the vault twice to answer two questions asked at the same moment is
-/// the round trip this product keeps refusing.
-pub fn around(root: &Path, candidates: &[Candidate], note: &Path) -> Network {
+/// Answered from the index (`index.rs`), which holds every note's links with
+/// the line each is on. The resolving is still done here, at the moment of
+/// asking, against the vault's files as they are now: where a link lands
+/// depends on which other files exist, and that is exactly what an index of
+/// what each note *says* cannot know.
+pub fn around(root: &Path, candidates: &[Candidate], snapshot: &Snapshot, note: &Path) -> Network {
     let mut network = Network::default();
-    let mut read = 0usize;
 
-    for candidate in candidates {
-        if read >= MAX_NOTES_READ {
-            break;
-        }
-        if !is_markdown(&candidate.path) {
-            continue;
-        }
+    for (relative, indexed) in &snapshot.notes {
+        let path = index::absolute(root, relative);
         // A note does not link to itself in the backlink panel: the note is on
         // screen, and a row pointing at the thing you are reading is a row
         // nobody follows. Its own links are still read — for the unresolved
         // list, which is exactly about this note.
-        let own = same_file(&candidate.path, note);
+        let own = same_file(&path, note);
 
-        let Ok(bytes) = std::fs::read(&candidate.path) else {
-            continue;
-        };
-        // Through the document layer, so what is scanned is the text an editor
-        // would show. A note that is not UTF-8 is skipped rather than guessed
-        // at: it is read-only here anyway (ADR 0002).
-        let Ok(document) = crate::document::decode(&bytes) else {
-            continue;
-        };
-        read += 1;
-
-        for found in links::scan(&document.text) {
+        for found in &indexed.links {
             if own {
-                collect_unresolved(candidates, &document.text, &found, &mut network);
+                collect_unresolved(candidates, found, &mut network);
                 continue;
             }
             // `[[#heading]]` points inside the note it is written in, so it is
@@ -120,11 +95,11 @@ pub fn around(root: &Path, candidates: &[Candidate], note: &Path) -> Network {
                 continue;
             }
             network.backlinks.push(Reference {
-                relative: relative_to(root, &candidate.path),
-                path: candidate.path.to_string_lossy().into_owned(),
+                relative: relative.clone(),
+                path: path.to_string_lossy().into_owned(),
                 line: found.line,
-                context: line_at(&document.text, found.line),
-                target: found.target,
+                context: found.context.clone(),
+                target: found.target.clone(),
             });
         }
     }
@@ -138,14 +113,8 @@ pub fn around(root: &Path, candidates: &[Candidate], note: &Path) -> Network {
     network
 }
 
-/// The links of the open note that resolve to nothing, gathered as its own text
-/// is scanned.
-fn collect_unresolved(
-    candidates: &[Candidate],
-    text: &str,
-    found: &links::Found,
-    network: &mut Network,
-) {
+/// The links of the open note that resolve to nothing.
+fn collect_unresolved(candidates: &[Candidate], found: &LinkAt, network: &mut Network) {
     // A link into this note by heading alone has no file to find.
     if found.target.is_empty() {
         return;
@@ -164,24 +133,8 @@ fn collect_unresolved(
     network.unresolved.push(Unresolved {
         target: found.target.clone(),
         line: found.line,
-        context: line_at(text, found.line),
+        context: found.context.clone(),
     });
-}
-
-/// The text of a 1-based line, trimmed, and cut if it is a paragraph rather than
-/// a line.
-fn line_at(text: &str, line: usize) -> String {
-    const CONTEXT_CHARS: usize = 200;
-    let raw = text.lines().nth(line.saturating_sub(1)).unwrap_or_default();
-    let trimmed = raw.trim();
-    if trimmed.chars().count() <= CONTEXT_CHARS {
-        return trimmed.to_string();
-    }
-    // Cut by characters, not bytes: a note in Cyrillic would otherwise be cut to
-    // half the length, and through the middle of a character at that.
-    let mut out: String = trimmed.chars().take(CONTEXT_CHARS).collect();
-    out.push('…');
-    out
 }
 
 /// Whether a path is a markdown note. Only notes are read: a link may point at a

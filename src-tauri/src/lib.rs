@@ -6,14 +6,18 @@ pub mod associations;
 pub mod attachments;
 pub mod document;
 pub mod files;
+pub mod frontmatter;
+pub mod index;
 pub mod links;
 pub mod network;
 pub mod notes;
 pub mod obsidian;
 pub mod quick;
 pub mod rename;
+pub mod replace;
 pub mod root;
 pub mod scratch;
+pub mod search;
 mod settings;
 pub mod startup;
 pub mod tags;
@@ -102,8 +106,17 @@ fn open_file(path: String) -> Result<OpenFile, CommandError> {
 
 /// Writes edited text back in the shape the file was read with.
 #[tauri::command]
-fn save_file(path: String, text: String, shape: DocumentShape) -> Result<(), CommandError> {
-    document::write(&PathBuf::from(path), &text, &shape)?;
+fn save_file(
+    notes: tauri::State<'_, index::NoteIndex>,
+    path: String,
+    text: String,
+    shape: DocumentShape,
+) -> Result<(), CommandError> {
+    let path = PathBuf::from(path);
+    document::write(&path, &text, &shape)?;
+    // Told now rather than left to the watcher, so a panel asked the moment the
+    // save returns is not answered from the note as it was before it.
+    notes.changed(&[path]);
     Ok(())
 }
 
@@ -426,8 +439,25 @@ fn watch_vault(
         return Ok(());
     };
 
+    // The index is built behind the text, and this is the moment the text is
+    // known to be on screen: the window points the watch only after its first
+    // paint (ADR 0001).
+    app.state::<index::NoteIndex>().open(&root);
+
     state
         .point_at(&root, move |changes| {
+            // The core's own lists first, then the window. A panel that hears
+            // "the vault changed" and asks straight away must be answered from
+            // lists that already know it.
+            let paths: Vec<PathBuf> = changes
+                .changed
+                .iter()
+                .chain(&changes.added)
+                .chain(&changes.removed)
+                .map(PathBuf::from)
+                .collect();
+            app.state::<index::NoteIndex>().changed(&paths);
+            *app.state::<VaultIndex>().0.lock().expect("index lock") = None;
             let _ = app.emit(watch::CHANGED_EVENT, changes);
         })
         .map_err(|error| CommandError {
@@ -481,16 +511,6 @@ fn find_files(
         quick::search(&index.picker, &query)
     })
     .unwrap_or_default()
-}
-
-/// Throws the vault's file list away, so the next question reads it again.
-///
-/// Called when the watcher says the vault changed. Without it, a note created in
-/// Obsidian is invisible to `Ctrl+P` and to every wikilink pointing at it until
-/// the window is restarted.
-#[tauri::command]
-fn forget_file_index(state: tauri::State<'_, VaultIndex>) {
-    *state.0.lock().expect("index lock") = None;
 }
 
 /// The vault's files, flattened the two ways they are asked about.
@@ -627,6 +647,7 @@ fn resolve_wikilinks(
 #[tauri::command]
 fn create_from_wikilink(
     state: tauri::State<'_, VaultIndex>,
+    notes: tauri::State<'_, index::NoteIndex>,
     document: String,
     target: String,
 ) -> Result<String, CommandError> {
@@ -673,45 +694,198 @@ fn create_from_wikilink(
     // amended: the watcher is about to say the same thing, and one way of going
     // stale is easier to reason about than two.
     *state.0.lock().expect("index lock") = None;
+    notes.changed(std::slice::from_ref(&path));
 
     Ok(path.to_string_lossy().into_owned())
 }
 
 /// What points at this note, and what it points at in vain.
 ///
-/// One call for both, because both are answered by the same walk over the
-/// vault's notes and asking twice would read every file twice. Empty when the
-/// document is not in a vault: a lone note on the Desktop has no vault whose
-/// links could point at it, which is the same answer the picker and the
-/// wikilinks give (decision 2026-09-05).
+/// Answered from the vault's index (`index.rs`), waiting for it if it is still
+/// being built — on a thread of the pool rather than the window's, which is why
+/// this is `async`: a synchronous command runs on the main thread, and the
+/// first ask after opening a vault would freeze the window for the build.
+/// Empty when the document is not in a vault: a lone note on the Desktop has
+/// no vault whose links could point at it, which is the same answer the picker
+/// and the wikilinks give (decision 2026-09-05).
 #[tauri::command]
-fn read_network(state: tauri::State<'_, VaultIndex>, document: String) -> network::Network {
-    let document = PathBuf::from(document);
-    with_index(&state, &document, |index| {
-        network::around(&index.root, &index.links, &document)
+async fn read_network(app: tauri::AppHandle, document: String) -> network::Network {
+    tauri::async_runtime::spawn_blocking(move || {
+        let document = PathBuf::from(document);
+        let root = root::for_vault(&document)?;
+        app.state::<index::NoteIndex>().with(&root, |snapshot| {
+            with_index(&app.state::<VaultIndex>(), &document, |files| {
+                network::around(&files.root, &files.links, snapshot, &document)
+            })
+        })?
     })
+    .await
+    .ok()
+    .flatten()
     .unwrap_or_default()
 }
 
 /// Every tag in the vault, most-used first, with the notes carrying each.
 ///
-/// Read on the same terms as the network: the vault's notes are read when the
-/// panel is opened and again when the watcher says something changed, rather
-/// than kept in an index that would be a second truth about a folder Obsidian
-/// also writes to (`tags.rs`). The candidate list is the one the index already
-/// holds, so the directory walk is not repeated for this panel.
-///
-/// Empty when the document is not in a vault: a lone note on the Desktop has no
-/// vault whose tags could be collected, which is the same answer the picker, the
-/// wikilinks and the network give (decision 2026-09-05).
+/// From the index, on the same terms as the network. Empty when the document is
+/// not in a vault (decision 2026-09-05).
 #[tauri::command]
-fn read_tags(state: tauri::State<'_, VaultIndex>, document: String) -> Vec<tags::Tag> {
-    let document = PathBuf::from(document);
-    with_index(&state, &document, |index| {
-        tags::read(&index.root, &index.links)
+async fn read_tags(app: tauri::AppHandle, document: String) -> Vec<tags::Tag> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = root::for_vault(Path::new(&document))?;
+        app.state::<index::NoteIndex>()
+            .with(&root, |snapshot| tags::read(&root, snapshot))
     })
+    .await
+    .ok()
+    .flatten()
     .unwrap_or_default()
 }
+
+/// The search the window asked for last. Each search takes the next number and
+/// stops when it is no longer the newest: the window searches as the person
+/// types, and a search for "sch" is not worth finishing once "scheda" has been
+/// typed.
+#[derive(Default)]
+struct Searches(std::sync::Arc<std::sync::atomic::AtomicU64>);
+
+impl From<search::SearchError> for CommandError {
+    fn from(error: search::SearchError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
+impl From<replace::ReplaceError> for CommandError {
+    fn from(error: replace::ReplaceError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
+fn not_in_a_vault() -> CommandError {
+    CommandError {
+        message: "this note is not in a vault, so there is no vault to search".into(),
+        read_only: false,
+    }
+}
+
+/// A background job that did not come back — it panicked, which is a defect,
+/// said in words rather than as a closed promise.
+fn stopped(what: &str, error: impl std::fmt::Display) -> CommandError {
+    CommandError {
+        message: format!("the {what} stopped: {error}"),
+        read_only: false,
+    }
+}
+
+/// Searches the text of every note in the document's vault.
+///
+/// `null` when a newer search overtook this one — the window drops the answer
+/// rather than showing results for what was typed a keystroke ago.
+#[tauri::command]
+async fn search_vault(
+    app: tauri::AppHandle,
+    document: String,
+    query: search::Query,
+) -> Result<Option<search::Found>, CommandError> {
+    let counter = app.state::<Searches>().0.clone();
+    let mine = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = root::for_vault(Path::new(&document)).ok_or_else(not_in_a_vault)?;
+        let matcher = search::matcher(&query)?;
+        let keys = app
+            .state::<index::NoteIndex>()
+            .with(&root, |snapshot| search::notes_for(snapshot, &query))
+            .unwrap_or_default();
+        let cancelled = || counter.load(std::sync::atomic::Ordering::SeqCst) != mine;
+        Ok(search::run(&root, &keys, matcher.as_ref(), &cancelled))
+    })
+    .await
+    .map_err(|error| stopped("search", error))?
+}
+
+/// What replacing every match of a search would change, without changing any
+/// of it.
+#[tauri::command]
+async fn plan_replace(
+    app: tauri::AppHandle,
+    document: String,
+    query: search::Query,
+    replacement: String,
+) -> Result<replace::Plan, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = root::for_vault(Path::new(&document)).ok_or_else(not_in_a_vault)?;
+        let Some(matcher) = search::matcher(&query)? else {
+            return Ok(replace::Plan::default());
+        };
+        let keys = app
+            .state::<index::NoteIndex>()
+            .with(&root, |snapshot| search::notes_for(snapshot, &query))
+            .unwrap_or_default();
+        Ok(replace::plan(
+            &root,
+            &keys,
+            &matcher,
+            &replacement,
+            query.regex,
+        )?)
+    })
+    .await
+    .map_err(|error| stopped("preview", error))?
+}
+
+/// Performs the changes the plan still holds — the window has taken out the
+/// ones the person unticked.
+#[tauri::command]
+async fn apply_replace(
+    app: tauri::AppHandle,
+    plan: replace::Plan,
+) -> Result<replace::Applied, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (applied, error) = replace::apply(&plan);
+        let touched: Vec<PathBuf> = applied.paths.iter().map(PathBuf::from).collect();
+        app.state::<index::NoteIndex>().changed(&touched);
+        // Kept for the undo even when a later note failed: the notes written
+        // before it are real, and forgetting them would leave no way back.
+        *LAST_REPLACE.lock().expect("replace lock") = Some(applied.clone());
+        match error {
+            Some(error) => Err(error.into()),
+            None => Ok(applied),
+        }
+    })
+    .await
+    .map_err(|error| stopped("replacement", error))?
+}
+
+/// Puts back the last replacement, note by note, except where a note has been
+/// written since. Answers the notes it left alone for that reason.
+#[tauri::command]
+fn undo_replace(notes: tauri::State<'_, index::NoteIndex>) -> Result<Vec<String>, CommandError> {
+    let Some(applied) = LAST_REPLACE.lock().expect("replace lock").take() else {
+        return Ok(Vec::new());
+    };
+    let (kept, error) = replace::undo(&applied);
+    let touched: Vec<PathBuf> = applied
+        .restore
+        .iter()
+        .map(|file| file.path.clone())
+        .collect();
+    notes.changed(&touched);
+    match error {
+        Some(error) => Err(error.into()),
+        None => Ok(kept),
+    }
+}
+
+/// The replacement that may still be undone — one, like the rename's, for the
+/// same reason: the bytes to put back are only the right bytes while nothing
+/// else has been written over them.
+static LAST_REPLACE: std::sync::Mutex<Option<replace::Applied>> = std::sync::Mutex::new(None);
 
 /// What renaming a file would change, without changing any of it.
 ///
@@ -754,9 +928,11 @@ fn plan_rename(
 #[tauri::command]
 fn apply_rename(
     state: tauri::State<'_, VaultIndex>,
+    notes: tauri::State<'_, index::NoteIndex>,
     plan: rename::Plan,
 ) -> Result<rename::Applied, CommandError> {
     let applied = rename::apply(&plan)?;
+    notes.changed(&renamed_paths(&applied));
     // The vault's file list now names a file that has moved, and every link
     // answer in it was computed against the old name.
     *state.0.lock().expect("index lock") = None;
@@ -775,14 +951,25 @@ fn apply_rename(
 #[tauri::command]
 fn undo_rename(
     state: tauri::State<'_, VaultIndex>,
+    notes: tauri::State<'_, index::NoteIndex>,
 ) -> Result<Option<rename::Applied>, CommandError> {
     let held = LAST_RENAME.lock().expect("rename lock").take();
     let Some(applied) = held else {
         return Ok(None);
     };
     rename::undo(&applied)?;
+    notes.changed(&renamed_paths(&applied));
     *state.0.lock().expect("index lock") = None;
     Ok(Some(applied))
+}
+
+/// Every path a rename touched: both names of the file, and each note whose
+/// links it rewrote.
+fn renamed_paths(applied: &rename::Applied) -> Vec<PathBuf> {
+    [PathBuf::from(&applied.from), PathBuf::from(&applied.to)]
+        .into_iter()
+        .chain(applied.restore.iter().map(|file| file.path.clone()))
+        .collect()
 }
 
 /// The rename that may still be undone.
@@ -1014,6 +1201,8 @@ pub fn run() {
         .manage(Preloaded(Mutex::new(preloaded)))
         .manage(watch::Watch::default())
         .manage(VaultIndex::default())
+        .manage(index::NoteIndex::new(index::directory()))
+        .manage(Searches::default())
         .invoke_handler(tauri::generate_handler![
             take_preloaded,
             open_file,
@@ -1022,7 +1211,6 @@ pub fn run() {
             file_differs,
             watch_vault,
             find_files,
-            forget_file_index,
             read_network,
             plan_rename,
             apply_rename,
@@ -1047,6 +1235,10 @@ pub fn run() {
             restore_drafts,
             report_first_paint,
             read_tags,
+            search_vault,
+            plan_replace,
+            apply_replace,
+            undo_replace,
             load_settings,
             save_settings,
             remember_recent,

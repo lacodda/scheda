@@ -56,6 +56,10 @@ you have already answered.
 - **The tree** redraws, so a note created in Obsidian appears without restarting.
 - **[Go to file](/scheda/reference/going-to-a-file/)** searches the vault as it
   is now, not as it was when the window opened.
+- **The index** behind the tags, the backlinks and the
+  [vault search](/scheda/reference/search/) reads the changed notes again
+  before the window is told anything changed, so a panel that asks straight
+  away gets the new answer.
 - **A tab whose file was deleted** says so in the status bar and offers to save
   the text somewhere else, rather than silently re-creating the file somebody
   just moved to the recycle bin.

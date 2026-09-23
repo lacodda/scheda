@@ -46,6 +46,12 @@ against a 500 ms gate on every build.
   front matter, counted by notes rather than by mentions, with the tags of the
   note you are reading marked. A heading, a colour and a fragment are not tags,
   which is most of what a tag panel gets wrong.
+- **Search the whole vault, and replace with a preview.** `Ctrl+Shift+F` finds
+  a word, a whole word or a pattern in every note, narrowed by `#tag` or a
+  front-matter field. Replacing lists every match with a box beside it and
+  writes only what you leave ticked - byte for byte everywhere else.
+- **Diagrams while reading.** A `mermaid` block is code while you write it and
+  the diagram while you read.
 - **Tabs in the title bar**, with their own undo history, so one strip of screen
   does the work of two. A second launch hands its file to the window you have.
 - **A draft you never named.** `Ctrl+N` opens a tab with no file; its text
@@ -71,9 +77,10 @@ Windows does not let a program take that decision for you.
 
 ## Status
 
-v0.6.0, in daily use. Everything above works, including file management from
-the tree - into the recycle bin, never an unlink - folder watching, and use as
-`$EDITOR`. Checked on every build against a corpus of deliberately awkward
+v0.10.0, in daily use. Everything above works, including file management from
+the tree - into the recycle bin, never an unlink - folder watching, use as
+`$EDITOR`, and an index of the vault kept in scheda's own directory and checked
+against the disk on every open. Checked on every build against a corpus of deliberately awkward
 files, and against the owner's own 5000-note vault before release. What landed
 in each version:
 [CHANGELOG](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md).

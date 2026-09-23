@@ -102,11 +102,6 @@ export function findFiles(document: string, query: string): Promise<FileHit[]> {
   return invoke<FileHit[]>('find_files', { document, query })
 }
 
-/** Throws the picker's list away, so the next search reads the vault again. */
-export function forgetFileIndex(): Promise<void> {
-  return invoke<void>('forget_file_index')
-}
-
 /** The URL that opens a document in Obsidian, or null when it is not in a vault
  *  and Obsidian would have none to open it in. */
 export function obsidianUrl(document: string): Promise<string | null> {
@@ -480,4 +475,111 @@ export function applyRename(plan: RenamePlan): Promise<RenameApplied> {
  *  are only the right ones while nothing else has been written over them. */
 export function undoRename(): Promise<RenameApplied | null> {
   return invoke<RenameApplied | null>('undo_rename')
+}
+
+/** What to look for in a vault's notes, and which notes to look in. */
+export interface SearchQuery {
+  /** The text, or a pattern when `regex` is set. Empty lists the notes the
+   *  filters allow. */
+  text: string
+  caseSensitive: boolean
+  wholeWord: boolean
+  regex: boolean
+  /** Only notes carrying this tag or one nested under it. */
+  tag?: string | null
+  /** Only notes whose front matter has this field, with `value` in it when
+   *  given. */
+  field?: string | null
+  value?: string | null
+}
+
+/** One line with a match in it. */
+export interface SearchHit {
+  line: number
+  /** Where the first match starts in the whole line, and its length — in
+   *  UTF-16 units, which is what the editor's positions count in. */
+  column: number
+  length: number
+  /** The line as shown: whole, or a window around the first match. */
+  text: string
+  /** Every match inside `text`, as `[start, end)`. */
+  ranges: [number, number][]
+}
+
+export interface SearchFile {
+  path: string
+  relative: string
+  hits: SearchHit[]
+  /** Matches in the note, not lines with one. */
+  matches: number
+}
+
+export interface SearchFound {
+  files: SearchFile[]
+  matches: number
+  /** Notes searched, after the filters. */
+  notes: number
+  /** The answer stopped at a ceiling and is the first part of it. */
+  truncated: boolean
+}
+
+/** Searches the text of every note in the document's vault.
+ *
+ *  Null when a newer search overtook this one: the core stops the old one, and
+ *  an answer to what was typed a keystroke ago is not worth showing. */
+export function searchVault(document: string, query: SearchQuery): Promise<SearchFound | null> {
+  return invoke<SearchFound | null>('search_vault', { document, query })
+}
+
+/** One match a replacement would change. */
+export interface ReplaceChange {
+  line: number
+  from: number
+  to: number
+  left: string
+  right: string
+  found: string
+  replacement: string
+}
+
+export interface ReplaceFile {
+  path: string
+  relative: string
+  hash: string
+  changes: ReplaceChange[]
+}
+
+/** Everything a replacement would do, before any of it is done. */
+export interface ReplacePlan {
+  files: ReplaceFile[]
+  changes: number
+  truncated: boolean
+}
+
+export interface ReplaceApplied {
+  paths: string[]
+  changes: number
+  /** Notes left alone because they changed after the preview. */
+  skipped: string[]
+}
+
+/** The dry run: every match and what it would become. Nothing is written. */
+export function planReplace(
+  document: string,
+  query: SearchQuery,
+  replacement: string,
+): Promise<ReplacePlan> {
+  return invoke<ReplacePlan>('plan_replace', { document, query, replacement })
+}
+
+/** Makes the changes the plan still holds; the window takes out the unticked
+ *  ones before sending it back. */
+export function applyReplace(plan: ReplacePlan): Promise<ReplaceApplied> {
+  return invoke<ReplaceApplied>('apply_replace', { plan })
+}
+
+/** Puts the last replacement back. Answers the notes it left alone because
+ *  they were written after the replacement. */
+export function undoReplace(): Promise<string[]> {
+  return invoke<string[]>('undo_replace')
 }

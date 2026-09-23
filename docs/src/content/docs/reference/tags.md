@@ -60,12 +60,22 @@ A `#` is not a tag when it is:
   does not file itself under `#!/bin/sh`;
 - **a colour.** `#fff` and `#d9704a` are what a note about design is full of;
 - **a year.** `#2024` is all digits;
+- **a spreadsheet error.** `#REF!`, `#DIV/0!`, `#VALUE!`, `#NAME?` and `#N/A`
+  are what a note about formulas is full of. Capitals closed by `!` or `?` is
+  how a spreadsheet writes an error and how nobody writes a tag, so the shape
+  decides rather than a list — while a lowercase `#urgent!` in a sentence is
+  still the tag `urgent`;
 - **attached to a word.** The hash has to follow a line start or a space, which
   is what leaves the fragment in `page.md#section` and the sharp in `C#` alone.
 
 ## How it is read
 
-The vault's notes are read when the panel is opened, and again when something on
-disk changes. There is no stored index — it would be a second truth about a
-folder that Obsidian writes to as well, and wrong every time a note changed
-while this window was closed.
+From the index scheda keeps in its own data directory, never in the vault. The
+index is checked against the disk every time the vault is opened — a note whose
+size or modification time moved is read again — and kept current by watching
+the folder, so a note Obsidian wrote while scheda was closed is not remembered
+wrong. The rules above are what builds it; the index only saves reading every
+note each time the panel opens.
+
+To see every note carrying a tag with the lines around it, filter the
+[vault search](/scheda/reference/search/) by `#tag`.

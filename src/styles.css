@@ -1299,6 +1299,269 @@ body {
   -webkit-line-clamp: 2;
 }
 
+/* -------------------------------------------------------------- search -- */
+
+/* The vault search sits on the left, beside the tree: it is a way of FINDING a
+   note, which is the tree's side of the window, while the right side is about
+   the note already open. The rows are the tags panel's rows — a file line with
+   ink, a quieter line of context under it — because a list of places in a
+   vault should read the same wherever it is. */
+.search-host {
+  display: flex;
+  min-height: 0;
+}
+
+.search {
+  flex: 0 0 auto;
+  width: 20rem;
+  overflow-y: auto;
+  padding: 0.6rem 0 1rem;
+  border-right: 1px solid var(--border);
+  background: var(--status-bg);
+  font-size: 12px;
+}
+
+@media (max-width: 60rem) {
+  .search {
+    width: 45%;
+    min-width: 10rem;
+  }
+}
+
+.search-heading {
+  margin: 0.5rem 0 0.3rem;
+  padding: 0 0.9rem;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.search-row {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  margin: 0.2rem 0.9rem;
+}
+
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.search-input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.search-toggle,
+.search-action {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: default;
+}
+
+.search-toggle {
+  min-width: 1.7rem;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+.search-toggle--word {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.search-replace-toggle {
+  font-family: inherit;
+}
+
+.search-toggle:hover,
+.search-action:hover:not(:disabled) {
+  background: var(--active-line);
+  color: var(--text);
+}
+
+/* On is said by the accent edge the rest of the window marks "this one" with,
+   and by the text taking ink — not by colour alone. */
+.search-toggle--on {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.search-action {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.search-action:disabled {
+  opacity: 0.5;
+}
+
+.search-action--primary {
+  border-color: var(--accent);
+}
+
+.search-summary,
+.search-empty,
+.search-problem {
+  margin: 0.5rem 0 0.2rem;
+  padding: 0 0.9rem;
+  color: var(--muted);
+}
+
+.search-problem {
+  color: var(--will-be);
+}
+
+.search-done,
+.search-plan-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.5rem 0.9rem 0.3rem;
+  color: var(--text);
+}
+
+.search-plan-bar > span,
+.search-done > span {
+  flex: 1 1 100%;
+}
+
+.search-files,
+.search-hits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Border-box, because the rows of the preview are labels rather than buttons
+   and a label is content-box: at `width: 100%` plus its padding it ran 30px
+   past the panel and gave the sidebar a horizontal scrollbar — measured in the
+   live window, where the button rows of the results had hidden it. */
+.search-file,
+.search-hit {
+  box-sizing: border-box;
+}
+
+.search-file {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.35rem 0.9rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.search-file:hover {
+  border-left-color: var(--accent);
+  background: var(--active-line);
+}
+
+.search-file--plan input,
+.search-hit--plan input {
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.search-where {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.search-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.search-hits {
+  margin-left: 1.5rem;
+  padding-bottom: 0.2rem;
+  border-left: 1px solid var(--border);
+}
+
+.search-hit {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.25rem 0.9rem 0.25rem 0.6rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: default;
+}
+
+.search-hit:hover {
+  background: var(--active-line);
+}
+
+.search-line {
+  flex: 0 0 auto;
+  min-width: 1.6rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.search-text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* A match takes the colour the editor's own search marks one with, so the two
+   searches in the window say "found" the same way. */
+.search-text mark {
+  border-radius: 2px;
+  background: var(--match);
+  color: inherit;
+}
+
+/* The preview reads like the rename's: what was, struck, and what will be,
+   in the accent — the same two tokens, so a change looks like a change
+   wherever the window shows one. */
+.search-text del {
+  background: var(--was-bg);
+  color: var(--was);
+}
+
+.search-text ins {
+  background: var(--will-be-bg);
+  color: var(--will-be);
+  text-decoration: none;
+}
+
 /* -------------------------------------------------------------- rename -- */
 
 .rename-backdrop {

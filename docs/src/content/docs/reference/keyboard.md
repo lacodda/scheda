@@ -45,7 +45,9 @@ unsaved-work check as `Ctrl+W` and the system's own close.
 In reading mode every syntax marker hides — including on the line the caret is
 on, which is the one difference from editing — and the document refuses changes.
 Not a preview pane: it is the same view with two things switched, so what you
-read is what you were just editing.
+read is what you were just editing. A ```` ```mermaid ```` block is drawn as its
+diagram while reading and is code again when you go back — see
+[Markup](/scheda/reference/markup/#diagrams).
 
 ## Getting around a long note
 
@@ -94,12 +96,16 @@ Following a link to a note that does not exist yet offers to create it. See
 
 | Keys | What it does |
 | --- | --- |
-| `Ctrl+F` | Find, with replace in the same panel |
+| `Ctrl+F` | Find in this note, with replace in the same panel |
 | `Enter` / `Shift+Enter` | Next or previous match |
 | `Escape` | Close the panel |
+| `Ctrl+Shift+F` | Search every note in the vault |
+| `Ctrl+Shift+H` | Search and replace across the vault, with a preview |
+| `Escape` in the vault search | Close it and return to the note |
 
 Matches are highlighted as you type, and the one you are on stands apart from
-the rest.
+the rest. The vault search, its filters and what replacing across notes will and
+will not do are on [Searching the vault](/scheda/reference/search/).
 
 ## Editing
 
@@ -132,5 +138,6 @@ Text editing beyond this is CodeMirror's default keymap: word-wise movement
 with `Ctrl+←` and `Ctrl+→`, line deletion with `Ctrl+Shift+K`, and the usual
 selection modifiers.
 
-A command palette and search across a whole folder arrive in later versions;
-see the [roadmap](https://github.com/lacodda/scheda#roadmap).
+A command palette arrives in a later version; see the
+[changelog](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md) for what
+each version brought.

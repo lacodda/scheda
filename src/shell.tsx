@@ -12,7 +12,6 @@ import { EditorView } from '@codemirror/view'
 import {
   createFromWikilink,
   fileDiffers,
-  forgetFileIndex,
   forgetRecent,
   loadSettings,
   obsidianUrl,
@@ -40,6 +39,7 @@ import { RecentFiles } from './recent'
 import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
 import { Splash, useSlowStart } from './splash'
 import { TagsPanel } from './tags'
+import { SearchPanel } from './search'
 import type { EditorHandle, Tab } from './editor/mount'
 
 /** The version the build was made from, for the splash to show. */
@@ -455,10 +455,10 @@ function Shell({ editor }: { editor: EditorHandle }) {
     // different things: does an open tab show a file that changed, has a tab
     // lost its file, and is the picker's list of the vault out of date.
     const unlisten = onVaultChanged((changes) => {
-      // The picker's list always, whatever else happened: a note created in
-      // Obsidian that Ctrl+P cannot find is exactly the staleness this version
-      // is about.
-      void forgetFileIndex()
+      // The core has already brought the picker's list and the vault's index
+      // up to date before telling us; what is left here is to tell the panels
+      // that read them to ask again.
+      vaultWrites.bump()
       // And what every open note's links resolved to. Thrown away wholesale
       // rather than per path: a note that appeared may be the target of a
       // `[[link]]` in any open tab, and the window cannot know which without
@@ -584,16 +584,21 @@ function useVaultWrites(): number {
  *  and a note opened at its first paragraph has answered "which note" and
  *  dropped "where in it". Two copies of this would be two ways to drift about
  *  what a row does when it is clicked. */
-function openAt(editor: EditorHandle, path: string, line: number) {
+function openAt(editor: EditorHandle, path: string, line: number, column = 0, length = 0) {
   void editor.open(path).then(
     () => {
       rememberRecent(path)
       const at = editor.view.state.doc.line(
         Math.min(Math.max(line, 1), editor.view.state.doc.lines),
       )
+      // A search knows where on the line, not only which line, and selects
+      // what it found. The column is in UTF-16 units — the editor's own — and
+      // is clamped to the line in case the note changed since it was read.
+      const anchor = Math.min(at.from + column, at.to)
+      const head = Math.min(anchor + length, at.to)
       editor.view.dispatch({
-        selection: { anchor: at.from },
-        effects: EditorView.scrollIntoView(at.from, { y: 'center' }),
+        selection: { anchor, head },
+        effects: EditorView.scrollIntoView(anchor, { y: 'center' }),
       })
       editor.view.focus()
     },
@@ -630,6 +635,63 @@ function TagsHost({ editor }: { editor: EditorHandle }) {
       visible={visible}
       revision={revision}
       onOpen={(path, line) => openAt(editor, path, line)}
+    />
+  )
+}
+
+/** The vault search, and the two keys that show it.
+ *
+ *  `Ctrl+Shift+F` to search and `Ctrl+Shift+H` to replace — the keys every
+ *  editor people come from already uses for the same two things. A second
+ *  press while the panel is open puts the cursor back in the search box rather
+ *  than closing it: the key means "search", and closing is what the same key
+ *  does in the panels that have nothing to type into. */
+function SearchHost({ editor }: { editor: EditorHandle }) {
+  const [visible, setVisible] = useState(false)
+  const [focusAsked, setFocusAsked] = useState(0)
+  const [replaceAsked, setReplaceAsked] = useState(false)
+  const revision = useVaultWrites()
+  useEditor(editor)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      const key = event.key.toLowerCase()
+      if (key !== 'f' && key !== 'h') return
+      event.preventDefault()
+      setVisible(true)
+      setReplaceAsked(key === 'h')
+      setFocusAsked((was) => was + 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    if (!visible) return
+    const onKey = (event: KeyboardEvent) => {
+      // Escape from inside the panel closes it and hands the keyboard back to
+      // the note, which is where it was before the search was asked for.
+      if (event.key !== 'Escape') return
+      const panel = document.querySelector('.search')
+      if (!panel || !panel.contains(document.activeElement)) return
+      event.preventDefault()
+      setVisible(false)
+      editor.view.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [visible, editor])
+
+  return (
+    <SearchPanel
+      editor={editor}
+      visible={visible}
+      revision={revision}
+      focusAsked={focusAsked}
+      replaceAsked={replaceAsked}
+      onOpen={(path, line, column, length) => openAt(editor, path, line, column, length)}
+      onReplaced={() => vaultWrites.bump()}
     />
   )
 }
@@ -843,7 +905,10 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   networkHost.className = 'network-host'
   const tagsHost = document.createElement('div')
   tagsHost.className = 'tags-host'
+  const searchHost = document.createElement('div')
+  searchHost.className = 'search-host'
   middle.appendChild(treeHost)
+  middle.appendChild(searchHost)
   middle.appendChild(editorHost)
   middle.appendChild(tagsHost)
   middle.appendChild(networkHost)
@@ -865,6 +930,11 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   createRoot(networkHost).render(
     <StrictMode>
       <NetworkHost editor={editor} />
+    </StrictMode>,
+  )
+  createRoot(searchHost).render(
+    <StrictMode>
+      <SearchHost editor={editor} />
     </StrictMode>,
   )
   createRoot(tagsHost).render(

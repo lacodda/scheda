@@ -72,6 +72,6 @@ checked on every build against a corpus of deliberately awkward files — see
 
 ## Where scheda keeps its own things
 
-Nowhere near your files. Settings and, later, the index and the session live in
-the application's data directory. scheda never writes into a folder you opened,
+Nowhere near your files. Settings, unsaved drafts and the index of a vault live
+in the application's data directory. scheda never writes into a folder you opened,
 and it never writes `.obsidian/`.

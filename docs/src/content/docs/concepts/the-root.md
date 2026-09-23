@@ -20,8 +20,8 @@ the tree does not appear — a note on the Desktop is a note, and a tree of the
 Desktop is noise.
 
 That is the whole rule, and everything the vault side of scheda does follows
-from it: the tree, `[[links]]` and backlinks when they arrive, search when it
-arrives, and today the one thing that already depends on it — which folder an
+from it: the tree, `[[links]]`, backlinks, tags, the
+[vault search](/scheda/reference/search/) and its index, and which folder an
 embedded picture may be read from ([ADR 0004](https://github.com/lacodda/scheda/blob/main/docs/adr/0004-images-come-through-a-scoped-protocol.md)).
 
 ## What the tree leaves out

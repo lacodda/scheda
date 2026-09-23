@@ -253,7 +253,7 @@ fn strings(paths: BTreeSet<PathBuf>) -> Vec<String> {
 }
 
 /// Whether any component of the path names a folder we do not report on.
-fn is_ignored(path: &Path) -> bool {
+pub fn is_ignored(path: &Path) -> bool {
     path.components().any(|component| {
         component
             .as_os_str()

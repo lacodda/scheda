@@ -42,7 +42,11 @@ fn main() {
     let warm = started.elapsed();
     let _ = std::fs::remove_dir_all(&store);
 
-    let unreadable = snapshot.notes.values().filter(|note| !note.readable).count();
+    let unreadable = snapshot
+        .notes
+        .values()
+        .filter(|note| !note.readable)
+        .count();
     println!(
         "{} notes under {} ({} not UTF-8)",
         snapshot.notes.len(),
