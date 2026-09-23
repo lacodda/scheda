@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.0] - 2026-09-23
+
+### Bug Fixes
+- Read front matter through one reader, and leave spreadsheet errors out
+
+### Features
+- Draw mermaid diagrams in reading mode
+- Keep an index of the vault, and search and replace across it
+
 ## [0.9.0] - 2026-09-21
 
 ### Bug Fixes
