@@ -80,10 +80,10 @@ pub fn resolve_link(root: &Path, document: &Path, link: &str) -> Result<PathBuf,
     }
     // A scheme means somebody else's business: http, https, mailto, data.
     // A Windows drive letter is not a scheme, hence the length test.
-    if let Some(colon) = link.find(':') {
-        if colon > 1 {
-            return Err(LinkError::NotLocal);
-        }
+    if let Some(colon) = link.find(':')
+        && colon > 1
+    {
+        return Err(LinkError::NotLocal);
     }
     // A fragment or query belongs to the link, not to the file name.
     let without_fragment = link.split(['#', '?']).next().unwrap_or(link);

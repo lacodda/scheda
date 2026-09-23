@@ -167,10 +167,10 @@ pub fn unregister() -> Result<(), AssociationError> {
         // A value that was never written is not a failure to report. Only our
         // own entry is touched — the neighbours in this key belong to other
         // editors, and removing the key itself would take them with it.
-        if key.get_type(PROGID).is_ok() {
-            if let Err(error) = key.remove_value(PROGID) {
-                failures.push(format!("{path}: {error}"));
-            }
+        if key.get_type(PROGID).is_ok()
+            && let Err(error) = key.remove_value(PROGID)
+        {
+            failures.push(format!("{path}: {error}"));
         }
     }
 
@@ -180,10 +180,10 @@ pub fn unregister() -> Result<(), AssociationError> {
         r"Software\lacodda\scheda".to_string(),
     ];
     for tree in trees {
-        if CURRENT_USER.open(&tree).is_ok() {
-            if let Err(error) = CURRENT_USER.remove_tree(&tree) {
-                failures.push(format!("{tree}: {error}"));
-            }
+        if CURRENT_USER.open(&tree).is_ok()
+            && let Err(error) = CURRENT_USER.remove_tree(&tree)
+        {
+            failures.push(format!("{tree}: {error}"));
         }
     }
 
@@ -192,12 +192,10 @@ pub fn unregister() -> Result<(), AssociationError> {
         .read()
         .write()
         .open(r"Software\RegisteredApplications")
+        && registered.get_string("scheda").is_ok()
+        && let Err(error) = registered.remove_value("scheda")
     {
-        if registered.get_string("scheda").is_ok() {
-            if let Err(error) = registered.remove_value("scheda") {
-                failures.push(format!("RegisteredApplications: {error}"));
-            }
-        }
+        failures.push(format!("RegisteredApplications: {error}"));
     }
 
     notify_shell();

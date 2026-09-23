@@ -27,16 +27,16 @@ pub fn headings_in(text: &str) -> Vec<String> {
         // A fence is three or more of the same character; the closing one has to
         // match the character that opened it, or ``` inside a ~~~ block would
         // end it.
-        if let Some(marker) = trimmed.chars().next().filter(|c| *c == '`' || *c == '~') {
-            if trimmed.chars().take_while(|c| *c == marker).count() >= 3 {
-                match fence {
-                    Some(open) if open == marker => fence = None,
-                    None => fence = Some(marker),
-                    // A different fence character inside a block is content.
-                    Some(_) => {}
-                }
-                continue;
+        if let Some(marker) = trimmed.chars().next().filter(|c| *c == '`' || *c == '~')
+            && trimmed.chars().take_while(|c| *c == marker).count() >= 3
+        {
+            match fence {
+                Some(open) if open == marker => fence = None,
+                None => fence = Some(marker),
+                // A different fence character inside a block is content.
+                Some(_) => {}
             }
+            continue;
         }
         if fence.is_some() {
             continue;

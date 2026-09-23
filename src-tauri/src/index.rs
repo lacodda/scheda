@@ -261,10 +261,11 @@ fn refresh_note(snapshot: &mut Snapshot, root: &Path, key: &str, now: u64) -> bo
     let Some((size, modified)) = stamp(&path) else {
         return bury(snapshot, key, now);
     };
-    if let Some(known) = snapshot.notes.get(key) {
-        if known.size == size && known.modified == modified {
-            return false;
-        }
+    if let Some(known) = snapshot.notes.get(key)
+        && known.size == size
+        && known.modified == modified
+    {
+        return false;
     }
     let Ok(bytes) = std::fs::read(&path) else {
         // Present but unreadable right now — a sync client holding it open.

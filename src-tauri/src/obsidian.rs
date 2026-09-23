@@ -33,10 +33,10 @@ pub fn open_url(root: &Path, document: &Path) -> Option<String> {
     // The extension comes off, the way a wikilink is written. Only `.md`:
     // Obsidian resolves an extensionless name as a note, so stripping `.png`
     // would ask it to open a note that does not exist instead of the picture.
-    if let Some(last) = parts.last_mut() {
-        if let Some(stem) = last.strip_suffix(".md") {
-            *last = stem.to_string();
-        }
+    if let Some(last) = parts.last_mut()
+        && let Some(stem) = last.strip_suffix(".md")
+    {
+        *last = stem.to_string();
     }
 
     Some(format!(
