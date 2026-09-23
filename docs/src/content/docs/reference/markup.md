@@ -125,6 +125,27 @@ embedded HTML, so those three are always present.)
 Extra words after the language are ignored, so ```` ```js title="example.js" ````
 works.
 
+## Diagrams
+
+`````markdown
+```mermaid
+graph LR
+  Draft --> Review --> Published
+```
+`````
+
+A block fenced as `mermaid` is code while you edit it and the diagram it
+describes in reading mode (`Ctrl+E`). Going back to editing brings the code
+back; the file never holds anything but what you wrote.
+
+The drawing library is loaded the first time a diagram is shown, not when the
+window opens — it is the heaviest thing scheda carries, and a notepad that paid
+for it on every launch would break its promise about starting. Diagrams are
+drawn with scripts and click handlers shut out, whatever the note says.
+
+A block the library cannot draw shows its source, with the library's reason
+above it, rather than an empty box.
+
 ## Rules
 
 ```markdown

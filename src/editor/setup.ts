@@ -17,6 +17,7 @@ import { schedaHighlightStyle } from './highlight'
 import { markdownImages } from './images'
 import { imagePaste } from './paste'
 import { linkPeek } from './peek'
+import { mermaidDiagrams } from './mermaid'
 import { reading, toggleReading } from './reading'
 import { schedaMarkdown } from './markdown'
 import { tableAlignment } from './tables'
@@ -64,6 +65,9 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
     imagePaste,
     frontMatterFold,
     reading,
+    // After reading mode, whose state it reads: a diagram replaces its block
+    // only while the note is being read.
+    mermaidDiagrams,
     // The panel sits at the top: at the bottom it would cover the status bar,
     // and the line being searched for is more often near the start.
     search({ top: true }),

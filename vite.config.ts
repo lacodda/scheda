@@ -16,6 +16,14 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   clearScreen: false,
+  build: {
+    // The chunks past the default 500 kB are mermaid's layout engines (elk,
+    // cytoscape), reached only through the dynamic import in
+    // `editor/mermaid.ts` when a diagram is first drawn in reading mode. They
+    // are never part of starting the window, which is what the warning is
+    // about; the startup path is held by `check:layout` and the startup log.
+    chunkSizeWarningLimit: 1600,
+  },
   server: {
     port: 1420,
     strictPort: true,

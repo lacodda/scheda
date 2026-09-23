@@ -312,6 +312,36 @@ export const schedaTheme = EditorView.theme({
   // says what was meant, which beats a broken-image glyph sitting in the prose.
   '.cm-md-image-failed': { display: 'none' },
 
+  // ------------------------------------------------------------ diagrams --
+
+  // A mermaid block in reading mode. Centred and scaled down to the column,
+  // like a picture; the placeholder and a refusal are quiet text in the same
+  // box, so nothing jumps when the drawing arrives.
+  '.cm-mermaid': {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '0.6rem 1rem',
+    color: 'var(--muted)',
+    fontSize: '0.85em',
+  },
+  '.cm-mermaid svg': {
+    maxWidth: '100%',
+    height: 'auto',
+  },
+  '.cm-mermaid--failed': {
+    display: 'block',
+  },
+  '.cm-mermaid-reason': {
+    margin: '0 0 0.4rem',
+  },
+  '.cm-mermaid--failed pre': {
+    margin: '0',
+    padding: '0.5rem 0.7rem',
+    backgroundColor: 'var(--code-bg)',
+    color: 'var(--text)',
+    whiteSpace: 'pre-wrap',
+  },
+
   // -------------------------------------------------------- front matter --
 
   '.cm-md-frontmatter-header': {
