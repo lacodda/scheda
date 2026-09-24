@@ -33,9 +33,9 @@ function themeOf(): 'dark' | 'default' {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'
 }
 
-/** Draws a diagram to SVG markup, loading the library the first time. */
-function draw(source: string): Promise<string> {
-  const theme = themeOf()
+/** Draws a diagram to SVG markup, loading the library the first time. The
+ *  window's theme unless told otherwise: a printed page is always light. */
+export function draw(source: string, theme: 'dark' | 'default' = themeOf()): Promise<string> {
   const key = `${theme}\n${source}`
   const known = drawn.get(key)
   if (known) return known

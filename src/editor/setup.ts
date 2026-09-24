@@ -12,6 +12,7 @@ import { EditorView, drawSelection, highlightActiveLine, keymap } from '@codemir
 import { wikilinkCompletion } from './complete'
 import { markdownDecorations } from './decorations'
 import { bracketClosing, smartEditKeymap } from './edits'
+import { focusMode, toggleFocus } from './focus'
 import { frontMatterFold } from './frontmatter'
 import { schedaHighlightStyle } from './highlight'
 import { markdownImages } from './images'
@@ -20,6 +21,8 @@ import { linkPeek } from './peek'
 import { mermaidDiagrams } from './mermaid'
 import { reading, toggleReading } from './reading'
 import { schedaMarkdown } from './markdown'
+import { spelling } from './spelling'
+import { tableKeymap } from './table-edit'
 import { tableAlignment } from './tables'
 import { schedaTheme } from './theme'
 import { wikilinkDecorations } from './wikilinks'
@@ -68,6 +71,13 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
     // After reading mode, whose state it reads: a diagram replaces its block
     // only while the note is being read.
     mermaidDiagrams,
+    // The section being written in full colour and the rest faded, when the
+    // window is in focus mode. Line classes only, so its place in the list is
+    // about reading order.
+    focusMode,
+    // The system spell checker, off unless the settings turn it on, and the
+    // note's language for it either way.
+    spelling,
     // The panel sits at the top: at the bottom it would cover the status bar,
     // and the line being searched for is more often near the start.
     search({ top: true }),
@@ -90,7 +100,13 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
       // base commands decline and the queue reaches ours anyway — but because
       // reading the list in the order it is consulted is how the next person
       // works out which binding handles a key.
+      // Inside a table, Tab and Enter move between cells and add rows; the
+      // commands decline everywhere else and the list bindings get the key.
+      ...tableKeymap,
       ...smartEditKeymap,
+      // Focus mode. `D` for dim, which is what it does to everything but the
+      // section being written; nothing in the base keymap uses it.
+      { key: 'Mod-Shift-d', run: toggleFocus },
       {
         key: 'Mod-e',
         run: (view) => {

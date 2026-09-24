@@ -5,6 +5,7 @@
 pub mod associations;
 pub mod attachments;
 pub mod document;
+pub mod export;
 pub mod files;
 pub mod frontmatter;
 pub mod index;
@@ -342,6 +343,24 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
         shifted_month - 9
     } as u32;
     (if month <= 2 { year + 1 } else { year }, month, day)
+}
+
+/// A picture a note shows, as a data URL for a page written out of it.
+///
+/// Through the same root check as `resolve_asset`: a link that leaves the
+/// note's root is not read, and the page shows the picture's text instead.
+#[tauri::command]
+fn inline_picture(document: String, link: String) -> Option<String> {
+    export::inline_picture(&PathBuf::from(document), &link)
+}
+
+/// Writes a page rendered from a note to the path chosen in the save dialog.
+#[tauri::command]
+fn export_page(path: String, html: String) -> Result<(), CommandError> {
+    export::write_page(&PathBuf::from(path), &html).map_err(|error| CommandError {
+        message: error.to_string(),
+        read_only: false,
+    })
 }
 
 /// Keeps an unsaved draft where it will survive a restart.
@@ -1231,6 +1250,8 @@ pub fn run() {
             delete_entry,
             paste_image,
             keep_draft,
+            inline_picture,
+            export_page,
             discard_draft,
             restore_drafts,
             report_first_paint,

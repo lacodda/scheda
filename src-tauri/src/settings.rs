@@ -49,6 +49,11 @@ pub struct Settings {
     /// — an apostrophe in "don't" is not an opening quote — and a notepad that
     /// types characters nobody asked for is worse than one that does not.
     pub close_brackets: bool,
+    /// Whether the system spell checker underlines misspelt words.
+    ///
+    /// Off by default: a note full of code, paths and names is a note full of
+    /// red lines, and a notepad should not greet its first file that way.
+    pub spellcheck: bool,
 }
 
 impl Default for Settings {
@@ -59,6 +64,7 @@ impl Default for Settings {
             column_width: 46.0,
             recent: Vec::new(),
             close_brackets: false,
+            spellcheck: false,
         }
     }
 }

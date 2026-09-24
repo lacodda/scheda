@@ -5,7 +5,7 @@
 // one thing a regular expression gets wrong here, and gets wrong often, since
 // shell examples are full of comments.
 import { fullTree } from './parsed'
-import { type EditorState } from '@codemirror/state'
+import { type EditorState, type Text } from '@codemirror/state'
 
 export interface Heading {
   /** 1 for `#`, 6 for `######`. */
@@ -33,8 +33,17 @@ const HEADING_LEVELS: Record<string, number> = {
   SetextHeading2: 2,
 }
 
+/** The outline of each document already read, keyed by the document itself.
+ *
+ *  Focus mode asks on every caret move and the panel on every change; a caret
+ *  move leaves the document the same object, so a long note is walked once per
+ *  edit rather than once per arrow key. */
+const read = new WeakMap<Text, Heading[]>()
+
 /** Every heading in the document, in the order they appear. */
 export function outlineOf(state: EditorState): Heading[] {
+  const known = read.get(state.doc)
+  if (known) return known
   const headings: Heading[] = []
   // The whole document, not the part the parser has reached: an outline built
   // from a partial tree lists the headings near the top and drops the rest
@@ -53,6 +62,7 @@ export function outlineOf(state: EditorState): Heading[] {
       })
     },
   })
+  read.set(state.doc, headings)
   return headings
 }
 

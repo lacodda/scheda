@@ -262,6 +262,11 @@ body {
   color: var(--accent);
 }
 
+/* A mode the window is in rather than a fact about the file. */
+.status-mode {
+  color: var(--accent);
+}
+
 /* A failure the user would otherwise never see. A released build has no
    console, so a broken shell has to say so on screen — once, with a way to
    dismiss it, rather than one row per occurrence. */
@@ -652,6 +657,24 @@ body {
 }
 
 /* Indented by level, so the shape of the document is visible in the list. */
+/* A section being dragged, and the place it would land: a line above the
+   heading it would go before, or below the last one for the end of the note. */
+.outline-item--dragged {
+  opacity: 0.45;
+}
+
+.outline-list > li.outline-drop {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.outline-drop-end {
+  min-height: 1.2rem;
+}
+
+.outline-drop-end.outline-drop {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
 .outline-level-1 { padding-left: 0.9rem; font-weight: 600; }
 .outline-level-2 { padding-left: 1.7rem; }
 .outline-level-3 { padding-left: 2.5rem; }
@@ -1889,4 +1912,15 @@ body {
   margin: 0.75rem 0 0;
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* The frame a note is printed from. Out of sight and out of layout: it exists
+   for the print dialog, not for the window. */
+.print-frame {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border: 0;
 }

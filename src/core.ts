@@ -127,6 +127,17 @@ export async function resolveAsset(document: string, link: string): Promise<stri
   return path === null ? null : convertFileSrc(path)
 }
 
+/** A picture a note shows, as a data URL a page written out of the note can
+ *  carry — or null when the link leaves the note's root or is not a picture. */
+export function inlinePicture(document: string, link: string): Promise<string | null> {
+  return invoke<string | null>('inline_picture', { document, link })
+}
+
+/** Writes a page rendered from a note to a path the person chose. */
+export function exportPage(path: string, html: string): Promise<void> {
+  return invoke<void>('export_page', { path, html })
+}
+
 /** One entry in a vault's tree: a file, or a folder with its contents. */
 export interface TreeEntry {
   name: string
@@ -241,6 +252,9 @@ export interface Settings {
   /** Whether an opening bracket or quote types its closing partner. Off by
    *  default: in prose the guess is wrong more often than right. */
   close_brackets: boolean
+  /** Whether the system spell checker underlines misspelt words. Off by
+   *  default: code, paths and names are all misspellings to it. */
+  spellcheck: boolean
 }
 
 export function loadSettings(): Promise<Settings> {

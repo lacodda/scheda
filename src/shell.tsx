@@ -33,6 +33,9 @@ import { NetworkPanel } from './network'
 import { RenamePreview, UndoBar } from './rename'
 import { undoRename, type RenameApplied } from './core'
 import { setBracketClosing } from './editor/edits'
+import { isFocusing } from './editor/focus'
+import { setSpelling } from './editor/spelling'
+import { WORDS_PER_MINUTE, bodyWords, countWords, readingMinutes } from './editor/words'
 import { forgetPeeks } from './editor/peek'
 import { forgetAllEmbeds, forgetAllLinks, setFollowLink } from './editor/wikilinks'
 import { RecentFiles } from './recent'
@@ -146,7 +149,14 @@ function StatusBar({ editor }: { editor: EditorHandle }) {
   const line = state.doc.lineAt(state.selection.main.head)
   const column = state.selection.main.head - line.from + 1
   const characters = state.doc.length
-  const words = countWords(state.doc.toString())
+  const words = bodyWords(state.doc)
+  // Words in the selection, when there is one: "how long is this paragraph"
+  // is a question asked by selecting it.
+  const selected = state.selection.ranges.reduce(
+    (sum, range) => sum + (range.empty ? 0 : countWords(state.sliceDoc(range.from, range.to))),
+    0,
+  )
+  const minutes = readingMinutes(words)
 
   return (
     <footer className="status">
@@ -161,12 +171,15 @@ function StatusBar({ editor }: { editor: EditorHandle }) {
           there doing nothing is otherwise a mystery, and the way out of it —
           close the tab — is not something anybody guesses. */}
       {tab.awaited && <span className="status-waiting">waiting — close to return</span>}
+      {isFocusing() && <span className="status-mode">focus</span>}
       <span>
         Ln {line.number}, Col {column}
       </span>
-      <span>
-        {words} {words === 1 ? 'word' : 'words'}
+      <span className="status-words">
+        {selected > 0 ? `${count(selected)} of ` : ''}
+        {count(words)} {words === 1 ? 'word' : 'words'}
       </span>
+      {minutes > 0 && <span title={`At ${WORDS_PER_MINUTE} words a minute`}>{minutes} min read</span>}
       <span>{characters} chars</span>
       <span>{LINE_ENDING_LABEL[tab.shape.line_ending]}</span>
       <span>{tab.shape.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
@@ -174,10 +187,14 @@ function StatusBar({ editor }: { editor: EditorHandle }) {
   )
 }
 
-/** Words, counted the way a writer means them: runs of non-whitespace. */
-function countWords(text: string): number {
-  const trimmed = text.trim()
-  return trimmed === '' ? 0 : trimmed.split(/\s+/).length
+/** A count with its thousands grouped: 1,240 reads at a glance, 1240 does not. */
+function count(value: number): string {
+  return value.toLocaleString('en-US')
+}
+
+/** Says why a page could not be printed or written — the core's own words. */
+function reportExport(error: unknown): void {
+  void ask(messageOf(error), { title: 'The page was not made', kind: 'error', okLabel: 'OK' })
 }
 
 function Shell({ editor }: { editor: EditorHandle }) {
@@ -325,19 +342,40 @@ function Shell({ editor }: { editor: EditorHandle }) {
       if (!event.ctrlKey && !event.metaKey) return
       const key = event.key.toLowerCase()
 
+      if (event.altKey) {
+        // AltGr arrives as Ctrl+Alt on Windows, and on a Polish or German
+        // keyboard AltGr with a letter types a character. That is typing, not
+        // a shortcut.
+        if (event.getModifierState('AltGraph')) return
+        if (event.code === 'KeyP') {
+          // Print. `Ctrl+P` is going to a file, as in every editor with that
+          // feature; the page printed is the note, not the window.
+          event.preventDefault()
+          void import('./export').then(({ printNote }) => printNote(editor)).catch(reportExport)
+        } else if (event.code === 'KeyS') {
+          // Save as a web page: one HTML file, pictures inside it.
+          event.preventDefault()
+          void import('./export').then(({ exportNote }) => exportNote(editor)).catch(reportExport)
+        }
+        return
+      }
+
+      // The plain keys below answer without Shift only: `Ctrl+Shift+O`, `N` and
+      // `W` belong to the panels, and a key that also opened a file dialog
+      // behind the outline was two things at once.
       if (key === 's') {
         event.preventDefault()
         if (event.shiftKey) void saveAs()
         else void saveActive()
-      } else if (key === 'o') {
+      } else if (key === 'o' && !event.shiftKey) {
         event.preventDefault()
         void openDialog({ multiple: false, filters: MARKDOWN_FILTER }).then((path) => {
           if (typeof path === 'string') void openPath(path)
         })
-      } else if (key === 'n') {
+      } else if (key === 'n' && !event.shiftKey) {
         event.preventDefault()
         editor.openBlank()
-      } else if (key === 'w') {
+      } else if (key === 'w' && !event.shiftKey) {
         event.preventDefault()
         void closeTab(editor.active().id)
       } else if (key === 'p' && !event.shiftKey) {
@@ -399,6 +437,8 @@ function Shell({ editor }: { editor: EditorHandle }) {
         // so it is reconfigured rather than applied. The compartment means the
         // document, the undo history and the caret all survive the change.
         editor.view.dispatch(setBracketClosing(settings.close_brackets))
+        // The spell checker follows the setting in every tab, like focus mode.
+        setSpelling(editor.view, settings.spellcheck)
       })
       .catch(() => {
         // Unreadable settings are not worth a dialog on startup; the defaults

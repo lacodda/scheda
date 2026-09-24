@@ -363,6 +363,102 @@ export const schedaTheme = EditorView.theme({
     borderColor: 'var(--accent)',
   },
 
+  // The form the header opens into: a key column and a control column, in the
+  // header's own frame so the two read as one thing opened and closed.
+  '.cm-fm-form': {
+    display: 'grid',
+    gap: '0.25rem',
+    width: 'calc(100% - 2rem)',
+    margin: '0 1rem 0.4rem',
+    padding: '0.35rem 0.7rem 0.55rem',
+    fontFamily: 'system-ui, "Segoe UI", sans-serif',
+    fontSize: '0.85em',
+    background: 'var(--status-bg)',
+    border: '1px solid var(--border)',
+    borderRadius: '5px',
+    boxSizing: 'border-box',
+  },
+  '.cm-fm-bar': {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '0.15rem',
+  },
+  '.cm-fm-fold, .cm-fm-source, .cm-fm-back': {
+    padding: '0',
+    font: 'inherit',
+    color: 'var(--muted)',
+    background: 'none',
+    border: '0',
+    cursor: 'pointer',
+  },
+  '.cm-fm-fold:hover, .cm-fm-source:hover, .cm-fm-back:hover': { color: 'var(--accent)' },
+  '.cm-fm-back': {
+    marginLeft: '0.8rem',
+    fontSize: '0.8em',
+    fontFamily: 'system-ui, "Segoe UI", sans-serif',
+  },
+  '.cm-fm-row': {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(5rem, 11rem) 1fr auto',
+    alignItems: 'center',
+    gap: '0.6rem',
+    minHeight: '1.8rem',
+  },
+  '.cm-fm-key': {
+    overflow: 'hidden',
+    color: 'var(--muted)',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  '.cm-fm-input, .cm-fm-add, .cm-fm-pill-add': {
+    minWidth: '0',
+    padding: '0.15rem 0.4rem',
+    font: 'inherit',
+    color: 'var(--text)',
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    outline: 'none',
+  },
+  '.cm-fm-input:focus, .cm-fm-add:focus, .cm-fm-pill-add:focus': { borderColor: 'var(--accent)' },
+  '.cm-fm-input:disabled': { color: 'var(--text)', background: 'transparent', borderColor: 'transparent' },
+  '.cm-fm-add': { justifySelf: 'start', width: '11rem', marginTop: '0.2rem' },
+  '.cm-fm-check': { justifySelf: 'start', margin: '0', accentColor: 'var(--accent)' },
+  '.cm-fm-pills': { display: 'flex', flexWrap: 'wrap', gap: '0.3rem', alignItems: 'center' },
+  '.cm-fm-pill': {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.2rem',
+    padding: '0.05rem 0.45rem',
+    color: 'var(--text)',
+    background: 'var(--code-bg)',
+    borderRadius: '999px',
+  },
+  '.cm-fm-pill-remove, .cm-fm-remove': {
+    padding: '0 0.2rem',
+    font: 'inherit',
+    lineHeight: '1',
+    color: 'var(--muted)',
+    background: 'none',
+    border: '0',
+    cursor: 'pointer',
+  },
+  '.cm-fm-pill-remove:hover, .cm-fm-remove:hover': { color: 'var(--accent)' },
+  '.cm-fm-pill-add': { width: '6rem' },
+  '.cm-fm-complex': {
+    overflow: 'hidden',
+    color: 'var(--muted)',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+
+  // ------------------------------------------------------------ focus mode --
+
+  // Everything but the section being written, faded. Not hidden: where the
+  // section sits among the others is part of writing it.
+  '.cm-line.cm-focus-faded': { opacity: '0.3', transition: 'opacity 120ms ease-out' },
+  '&.cm-focusing .cm-activeLine': { backgroundColor: 'transparent' },
+
   // ---------------------------------------------------------- reading mode --
 
   // No caret, no active line: nothing that says "your cursor is here", because

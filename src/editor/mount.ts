@@ -118,7 +118,10 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
   const baseExtensions: Extension[] = [
     ...schedaSetup(),
     EditorView.updateListener.of((update) => {
-      if (update.docChanged || update.selectionSet) notify()
+      // Effects too: a mode switched from the keyboard (focus, reading) is news
+      // for the status bar even though neither the text nor the caret moved.
+      const switched = update.transactions.some((transaction) => transaction.effects.length > 0)
+      if (update.docChanged || update.selectionSet || switched) notify()
       if (update.docChanged) scheduleDraft()
     }),
   ]
