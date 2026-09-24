@@ -11,6 +11,7 @@ list:
 # comment
 trailing: value # comment
 date: 2026-02-30
+spaced: trailing spaces after the value   
 ---
 
 body

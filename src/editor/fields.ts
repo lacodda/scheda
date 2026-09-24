@@ -238,7 +238,9 @@ export function readFrontMatter(text: string): FrontMatter | null {
       key,
       value,
       from: line.from,
-      to: lines[last].from + lines[last].text.length,
+      // Before any trailing spaces: they are not part of the value, and a
+      // field written back must leave them exactly where they were.
+      to: lines[last].from + lines[last].text.trimEnd().length,
       written: lastWritten,
     })
     i = last

@@ -99,8 +99,10 @@ function writeValue(view: EditorView, index: number, raw: string, value: FieldVa
 function removeField(view: EditorView, index: number, raw: string): void {
   const field = readFrontMatter(view.state.doc.toString())?.fields[index]
   if (!field || field.raw !== raw) return
-  // The line break after it goes too; the closing fence guarantees there is one.
-  view.dispatch({ changes: { from: field.from, to: field.to + 1 }, userEvent: 'delete.frontmatter' })
+  // To the end of its last line, trailing spaces and the line break with it;
+  // the closing fence guarantees there is a break.
+  const end = view.state.doc.lineAt(field.to).to + 1
+  view.dispatch({ changes: { from: field.from, to: end }, userEvent: 'delete.frontmatter' })
 }
 
 function addField(view: EditorView, key: string): void {

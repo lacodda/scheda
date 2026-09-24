@@ -112,6 +112,18 @@ describe('writing a field', () => {
     }
   })
 
+  it('leaves trailing spaces after a value where they were', () => {
+    // Found on a real vault: a description ending in a space, which a writer
+    // that trimmed would have taken away on the first save.
+    const text = '---\ndescription: ends with a space \nnext: 1\n---\n'
+    const field = readFrontMatter(text)!.fields[0]
+    expect(text.slice(field.from, field.to)).toBe('description: ends with a space')
+    expect(rewrite(text, 'description', field.value)).toBe(text)
+    expect(rewrite(text, 'description', { kind: 'text', value: 'new', quote: '' })).toBe(
+      '---\ndescription: new \nnext: 1\n---\n',
+    )
+  })
+
   it('changes one line and leaves the rest byte for byte', () => {
     const text = rewrite(NOTE, 'draft', { kind: 'boolean', value: false })
     expect(text).toBe(NOTE.replace('draft: true', 'draft: false'))
