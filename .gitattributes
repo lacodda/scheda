@@ -1,0 +1,3 @@
+# The corpus is bytes, not text: its line endings and BOMs are what the
+# round-trip gate tests, and a checkout that normalised them would test nothing.
+src-tauri/tests/corpus/** -text
