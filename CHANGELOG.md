@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.11.0] - 2026-09-24
+
+### Bug Fixes
+- Declare the Rust version the Windows build needs, and check it there
+- Keep trailing spaces after a value out of the field
+
+### Documentation
+- Describe the writing tools
+
+### Features
+- Add the writing tools: focus mode, word count, front matter form, table keys, section moves, spelling, print and export
+
+### Style
+- Collapse nested ifs into let chains now that the MSRV has them
+
+### Testing
+- Give jsdom's Range the rectangles CodeMirror measures with
+- Add evil files and keep the corpus out of line-ending conversion
+
 ## [0.10.0] - 2026-09-23
 
 ### Bug Fixes
