@@ -52,6 +52,10 @@ against a 500 ms gate on every build.
   writes only what you leave ticked - byte for byte everywhere else.
 - **Diagrams while reading.** A `mermaid` block is code while you write it and
   the diagram while you read.
+- **Room to write.** Focus mode fades everything but the section you are in; the
+  status bar counts words and minutes to read. Front matter opens as a form that
+  writes the YAML for you, tables take `Tab` and `Enter`, sections move by
+  dragging their heading, and a note prints or saves as one HTML file.
 - **Tabs in the title bar**, with their own undo history, so one strip of screen
   does the work of two. A second launch hands its file to the window you have.
 - **A draft you never named.** `Ctrl+N` opens a tab with no file; its text

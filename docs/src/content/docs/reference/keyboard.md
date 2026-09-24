@@ -14,6 +14,8 @@ description: Every shortcut scheda responds to.
 | `Ctrl+W` | Close the tab, asking first if it holds unsaved work |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next or previous tab, wrapping at the ends |
 | `Ctrl+P` | Go to a file by name — see [Going to a file](/scheda/reference/going-to-a-file/) |
+| `Ctrl+Alt+P` | Print the note — the note itself, not the window |
+| `Ctrl+Alt+S` | Save the note as one HTML file, pictures inside it |
 
 Dropping files on the window opens them, and launching scheda again with a file
 adds it to the window you already have rather than opening a second one.
@@ -41,6 +43,7 @@ unsaved-work check as `Ctrl+W` and the system's own close.
 | Keys | What it does |
 | --- | --- |
 | `Ctrl+E` | Reading mode on or off |
+| `Ctrl+Shift+D` | Focus mode on or off: the section being written in full colour, the rest faded |
 
 In reading mode every syntax marker hides — including on the line the caret is
 on, which is the one difference from editing — and the document refuses changes.
@@ -71,7 +74,8 @@ the branch holding the document and marks it, so you can see where you are;
 clicking a file opens it in a tab.
 
 The outline lists the document's headings, indented by level; clicking one puts
-the caret at that heading. It is hidden until you ask for it — most notes have
+the caret at that heading, and dragging one moves its whole section — see
+[Writing](/scheda/reference/writing/#moving-a-section). It is hidden until you ask for it — most notes have
 three headings or none, and a sidebar that is always there is not a notepad.
 
 A folded section shows `⋯` in place of what it holds. There is no arrow column
@@ -131,6 +135,20 @@ Numbering counts up on its own, and a finished task continues as an unfinished
 one — `- [x]` followed by another `- [x]` would claim work nobody did.
 
 Outside a list none of this applies: `Tab` in a paragraph is a tab.
+
+### In a table
+
+| Keys | What it does |
+| --- | --- |
+| `Tab` / `Shift+Tab` | The next or previous cell; past the last one, a new row |
+| `Enter` | A new row under the caret's; on an empty last row, out of the table |
+| `Ctrl+Alt+→` / `Ctrl+Alt+←` | A new column after or before the caret's |
+| `Ctrl+Alt+Backspace` | Remove the caret's column |
+
+`Ctrl+Alt` with a letter is a shortcut only when it is `Ctrl` and `Alt`: on a
+keyboard where `AltGr` types a character, it types the character. See
+[Writing](/scheda/reference/writing/) for focus mode, tables, moving sections
+and printing.
 
 Undo history belongs to the tab, so switching away and back does not lose it.
 

@@ -12,7 +12,9 @@ save.
 | Name | The file name, or `Untitled` for a buffer that has never been saved. A `•` after it means there are unsaved changes. |
 | `read-only` | The file could not be decoded as UTF-8. It is shown but will not be written back. |
 | `Ln`, `Col` | The cursor position. Columns count characters from 1. |
-| words | Runs of non-whitespace in the document. |
+| `focus` | The window is in focus mode — see [Writing](/scheda/reference/writing/#focus-mode). |
+| words | Words in the note's body, front matter left out. With a selection, `56 of 1,240 words`. |
+| `min read` | Minutes to read the body at 200 words a minute, rounded up. |
 | chars | The document length in characters, not bytes. |
 | `LF` / `CRLF` / `mixed` | The line endings the file was read with, and the ones it will be saved with. `mixed` means the file uses both, and each line keeps its own. |
 | `UTF-8` / `UTF-8 BOM` | Whether the file starts with a byte-order mark. It will be saved the same way. |

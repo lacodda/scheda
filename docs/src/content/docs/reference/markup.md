@@ -203,12 +203,14 @@ tags: [drafts, ideas]
 ```
 
 The fields at the top of a file fold into a single line saying how many there
-are. Click it to see them, click again to fold them back; put the caret inside
-and they unfold on their own, because a fold over the line you are typing into
-would be in the way.
+are. Click it and they open as a form — a checkbox for `true`, a date picker for
+a date, pills for a list — that writes the YAML for you; see
+[Writing](/scheda/reference/writing/#the-front-matter-form). Put the caret
+inside and they show as text, because anything drawn over the line you are
+typing into would be in the way.
 
-Folding is a view state and nothing else — the file is untouched, and closing the
-tab forgets it.
+Folding and the form are view states — the file changes only when you change a
+value, and closing the tab forgets how it was shown.
 
 Three dashes anywhere but the very top of a file are a horizontal rule, not
 front matter.

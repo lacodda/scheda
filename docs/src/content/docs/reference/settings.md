@@ -23,7 +23,9 @@ later version.
   "theme": "system",
   "font_size": 15,
   "column_width": 46.0,
-  "recent": []
+  "recent": [],
+  "close_brackets": false,
+  "spellcheck": false
 }
 ```
 
@@ -33,6 +35,8 @@ later version.
 | `font_size` | Editor font size in pixels. |
 | `column_width` | The width of the reading column, in `rem`. `0` means the full window. |
 | `recent` | The last twelve files you opened, most recent first. Shown on an empty window. |
+| `close_brackets` | Whether an opening bracket types its partner. See below. |
+| `spellcheck` | Whether misspelt words are underlined. See below. |
 
 Every field has a default and unknown fields are ignored, so a settings file
 written by a newer scheda still opens in an older one.
@@ -68,3 +72,14 @@ instead of doubling it.
 It is off because prose is not code. The apostrophe in "don't" is not an opening
 quote, and a notepad that inserts characters nobody typed is worse than one that
 leaves them alone. Turn it on if you write more code in your notes than prose.
+
+## `spellcheck`
+
+```json
+{ "spellcheck": true }
+```
+
+Off by default. With it on, the system's spell checker underlines misspelt
+words. It is off because a note full of code, paths and names is a note full of
+red lines. What the checker can and cannot do inside the window is on
+[Writing](/scheda/reference/writing/#spelling).
