@@ -3,6 +3,19 @@ title: Keyboard
 description: Every shortcut scheda responds to.
 ---
 
+Every key below that runs a command can be changed in the settings (`Ctrl+,`,
+*Keyboard*), and every command is in the palette with its key beside it — see
+[Commands and keys](/scheda/reference/commands/). Keys are read by their place on
+the keyboard when the layout does not type Latin letters, so they work on a
+Russian layout too.
+
+| Keys | What it does |
+| --- | --- |
+| `Ctrl+Shift+P` | Every command, by name |
+| `Ctrl+,` | Settings |
+| `Ctrl+Shift+Space` | Insert a block: callout, table, code block, task, divider |
+| `Win+Shift+N` | A quick note, from any program — see [Quick note](/scheda/reference/quick-note/) |
+
 ## Files and tabs
 
 | Keys | What it does |
@@ -13,6 +26,8 @@ description: Every shortcut scheda responds to.
 | `Ctrl+Shift+S` | Save as |
 | `Ctrl+W` | Close the tab, asking first if it holds unsaved work |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next or previous tab, wrapping at the ends |
+| `Ctrl+\` | Split the window, or close the split |
+| `Ctrl+1` / `Ctrl+2` | The keyboard to the first or the second pane |
 | `Ctrl+P` | Go to a file by name — see [Going to a file](/scheda/reference/going-to-a-file/) |
 | `Ctrl+Alt+P` | Print the note — the note itself, not the window |
 | `Ctrl+Alt+S` | Save the note as one HTML file, pictures inside it |
@@ -22,7 +37,9 @@ adds it to the window you already have rather than opening a second one.
 
 A draft with text in it survives closing the window and comes back as a tab next
 time. Closing its tab discards it. See
-[Working with files](/scheda/reference/files/).
+[Working with files](/scheda/reference/files/). Pinning, splitting and what the
+window remembers between runs are on
+[Tabs, panes and the session](/scheda/reference/tabs-and-panes/).
 
 ## The window
 
@@ -156,6 +173,6 @@ Text editing beyond this is CodeMirror's default keymap: word-wise movement
 with `Ctrl+←` and `Ctrl+→`, line deletion with `Ctrl+Shift+K`, and the usual
 selection modifiers.
 
-A command palette arrives in a later version; see the
-[changelog](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md) for what
-each version brought.
+The commands with no key of their own — *Tab: Close others*, *Tab: Close all*,
+*Tab: Reopen closed*, *Tab: Pin or unpin*, the themes, *Autosave* — are in the
+command palette, and any of them can be given one in the settings.

@@ -1,7 +1,24 @@
 ---
 title: Settings
-description: What scheda remembers between runs, and the file it keeps it in.
+description: The settings screen, what scheda remembers between runs, and the file it keeps it in.
 ---
+
+`Ctrl+,` opens the settings. Every change takes effect as you make it — in
+every tab and both panes, without a restart — and is stored at once; there is
+no Save button to forget.
+
+| Section | What is in it |
+| --- | --- |
+| Appearance | Theme, text size, the width of the reading column |
+| Writing | Autosave, bracket closing, spell check |
+| Quick note | The file quick notes go to, and the system-wide key — see [Quick note](/scheda/reference/quick-note/) |
+| Keyboard | Every command and its keys, to change — see [Commands and keys](/scheda/reference/commands/) |
+| Recent files | How many are remembered, and a button that clears the list |
+
+The theme and autosave are also commands, so `Ctrl+Shift+P` then `dark` is a
+quicker way to switch.
+
+## The file
 
 scheda stores its settings in the application's own data directory — never in
 the folder you opened. A vault stays exactly as its owner left it: no stray file
@@ -13,8 +30,7 @@ to commit, sync or explain.
 | Linux | `~/.config/scheda/settings.json` |
 | macOS | `~/Library/Application Support/scheda/settings.json` |
 
-There is no settings screen yet; edit the file and restart. One arrives in a
-later version.
+The file can still be edited by hand; scheda reads it when it starts.
 
 ## What is in it
 
@@ -25,7 +41,11 @@ later version.
   "column_width": 46.0,
   "recent": [],
   "close_brackets": false,
-  "spellcheck": false
+  "spellcheck": false,
+  "autosave": false,
+  "keys": {},
+  "quick_note_file": null,
+  "quick_note_key": "Win+Shift+N"
 }
 ```
 
@@ -37,9 +57,18 @@ later version.
 | `recent` | The last twelve files you opened, most recent first. Shown on an empty window. |
 | `close_brackets` | Whether an opening bracket types its partner. See below. |
 | `spellcheck` | Whether misspelt words are underlined. See below. |
+| `autosave` | Whether a file is written a moment after typing stops. See below. |
+| `keys` | The shortcuts you changed, by command id. Only the changes. |
+| `quick_note_file` | Where quick notes go; `null` until you choose. |
+| `quick_note_key` | The system-wide quick-note key; empty turns it off. |
 
 Every field has a default and unknown fields are ignored, so a settings file
-written by a newer scheda still opens in an older one.
+written by a newer scheda still opens in an older one. Numbers are held to a
+usable range: the text size to 10–32 pixels, the column to 24–120 `rem` or `0`
+for the full window.
+
+What the window had open — its tabs and panes — is kept beside this file in
+`session.json`; see [Tabs, panes and the session](/scheda/reference/tabs-and-panes/).
 
 ## The recent list
 
@@ -47,7 +76,8 @@ An empty window shows what you were last in. Opening a file records it; a file
 that has gone drops off the list the next time you try it, without an error —
 the list is a convenience, not a promise.
 
-To clear it, set `"recent": []` and restart.
+To clear it, use *Clear the list* in the settings. `Ctrl+P` with nothing typed
+lists the same files first.
 
 ## Scrollbars
 
@@ -72,6 +102,22 @@ instead of doubling it.
 It is off because prose is not code. The apostrophe in "don't" is not an opening
 quote, and a notepad that inserts characters nobody typed is worse than one that
 leaves them alone. Turn it on if you write more code in your notes than prose.
+
+## `autosave`
+
+```json
+{ "autosave": true }
+```
+
+Off by default. With it on, a file is written a second after you stop typing,
+when the window loses focus, and when it closes — the status bar says
+`autosave` while it is on.
+
+It never writes over a change it did not see. If another program wrote the file
+after scheda last read it, autosave leaves it alone and asks the question an
+outside change always asks: load theirs, or keep yours. A draft with no file is
+not autosaved (it is kept in scheda's own directory as always), and neither is a
+read-only file or one that went to the recycle bin.
 
 ## `spellcheck`
 

@@ -57,7 +57,14 @@ against a 500 ms gate on every build.
   writes the YAML for you, tables take `Tab` and `Enter`, sections move by
   dragging their heading, and a note prints or saves as one HTML file.
 - **Tabs in the title bar**, with their own undo history, so one strip of screen
-  does the work of two. A second launch hands its file to the window you have.
+  does the work of two. Pin the ones you keep, put two notes side by side with
+  `Ctrl+\`, and the window opens next time exactly as you left it - tabs, caret,
+  scroll and split. A second launch hands its file to the window you have.
+- **Every command under one key.** `Ctrl+Shift+P` finds any command by name,
+  `Ctrl+Shift+Space` inserts a callout, table or code block, and every key can be
+  changed on a settings screen that applies what you change as you change it.
+- **A quick note from anywhere.** `Win+Shift+N` in any program brings up a small
+  window; `Enter` adds the line, stamped, to the end of the file you chose.
 - **A draft you never named.** `Ctrl+N` opens a tab with no file; its text
   survives closing the window - written to scheda's own directory, never into
   your vault.
@@ -81,7 +88,7 @@ Windows does not let a program take that decision for you.
 
 ## Status
 
-v0.10.0, in daily use. Everything above works, including file management from
+v0.12.0, in daily use. Everything above works, including file management from
 the tree - into the recycle bin, never an unlink - folder watching, use as
 `$EDITOR`, and an index of the vault kept in scheda's own directory and checked
 against the disk on every open. Checked on every build against a corpus of deliberately awkward
