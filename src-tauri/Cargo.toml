@@ -30,7 +30,7 @@ dirs = "6"
 # platform scheda targets, which is exactly when the line takes a dependency
 # rather than writing its own.
 trash = "5"
-tauri-plugin-dialog = "2.7.3"
+tauri-plugin-dialog = "2.8"
 tauri-plugin-single-instance = "2.4.4"
 # Watching a folder is one API per platform — ReadDirectoryChangesW, inotify,
 # FSEvents — and each has its own way of coalescing a burst. `notify` is the
@@ -45,7 +45,7 @@ notify-debouncer-full = "0.7"
 # the alternative on Windows is `cmd /c start`, which cuts a URL at its first
 # ampersand and then RUNS the tail as a command — and every URL scheda builds
 # has `&file=` in it.
-tauri-plugin-opener = "2.5.5"
+tauri-plugin-opener = "2.7"
 # The index keeps a content hash of every note (ADR 0011). A real digest rather
 # than a quick one, because the same hash is what a sync transport will compare
 # across machines, and a collision there costs somebody a note. SHA-256 is the
@@ -56,6 +56,10 @@ sha2 = "0.11"
 # guarantees linear time, which matters for a pattern typed one character at a
 # time against thousands of notes.
 regex = "1"
+# The quick note is summoned from any program, which is a system-wide hotkey:
+# RegisterHotKey on Windows, a different API on each of the other two. The
+# plugin is that whole job on all three and is Tauri's own.
+tauri-plugin-global-shortcut = "2"
 
 # File associations are a Windows-shell concern and nothing else needs them.
 [target.'cfg(windows)'.dependencies]
