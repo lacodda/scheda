@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.12.0] - 2026-09-30
+
+### Bug Fixes
+- Keep overlay scrollbars on current WebView2
+
+### Documentation
+- Describe panes, sessions, commands, settings and the quick note
+
+### Features
+- Split panes, pinned tabs and a restored session, commands with rebindable keys, a settings screen, autosave and a system-wide quick note
+
 ## [0.11.0] - 2026-09-24
 
 ### Bug Fixes
