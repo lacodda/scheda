@@ -32,9 +32,15 @@
 
 /* The standard property. `thin` rather than `auto`, and a transparent track so
    nothing is painted where the bar is not. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+/* Only where the `::-webkit-scrollbar` rules below do not apply. Chromium 121
+   and later let the standard property win whenever it is set, and then draw
+   its own thin bar — arrows and all — instead of the one below: the WebView
+   updated under the product and every panel grew arrow buttons. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
 }
 
 /* Chromium and the WebView. The bar is sized but the track is left unpainted,
