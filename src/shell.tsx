@@ -1,5 +1,6 @@
-// Everything around the text: the tab strip, the status line, the shortcuts,
-// the drop target and the guard on unsaved work.
+// Everything around the text: the tab strip, the status line, the commands and
+// their keys, the palettes, the settings, the session, the drop target and the
+// guard on unsaved work.
 //
 // Mounted after the first paint. If this file were slow it would cost the
 // window nothing, which is exactly why it is a separate module.
@@ -9,22 +10,31 @@ import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { EditorView } from '@codemirror/view'
+import { foldAll, foldCode, unfoldAll, unfoldCode } from '@codemirror/language'
 import {
   createFromWikilink,
   fileDiffers,
   forgetRecent,
-  loadSettings,
+  loadSession,
   obsidianUrl,
   onFileHandedOver,
+  onFileWritten,
   onHandoverFailed,
   onVaultChanged,
+  openFile,
   rememberRecent,
   restoreDrafts,
+  saveSession,
+  showQuickNote,
   watchVault,
+  type Draft,
+  type OpenFile,
+  type Session,
 } from './core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { Palette } from './palette'
-import { basename, samePath } from './paths'
+import { Picker } from './picker'
+import { samePath } from './paths'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
 import { outlineOf } from './editor/outline'
@@ -32,9 +42,9 @@ import { FileTree } from './tree'
 import { NetworkPanel } from './network'
 import { RenamePreview, UndoBar } from './rename'
 import { undoRename, type RenameApplied } from './core'
-import { setBracketClosing } from './editor/edits'
-import { isFocusing } from './editor/focus'
-import { setSpelling } from './editor/spelling'
+import { isFocusing, setFocusing } from './editor/focus'
+import { toggleReading } from './editor/reading'
+import { blocks, type Block } from './editor/insert'
 import { WORDS_PER_MINUTE, bodyWords, countWords, readingMinutes } from './editor/words'
 import { forgetPeeks } from './editor/peek'
 import { forgetAllEmbeds, forgetAllLinks, setFollowLink } from './editor/wikilinks'
@@ -43,7 +53,12 @@ import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titleba
 import { Splash, useSlowStart } from './splash'
 import { TagsPanel } from './tags'
 import { SearchPanel } from './search'
-import type { EditorHandle, Tab } from './editor/mount'
+import { SettingsScreen } from './settings'
+import { settings as settingsStore } from './settings-store'
+import { available, handle, installKeys, keysFor, registry, run, setOverrides, type CommandSpec } from './commands'
+import { showChord } from './keys'
+import { TabStrip, tabLabel } from './tabstrip'
+import type { EditorHandle, RestoredTab } from './editor/mount'
 
 /** The version the build was made from, for the splash to show. */
 const VERSION = __APP_VERSION__
@@ -55,9 +70,9 @@ const MARKDOWN_FILTER = [
   { name: 'All files', extensions: ['*'] },
 ]
 
-function tabLabel(tab: Tab): string {
-  return tab.path ? basename(tab.path) : 'Untitled'
-}
+/** How long the window has to be still before the session is written. The
+ *  caret moves on every keystroke; the file is written once somebody pauses. */
+const SESSION_DELAY_MS = 1500
 
 /** Subscribes a component to the editor. The snapshot is a counter rather than
  *  anything derived from the document, because useSyncExternalStore re-renders
@@ -66,10 +81,15 @@ function useEditor(editor: EditorHandle) {
   useSyncExternalStore(editor.subscribe, editor.revision)
 }
 
-/** Closing a tab, asking first when it holds unsaved work. Shared so the strip
- *  and the keyboard cannot drift into asking differently. */
-function useCloseTab(editor: EditorHandle) {
-  return useCallback(
+/** Attaches a command's work for as long as the component is mounted. */
+function useCommand(id: string, work: () => boolean | void) {
+  useEffect(() => handle(id, work), [id, work])
+}
+
+/** Closing tabs, asking first when they hold unsaved work. Shared so the strip,
+ *  the menu and the keyboard cannot drift into asking differently. */
+function useClosing(editor: EditorHandle) {
+  const close = useCallback(
     async (id: number) => {
       const tab = editor.tabs().find((candidate) => candidate.id === id)
       // Closing a draft is closing it: the text was never a file, and the
@@ -91,58 +111,40 @@ function useCloseTab(editor: EditorHandle) {
     },
     [editor],
   )
-}
 
-function TabStrip({ editor, onClose }: { editor: EditorHandle; onClose: (id: number) => void }) {
-  useEditor(editor)
-  const tabs = editor.tabs()
-  const activeId = editor.active().id
-
-  // Every document gets a tab, including the only one. The strip used to hide
-  // itself for a single file, back when it was a second band under the system
-  // title bar; now it *is* the title bar, and an empty one would just be a
-  // window that has forgotten what it is showing.
-  return (
-    <div className="tabs" role="tablist">
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          role="tab"
-          aria-selected={tab.id === activeId}
-          className={`tab${tab.id === activeId ? ' tab--active' : ''}`}
-          onClick={() => editor.select(tab.id)}
-          onAuxClick={(event) => {
-            // Middle click closes, the way every tabbed thing does.
-            if (event.button === 1) {
-              event.preventDefault()
-              onClose(tab.id)
-            }
-          }}
-          title={tab.path ?? 'Untitled'}
-        >
-          <span className="tab-name">{tabLabel(tab)}</span>
-          {editor.isDirty(tab.id) && <span className="tab-dirty">•</span>}
-          {tabs.length > 1 && (
-            <button
-              type="button"
-              className="tab-close"
-              aria-label={`Close ${tabLabel(tab)}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                onClose(tab.id)
-              }}
-            >
-              ×
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
+  /** Several at once — "close others", "close all". One question for all of
+   *  them rather than one per tab, and a draft with text in it is on the list:
+   *  closing one on purpose throws it away, and a bulk close is not the same
+   *  purpose as closing that one tab. */
+  const closeMany = useCallback(
+    async (ids: number[]) => {
+      const tabs = ids
+        .map((id) => editor.tabs().find((candidate) => candidate.id === id))
+        .filter((tab) => tab !== undefined)
+      // A draft is dirty exactly when it has text: it has never been saved.
+      const unsaved = tabs.filter((tab) => editor.isDirty(tab.id))
+      let discard = true
+      if (unsaved.length > 0) {
+        const names = unsaved.map(tabLabel).join(', ')
+        discard = await ask(
+          unsaved.length === 1 ? `${names} has unsaved changes.` : `${unsaved.length} tabs have unsaved changes: ${names}.`,
+          { title: 'Close without saving?', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Keep those open' },
+        )
+      }
+      for (const tab of tabs) {
+        if (unsaved.includes(tab) && !discard) continue
+        editor.close(tab.id, true)
+      }
+    },
+    [editor],
   )
+
+  return { close, closeMany }
 }
 
 function StatusBar({ editor }: { editor: EditorHandle }) {
   useEditor(editor)
+  const autosave = useSyncExternalStore(settingsStore.subscribe, () => settingsStore.current()?.autosave ?? false)
 
   const tab = editor.active()
   const state = editor.view.state
@@ -172,6 +174,10 @@ function StatusBar({ editor }: { editor: EditorHandle }) {
           close the tab — is not something anybody guesses. */}
       {tab.awaited && <span className="status-waiting">waiting — close to return</span>}
       {isFocusing() && <span className="status-mode">focus</span>}
+      {/* Said, because a window that writes files on its own should say that it
+          does: the dot on a tab means something different when it will be
+          gone in a second. */}
+      {autosave && tab.path !== null && !tab.readOnly && <span className="status-mode">autosave</span>}
       <span>
         Ln {line.number}, Col {column}
       </span>
@@ -197,11 +203,77 @@ function reportExport(error: unknown): void {
   void ask(messageOf(error), { title: 'The page was not made', kind: 'error', okLabel: 'OK' })
 }
 
-function Shell({ editor }: { editor: EditorHandle }) {
+/** Which palette is over the text, if any. One at a time: two lists taking the
+ *  keyboard at once is one list too many. */
+type Overlay = 'files' | 'commands' | 'blocks' | 'settings' | null
+
+/** Puts back what the window had open when it last closed.
+ *
+ *  After the first frame, like everything that is not the text: the file in
+ *  front was read before the window existed (the core preloads it), and the
+ *  others are read here in the background. A file that has gone since is left
+ *  out without a word — the session is a convenience, not a promise — and so is
+ *  a draft whose text is no longer in the draft folder. */
+async function restoreSession(editor: EditorHandle, launchedWith: string | null): Promise<void> {
+  const [session, drafts] = await Promise.all([
+    loadSession().catch((): Session => ({ tabs: [], active: null, beside: null, focused: 0 })),
+    restoreDrafts().catch((): Draft[] => []),
+  ])
+  const front = session.active !== null ? session.tabs[session.active]?.path : null
+  // Launched with the file that was in front anyway — the preload came from the
+  // session — is the session coming back. Launched with another file is that
+  // file, asked for now, with the rest of the session behind it.
+  const keepFront = launchedWith !== null && !(front && samePath(front, launchedWith))
+
+  const opened = await Promise.all(
+    session.tabs.map(async (entry): Promise<RestoredTab | null> => {
+      const base = { pinned: entry.pinned, anchor: entry.anchor, head: entry.head, top: entry.top }
+      if (entry.path !== null) {
+        const path = entry.path
+        // A file the window already has — the one read before the first frame —
+        // is not read twice; `restore` finds its tab by the path.
+        const already = editor.tabs().some((tab) => tab.path !== null && samePath(tab.path, path))
+        const file: OpenFile | null = already
+          ? { path, text: '', shape: { line_ending: 'lf', bom: false }, readOnly: false }
+          : await openFile(path).catch(() => null)
+        return file ? { ...base, file, draft: null } : null
+      }
+      const draft = drafts.find((candidate) => candidate.key === entry.draft)
+      return draft ? { ...base, file: null, draft } : null
+    }),
+  )
+
+  // Drafts the session does not mention — the window closed before it was
+  // written, or an older version filed them — still come back, after the rest.
+  const mentioned = new Set(session.tabs.map((entry) => entry.draft))
+  const loose = drafts
+    .filter((draft) => !mentioned.has(draft.key))
+    .map((draft): RestoredTab => ({ file: null, draft, pinned: false, anchor: 0, head: 0, top: 0 }))
+
+  // The indices in the session are into its own list; the ones that did not
+  // come back are dropped, and the layout is moved to match.
+  const kept: RestoredTab[] = []
+  const moved = new Map<number, number>()
+  opened.forEach((entry, index) => {
+    if (entry === null) return
+    moved.set(index, kept.length)
+    kept.push(entry)
+  })
+  const remap = (index: number | null) => (index === null ? null : (moved.get(index) ?? null))
+  editor.restore(
+    [...kept, ...loose],
+    { active: remap(session.active), beside: remap(session.beside), focused: session.focused },
+    keepFront,
+  )
+}
+
+function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: string | null }) {
   // The watch below follows the active tab, so this component has to hear about
   // tabs changing. The status bar renders from the same subscription.
   useEditor(editor)
   const revision = editor.revision()
+  const [overlay, setOverlay] = useState<Overlay>(null)
+  const [restored, setRestored] = useState(false)
 
   /** Opens a path and records it as recent. A file that has gone is dropped
    *  from the list rather than reported: the list is a convenience, and an
@@ -238,8 +310,7 @@ function Shell({ editor }: { editor: EditorHandle }) {
     else await saveAs()
   }, [editor, saveAs])
 
-  const closeTab = useCloseTab(editor)
-  const [picking, setPicking] = useState(false)
+  const { close: closeTab, closeMany } = useClosing(editor)
 
   /** A file under an open tab was written by somebody else. Works out what that
    *  actually means for this tab, and asks only when it has to.
@@ -265,7 +336,8 @@ function Shell({ editor }: { editor: EditorHandle }) {
 
       // What is on screen, not what was last saved: the question is whether the
       // file differs from what this person is looking at.
-      const onScreen = tab.id === editor.active().id ? editor.view.state.doc.toString() : tab.state.doc.toString()
+      const shown = editor.panes().indexOf(tab.id)
+      const onScreen = shown !== -1 ? editor.views()[shown].state.doc.toString() : tab.state.doc.toString()
 
       let differs = true
       try {
@@ -320,83 +392,238 @@ function Shell({ editor }: { editor: EditorHandle }) {
     // The file the window opened with counts as recently opened; the core read
     // it before this module existed, so nothing recorded it then. Once, on
     // mount: every later open records itself.
-    const path = editor.active().path
-    if (path) void rememberRecent(path)
+    if (launchedWith) void rememberRecent(launchedWith)
 
-    // Drafts from a previous run come back as tabs. After the recent list, so
-    // the order on screen is "the file you launched with, then what you had
-    // open" rather than the other way round.
-    void restoreDrafts()
-      .then((drafts) => {
-        for (const draft of drafts) editor.adoptDraft(draft)
-      })
+    // The session comes back after the recent list, so the order on screen is
+    // "the file you launched with, then what you had open" rather than the
+    // other way round. Nothing is written back until it has: a session saved
+    // over the top of one still being read is a session lost.
+    void restoreSession(editor, launchedWith)
       .catch(() => {
-        // No drafts is the ordinary case, and an unreadable draft folder is not
-        // worth a dialog on startup.
+        // An unreadable session is an empty window, not a dialog on startup.
       })
+      .finally(() => setRestored(true))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (!event.ctrlKey && !event.metaKey) return
-      const key = event.key.toLowerCase()
-
-      if (event.altKey) {
-        // AltGr arrives as Ctrl+Alt on Windows, and on a Polish or German
-        // keyboard AltGr with a letter types a character. That is typing, not
-        // a shortcut.
-        if (event.getModifierState('AltGraph')) return
-        if (event.code === 'KeyP') {
-          // Print. `Ctrl+P` is going to a file, as in every editor with that
-          // feature; the page printed is the note, not the window.
-          event.preventDefault()
-          void import('./export').then(({ printNote }) => printNote(editor)).catch(reportExport)
-        } else if (event.code === 'KeyS') {
-          // Save as a web page: one HTML file, pictures inside it.
-          event.preventDefault()
-          void import('./export').then(({ exportNote }) => exportNote(editor)).catch(reportExport)
-        }
-        return
-      }
-
-      // The plain keys below answer without Shift only: `Ctrl+Shift+O`, `N` and
-      // `W` belong to the panels, and a key that also opened a file dialog
-      // behind the outline was two things at once.
-      if (key === 's') {
-        event.preventDefault()
-        if (event.shiftKey) void saveAs()
-        else void saveActive()
-      } else if (key === 'o' && !event.shiftKey) {
-        event.preventDefault()
-        void openDialog({ multiple: false, filters: MARKDOWN_FILTER }).then((path) => {
-          if (typeof path === 'string') void openPath(path)
-        })
-      } else if (key === 'n' && !event.shiftKey) {
-        event.preventDefault()
-        editor.openBlank()
-      } else if (key === 'w' && !event.shiftKey) {
-        event.preventDefault()
-        void closeTab(editor.active().id)
-      } else if (key === 'p' && !event.shiftKey) {
-        // Go to file. `Ctrl+P` is what every editor with this feature uses, and
-        // a notepad that printed on it would be a notepad nobody expects.
-        event.preventDefault()
-        setPicking(true)
-      } else if (key === 'tab') {
-        // Ctrl+Tab walks the strip in order, wrapping at the end.
-        event.preventDefault()
-        const tabs = editor.tabs()
-        if (tabs.length < 2) return
-        const index = tabs.findIndex((tab) => tab.id === editor.active().id)
-        const step = event.shiftKey ? -1 : 1
-        editor.select(tabs[(index + step + tabs.length) % tabs.length].id)
-      }
+    if (!restored) return
+    // Written a moment after the window settles. Every tab change, caret move
+    // and scroll that matters arrives through the editor's subscription.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stop = editor.subscribe(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => void saveSession(editor.snapshot()).catch(() => {}), SESSION_DELAY_MS)
+    })
+    return () => {
+      clearTimeout(timer)
+      stop()
     }
+  }, [editor, restored])
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editor, saveActive, saveAs, closeTab, openPath])
+  // The settings, applied wherever they are held: the look, the editor, the
+  // keys. Again on every change — the settings screen changes them live, and a
+  // setting that waits for a restart is one people assume did not work.
+  useEffect(() => {
+    const applyAll = () => {
+      const current = settingsStore.current()
+      if (!current) return
+      applyAppearance(current)
+      editor.configure({
+        closeBrackets: current.close_brackets,
+        spellcheck: current.spellcheck,
+        autosave: current.autosave,
+      })
+      setOverrides(current.keys)
+    }
+    const stop = settingsStore.subscribe(applyAll)
+    // Read here rather than before the first frame: the window appearing in
+    // the system theme and correcting itself a frame later is cheaper than a
+    // blank window waiting on a file read.
+    void settingsStore.load().catch(() => {
+      // Unreadable settings are not worth a dialog on startup; the defaults
+      // are already on screen.
+    })
+    applyAll()
+    return stop
+  }, [editor])
+
+  useEffect(() => installKeys(), [])
+
+  // ------------------------------------------------------------- commands
+
+  useCommand(
+    'file.save',
+    useCallback(() => void saveActive(), [saveActive]),
+  )
+  useCommand(
+    'file.saveAs',
+    useCallback(() => void saveAs(), [saveAs]),
+  )
+  useCommand(
+    'file.open',
+    useCallback(() => {
+      void openDialog({ multiple: false, filters: MARKDOWN_FILTER }).then((path) => {
+        if (typeof path === 'string') void openPath(path)
+      })
+    }, [openPath]),
+  )
+  useCommand(
+    'file.new',
+    useCallback(() => editor.openBlank(), [editor]),
+  )
+  useCommand(
+    'file.print',
+    useCallback(() => {
+      // The page printed is the note, not the window.
+      void import('./export').then(({ printNote }) => printNote(editor)).catch(reportExport)
+    }, [editor]),
+  )
+  useCommand(
+    'file.export',
+    useCallback(() => {
+      // One HTML file, pictures inside it.
+      void import('./export').then(({ exportNote }) => exportNote(editor)).catch(reportExport)
+    }, [editor]),
+  )
+  useCommand(
+    'file.goTo',
+    useCallback(() => setOverlay('files'), []),
+  )
+  useCommand(
+    'palette.commands',
+    useCallback(() => setOverlay('commands'), []),
+  )
+  useCommand(
+    'insert.block',
+    useCallback(() => {
+      if (editor.view.state.readOnly) return false
+      setOverlay('blocks')
+    }, [editor]),
+  )
+  useCommand(
+    'settings.open',
+    useCallback(() => setOverlay('settings'), []),
+  )
+  useCommand(
+    'tab.close',
+    useCallback(() => void closeTab(editor.active().id), [editor, closeTab]),
+  )
+  useCommand(
+    'tab.closeOthers',
+    useCallback(() => {
+      const id = editor.active().id
+      void closeMany(editor.tabs().filter((tab) => tab.id !== id && !tab.pinned).map((tab) => tab.id))
+    }, [editor, closeMany]),
+  )
+  useCommand(
+    'tab.closeAll',
+    useCallback(() => {
+      void closeMany(editor.tabs().filter((tab) => !tab.pinned).map((tab) => tab.id))
+    }, [editor, closeMany]),
+  )
+  useCommand(
+    'tab.reopen',
+    useCallback(() => {
+      const path = editor.takeClosed()
+      if (path) void openPath(path)
+    }, [editor, openPath]),
+  )
+  useCommand(
+    'tab.pin',
+    useCallback(() => {
+      const tab = editor.active()
+      editor.pin(tab.id, !tab.pinned)
+    }, [editor]),
+  )
+  const step = useCallback(
+    (by: number) => {
+      // Walks the strip in order, wrapping at the end.
+      const tabs = editor.tabs()
+      if (tabs.length < 2) return
+      const index = tabs.findIndex((tab) => tab.id === editor.active().id)
+      editor.select(tabs[(index + by + tabs.length) % tabs.length].id)
+    },
+    [editor],
+  )
+  useCommand(
+    'tab.next',
+    useCallback(() => step(1), [step]),
+  )
+  useCommand(
+    'tab.previous',
+    useCallback(() => step(-1), [step]),
+  )
+  useCommand(
+    'pane.split',
+    useCallback(() => editor.toggleSplit(), [editor]),
+  )
+  useCommand(
+    'pane.first',
+    useCallback(() => editor.focusPane(0), [editor]),
+  )
+  useCommand(
+    'pane.second',
+    useCallback(() => {
+      if (editor.panes().length < 2) return false
+      editor.focusPane(1)
+    }, [editor]),
+  )
+  useCommand(
+    'view.reading',
+    useCallback(() => {
+      editor.view.dispatch({ effects: toggleReading.of() })
+    }, [editor]),
+  )
+  useCommand(
+    'view.focus',
+    useCallback(() => {
+      // A property of the window: both panes fade, or neither.
+      const on = !isFocusing()
+      for (const view of editor.views()) setFocusing(view, on)
+    }, [editor]),
+  )
+  useCommand(
+    'fold.section',
+    useCallback(() => foldCode(editor.view), [editor]),
+  )
+  useCommand(
+    'unfold.section',
+    useCallback(() => unfoldCode(editor.view), [editor]),
+  )
+  useCommand(
+    'fold.all',
+    useCallback(() => foldAll(editor.view), [editor]),
+  )
+  useCommand(
+    'unfold.all',
+    useCallback(() => unfoldAll(editor.view), [editor]),
+  )
+  useCommand(
+    'quick.note',
+    useCallback(() => void showQuickNote().catch(() => {}), []),
+  )
+  useCommand(
+    'theme.system',
+    useCallback(() => void settingsStore.update({ theme: 'system' }).catch(() => {}), []),
+  )
+  useCommand(
+    'theme.light',
+    useCallback(() => void settingsStore.update({ theme: 'light' }).catch(() => {}), []),
+  )
+  useCommand(
+    'theme.dark',
+    useCallback(() => void settingsStore.update({ theme: 'dark' }).catch(() => {}), []),
+  )
+  useCommand(
+    'autosave.toggle',
+    useCallback(() => {
+      const on = settingsStore.current()?.autosave ?? false
+      void settingsStore.update({ autosave: !on }).catch(() => {})
+    }, []),
+  )
+
+  // ------------------------------------------------------------- the window
 
   useEffect(() => {
     // Dropping files on the window opens them. The webview reports paths; the
@@ -420,31 +647,35 @@ function Shell({ editor }: { editor: EditorHandle }) {
     const failed = onHandoverFailed((message) => {
       void ask(message, { title: 'Cannot open that file', kind: 'error', okLabel: 'OK' })
     })
+    // A quick note went into a file this window may be showing. The watcher
+    // hears about it only inside the vault it is watching, so the core says so
+    // itself, and the tab takes the line the same way it takes any outside
+    // change.
+    const written = onFileWritten((path) => {
+      const tab = editor.tabs().find((candidate) => candidate.path !== null && samePath(candidate.path, path))
+      if (tab) void reconcile(tab.id)
+    })
     return () => {
       void opened.then((stop) => stop())
       void failed.then((stop) => stop())
+      void written.then((stop) => stop())
     }
-  }, [editor])
+  }, [editor, reconcile])
 
   useEffect(() => {
-    // The look the user chose. Read here rather than before the first frame:
-    // the window appearing in the system theme and correcting itself a frame
-    // later is cheaper than a blank window waiting on a file read.
-    void loadSettings()
-      .then((settings) => {
-        applyAppearance(settings)
-        // Bracket closing is an editor extension rather than a CSS variable,
-        // so it is reconfigured rather than applied. The compartment means the
-        // document, the undo history and the caret all survive the change.
-        editor.view.dispatch(setBracketClosing(settings.close_brackets))
-        // The spell checker follows the setting in every tab, like focus mode.
-        setSpelling(editor.view, settings.spellcheck)
-      })
-      .catch(() => {
-        // Unreadable settings are not worth a dialog on startup; the defaults
-        // are already on screen.
-      })
-  }, [editor])
+    // Autosave did not write a tab because its file changed on disk since the
+    // tab last saw it. That is the outside-change question, asked the way it
+    // is always asked.
+    editor.onAutosaveRefused((id) => void reconcile(id))
+    // Leaving the window is a pause as good as any: whatever was typed goes to
+    // disk before the person is in another program looking at the file.
+    const onBlur = () => void editor.flushAutosave()
+    window.addEventListener('blur', onBlur)
+    return () => {
+      editor.onAutosaveRefused(null)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [editor, reconcile])
 
   useEffect(() => {
     // How the editor follows a `[[link]]`. Registered here because every one of
@@ -537,20 +768,21 @@ function Shell({ editor }: { editor: EditorHandle }) {
     // Closing the window with unsaved work asks first. Tauri lets us take the
     // close request back, which is the only reason this can be honest.
     const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+      // Taken back every time: writing the drafts, the autosaves and the
+      // session are round trips to the core, and the window would otherwise
+      // go first.
+      event.preventDefault()
+      await editor.flushAutosave()
+      await editor.keepDrafts()
+      await saveSession(editor.snapshot()).catch(() => {})
       // A tab with no file is not work about to be lost: its text is written to
       // the draft folder and comes back on the next launch. So the question is
       // only ever about named files whose edits are not on disk.
       const dirty = editor.tabs().filter((tab) => tab.path !== null && editor.isDirty(tab.id))
       if (dirty.length === 0) {
-        // Still taken back, because writing the drafts is a round trip to the
-        // core and the window would otherwise go first.
-        event.preventDefault()
-        await editor.keepDrafts()
         await getCurrentWindow().destroy()
         return
       }
-      event.preventDefault()
-      await editor.keepDrafts()
       const names = dirty.map(tabLabel).join(', ')
       const discard = await ask(
         dirty.length === 1
@@ -570,16 +802,71 @@ function Shell({ editor }: { editor: EditorHandle }) {
     }
   }, [editor])
 
+  const closeOverlay = useCallback(() => {
+    setOverlay(null)
+    editor.view.focus()
+  }, [editor])
+
   return (
     <>
       <StatusBar editor={editor} />
       <Palette
         documentPath={editor.active().path}
-        visible={picking}
+        visible={overlay === 'files'}
         onPick={(path) => void openPath(path)}
-        onClose={() => setPicking(false)}
+        onClose={closeOverlay}
       />
+      {overlay === 'commands' && <CommandPalette onClose={closeOverlay} />}
+      {overlay === 'blocks' && (
+        <Picker<Block>
+          items={BLOCKS}
+          text={blockTitle}
+          id={blockId}
+          label="Insert block"
+          placeholder="Insert a block"
+          empty="No block by that name"
+          onClose={closeOverlay}
+          onPick={(block) => {
+            editor.view.dispatch(block.build(editor.view.state))
+            editor.view.focus()
+          }}
+        />
+      )}
+      {overlay === 'settings' && <SettingsScreen onClose={closeOverlay} />}
     </>
+  )
+}
+
+const BLOCKS = blocks()
+const blockTitle = (block: Block) => block.title
+const blockId = (block: Block) => block.id
+
+const commandTitle = (command: CommandSpec) => command.title
+const commandId = (command: CommandSpec) => command.id
+const commandKeys = (command: CommandSpec) => keysFor(command.id).map(showChord).join('  ')
+
+/** Every command, with its key beside it. Choosing one runs it; the key is
+ *  shown so that next time it need not be chosen. */
+function CommandPalette({ onClose }: { onClose: () => void }) {
+  useSyncExternalStore(registry.subscribe, registry.revision)
+  // The palette itself is not in its own list: choosing it would do nothing.
+  const commands = available().filter((command) => command.id !== 'palette.commands')
+  return (
+    <Picker<CommandSpec>
+      items={commands}
+      text={commandTitle}
+      id={commandId}
+      detail={commandKeys}
+      label="Commands"
+      placeholder="Run a command"
+      empty="No command by that name"
+      onClose={onClose}
+      onPick={(command) => {
+        // After the palette has gone, so a command that opens a panel of its
+        // own — the settings, the block list — opens it into an empty window.
+        queueMicrotask(() => run(command.id))
+      }}
+    />
   )
 }
 
@@ -613,11 +900,19 @@ function useVaultWrites(): number {
   return useSyncExternalStore(vaultWrites.subscribe, () => vaultWrites.count)
 }
 
-/** The network panel, and the key that shows it.
+/** A panel's visibility, and the command that shows and hides it.
  *
- *  `Ctrl+Shift+B` — for backlinks, which is what the panel is mostly about. Like
- *  the outline and the tree, the state belongs to the window rather than to the
- *  document: switching tabs should not close a panel that was open. */
+ *  The state belongs to the window rather than to the document: switching tabs
+ *  should not close a panel that was open. */
+function usePanel(id: string): [boolean, (visible: boolean) => void] {
+  const [visible, setVisible] = useState(false)
+  useCommand(
+    id,
+    useCallback(() => setVisible((was) => !was), []),
+  )
+  return [visible, setVisible]
+}
+
 /** Opens a note at a line, for a panel that lists places rather than files.
  *
  *  Shared by the network and the tags panels: both answer "here, on this line",
@@ -648,26 +943,12 @@ function openAt(editor: EditorHandle, path: string, line: number, column = 0, le
   )
 }
 
-/** The tags panel, and the key that shows it.
- *
- *  `Ctrl+Shift+T` — the same shape as the tree's `E`, the network's `B` and the
- *  outline's `O`: hidden until asked for, because a notepad that opens with
+/** The tags panel — hidden until asked for, because a notepad that opens with
  *  four sidebars is not a notepad. */
 function TagsHost({ editor }: { editor: EditorHandle }) {
-  const [visible, setVisible] = useState(false)
+  const [visible] = usePanel('panel.tags')
   const revision = useVaultWrites()
   useEditor(editor)
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
-      if (event.key.toLowerCase() !== 't') return
-      event.preventDefault()
-      setVisible((was) => !was)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   return (
     <TagsPanel
@@ -679,13 +960,13 @@ function TagsHost({ editor }: { editor: EditorHandle }) {
   )
 }
 
-/** The vault search, and the two keys that show it.
+/** The vault search, and the two commands that show it.
  *
- *  `Ctrl+Shift+F` to search and `Ctrl+Shift+H` to replace — the keys every
- *  editor people come from already uses for the same two things. A second
- *  press while the panel is open puts the cursor back in the search box rather
- *  than closing it: the key means "search", and closing is what the same key
- *  does in the panels that have nothing to type into. */
+ *  Search and replace — the keys every editor people come from already uses for
+ *  the same two things. Asking again while the panel is open puts the cursor
+ *  back in the search box rather than closing it: the command means "search",
+ *  and closing is what the same key does in the panels that have nothing to
+ *  type into. */
 function SearchHost({ editor }: { editor: EditorHandle }) {
   const [visible, setVisible] = useState(false)
   const [focusAsked, setFocusAsked] = useState(0)
@@ -693,19 +974,19 @@ function SearchHost({ editor }: { editor: EditorHandle }) {
   const revision = useVaultWrites()
   useEditor(editor)
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
-      const key = event.key.toLowerCase()
-      if (key !== 'f' && key !== 'h') return
-      event.preventDefault()
-      setVisible(true)
-      setReplaceAsked(key === 'h')
-      setFocusAsked((was) => was + 1)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+  const show = useCallback((replace: boolean) => {
+    setVisible(true)
+    setReplaceAsked(replace)
+    setFocusAsked((was) => was + 1)
   }, [])
+  useCommand(
+    'search.vault',
+    useCallback(() => show(false), [show]),
+  )
+  useCommand(
+    'search.replace',
+    useCallback(() => show(true), [show]),
+  )
 
   useEffect(() => {
     if (!visible) return
@@ -736,21 +1017,11 @@ function SearchHost({ editor }: { editor: EditorHandle }) {
   )
 }
 
+/** The network panel — mostly about backlinks. */
 function NetworkHost({ editor }: { editor: EditorHandle }) {
-  const [visible, setVisible] = useState(false)
+  const [visible] = usePanel('panel.network')
   const revision = useVaultWrites()
   useEditor(editor)
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
-      if (event.key.toLowerCase() !== 'b') return
-      event.preventDefault()
-      setVisible((was) => !was)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   return (
     <NetworkPanel
@@ -775,34 +1046,14 @@ function NetworkHost({ editor }: { editor: EditorHandle }) {
   )
 }
 
-/** The outline, and the key that shows it.
- *
- *  The state lives here rather than in the editor: it is a property of the
- *  window, not of the document, and switching tabs should not close a panel
- *  that was open. */
+/** The outline. */
 function OutlinePanel({ editor }: { editor: EditorHandle }) {
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
-      if (event.key.toLowerCase() !== 'o') return
-      event.preventDefault()
-      setVisible((was) => !was)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
+  const [visible] = usePanel('panel.outline')
   return <Outline editor={editor} visible={visible} />
 }
 
-/** The file tree, and the key that shows it.
- *
- *  Like the outline, the state belongs to the window rather than to the
- *  document: switching tabs should not close a panel that was open. The path
- *  it reads from does follow the tabs, because the tree is the vault of
- *  whatever is being edited. */
+/** The file tree. The path it reads from follows the tabs, because the tree is
+ *  the vault of whatever is being edited. */
 function TreePanel({
   editor,
   onVaultWritten,
@@ -810,7 +1061,7 @@ function TreePanel({
   editor: EditorHandle
   onVaultWritten: () => void
 }) {
-  const [visible, setVisible] = useState(false)
+  const [visible] = usePanel('panel.tree')
   // The rename being asked about, and the one just done. Both live here because
   // the tree hands a rename up rather than performing it: a rename in a vault
   // may rewrite other people's notes, and the dry run, the approval and the
@@ -818,17 +1069,6 @@ function TreePanel({
   const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null)
   const [undoable, setUndoable] = useState<RenameApplied | null>(null)
   useEditor(editor)
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
-      if (event.key.toLowerCase() !== 'e') return
-      event.preventDefault()
-      setVisible((was) => !was)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   const refuse = useCallback((message: string) => {
     // The core's own words: "“notes.md” already exists", "“note.md” is open in
@@ -910,13 +1150,14 @@ function messageOf(error: unknown): string {
 }
 
 export interface ShellOptions {
-  /** Whether the window came up with nothing to open. The splash belongs to
-   *  this case and to no other — see `src/splash.tsx`. */
-  launchedBare: boolean
+  /** The file the window came up with, whether it was asked for or brought
+   *  back from the session — or null for a window that came up with nothing.
+   *  The splash belongs to that last case and to no other (`src/splash.tsx`). */
+  launchedWith: string | null
 }
 
 /** Mounts the title bar above the editor and the status bar below it. */
-export function mountShell(editor: EditorHandle, options: ShellOptions = { launchedBare: false }) {
+export function mountShell(editor: EditorHandle, options: ShellOptions = { launchedWith: null }) {
   const root = document.getElementById('root')!
   const editorHost = root.querySelector('.editor-host')!
 
@@ -959,7 +1200,7 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   // into two places.
   createRoot(shellHost).render(
     <StrictMode>
-      <Shell editor={editor} />
+      <Shell editor={editor} launchedWith={options.launchedWith} />
     </StrictMode>,
   )
   createRoot(outlineHost).render(
@@ -1005,7 +1246,7 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   // Not a hidden one, not one that renders null: the element is never created,
   // so a launch with a file cannot grow a splash through any later bug. The
   // cheapest guarantee is the one that has nothing to go wrong.
-  if (options.launchedBare) {
+  if (options.launchedWith === null) {
     const splashHost = document.createElement('div')
     splashHost.className = 'splash-host'
     root.appendChild(splashHost)
@@ -1020,11 +1261,11 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
 /** The splash and the work it is waiting on.
  *
  *  On a bare launch there is no file to read and no vault to walk, so what is
- *  left is the application's own state: the settings and the drafts from the
- *  previous run. Both are ordinarily instant, which is the point — the splash
- *  has a delay in front of it and a fast start never reaches it. What it covers
- *  is the slow one: a cold disk, a scanner reading the data directory, a folder
- *  of drafts that has grown. */
+ *  left is the application's own state: the settings, the session and the
+ *  drafts from the previous run. All are ordinarily instant, which is the point
+ *  — the splash has a delay in front of it and a fast start never reaches it.
+ *  What it covers is the slow one: a cold disk, a scanner reading the data
+ *  directory, a folder of drafts that has grown. */
 function OpeningScreen() {
   const [busy, setBusy] = useState(true)
   const shown = useSlowStart(busy)
@@ -1037,7 +1278,7 @@ function OpeningScreen() {
     // Settled rather than resolved: a draft folder that cannot be read is a
     // window that opens empty, not a window that shows a sweeping bar forever.
     // A splash that outlives its own failure is the blank window it replaced.
-    void Promise.allSettled([restoreDrafts(), loadSettings()]).then(done)
+    void Promise.allSettled([restoreDrafts(), loadSession(), settingsStore.load()]).then(done)
     return () => {
       current = false
     }
@@ -1056,7 +1297,8 @@ function OpeningScreen() {
  *
  *  It appears only for a note in a vault, because that is the only case where
  *  Obsidian has a vault to open it in — and a button that is there but does
- *  nothing is worse than one that is not. */
+ *  nothing is worse than one that is not. The command is there on the same
+ *  terms: attached only while there is somewhere to send the note. */
 function OpenInObsidian({ editor }: { editor: EditorHandle }) {
   useEditor(editor)
   const path = editor.active().path
@@ -1084,25 +1326,24 @@ function OpenInObsidian({ editor }: { editor: EditorHandle }) {
     }
   }, [path])
 
+  const send = useCallback(() => {
+    if (url === null) return false
+    // Through the opener rather than a shell command. On Windows
+    // `cmd /c start` cuts a URL at its first ampersand and runs the tail as
+    // a command, and every URL this builds has `&file=` in it.
+    void openUrl(url).catch(() => {
+      // Obsidian is not installed, or nothing handles the scheme. The note
+      // is open here either way, and a dialog saying somebody else's
+      // program is missing is not something this window can help with.
+    })
+  }, [url])
+
+  useEffect(() => (url === null ? undefined : handle('file.obsidian', send)), [url, send])
+
   if (url === null) return null
 
   return (
-    <button
-      type="button"
-      className="titlebar-action"
-      title="Open in Obsidian"
-      aria-label="Open in Obsidian"
-      onClick={() => {
-        // Through the opener rather than a shell command. On Windows
-        // `cmd /c start` cuts a URL at its first ampersand and runs the tail as
-        // a command, and every URL this builds has `&file=` in it.
-        void openUrl(url).catch(() => {
-          // Obsidian is not installed, or nothing handles the scheme. The note
-          // is open here either way, and a dialog saying somebody else's
-          // program is missing is not something this window can help with.
-        })
-      }}
-    >
+    <button type="button" className="titlebar-action" title="Open in Obsidian" aria-label="Open in Obsidian" onClick={send}>
       {/* The obsidian stone: a cut gem, which is what the name says. Drawn
           rather than imported so the bar carries no second asset for one
           button. */}
@@ -1124,7 +1365,7 @@ function OpenInObsidian({ editor }: { editor: EditorHandle }) {
  *  an empty window shows and the edges a frameless window is resized by. */
 function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: string) => void }) {
   useEditor(editor)
-  const closeTab = useCloseTab(editor)
+  const { close, closeMany } = useClosing(editor)
   const gestures = useTitleBarGestures()
 
   // The list belongs to an empty, unnamed, untouched document and nothing else:
@@ -1137,7 +1378,10 @@ function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: str
     <>
       <header className="titlebar" {...gestures}>
         <Mark />
-        <TabStrip editor={editor} onClose={(id) => void closeTab(id)} />
+        <TabStrip
+          editor={editor}
+          actions={{ close: (id) => void close(id), closeMany: (ids) => void closeMany(ids) }}
+        />
         {/* The gap between the tabs and the buttons is the part of the bar that
             is only there to be dragged. */}
         <div className="titlebar-drag" />

@@ -23,6 +23,17 @@ export default defineConfig({
     // are never part of starting the window, which is what the warning is
     // about; the startup path is held by `check:layout` and the startup log.
     chunkSizeWarningLimit: 1600,
+    // Two pages: the window, and the quick-note window a system-wide key
+    // brings up. The second shares nothing with the first's startup path —
+    // it is its own entry so the window's first frame never waits on it.
+    rollupOptions: {
+      input: {
+        // `index`, the name the single-page build gave the window's chunk:
+        // `check:layout` finds the first chunk the page loads by it.
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        quick: fileURLToPath(new URL('./quick.html', import.meta.url)),
+      },
+    },
   },
   server: {
     port: 1420,

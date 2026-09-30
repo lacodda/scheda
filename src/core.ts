@@ -38,8 +38,19 @@ export function openFile(path: string): Promise<OpenFile> {
   return invoke<OpenFile>('open_file', { path })
 }
 
-export function saveFile(path: string, text: string, shape: DocumentShape): Promise<void> {
-  return invoke<void>('save_file', { path, text, shape })
+/** Writes a tab's text to its file. Answers whether it was written.
+ *
+ *  With `expected`, the core writes only while the file still holds that text,
+ *  and answers false otherwise: autosave passes what the tab last saw on disk,
+ *  so a timer can never be what overwrites another program's change. A save the
+ *  person asked for passes nothing and is always written. */
+export function saveFile(
+  path: string,
+  text: string,
+  shape: DocumentShape,
+  expected: string | null = null,
+): Promise<boolean> {
+  return invoke<boolean>('save_file', { path, text, shape, expected })
 }
 
 /** Reads a file again, for a tab whose file was written by somebody else.
@@ -255,14 +266,85 @@ export interface Settings {
   /** Whether the system spell checker underlines misspelt words. Off by
    *  default: code, paths and names are all misspellings to it. */
   spellcheck: boolean
+  /** Whether a named file is written a moment after typing stops. */
+  autosave: boolean
+  /** Shortcuts the person changed, by command id. Only the changes: a command
+   *  absent here keeps its default, and an empty list means no key. */
+  keys: Record<string, string[]>
+  /** The file quick notes are added to, once one has been chosen. */
+  quick_note_file: string | null
+  /** The system-wide key for a quick note; empty when it is off. */
+  quick_note_key: string
 }
+
+/** A change to some settings. `quick_note_file: null` clears the file, while
+ *  leaving the field out leaves it alone. */
+export type SettingsPatch = Partial<Omit<Settings, 'recent'>> & { clear_recent?: boolean }
 
 export function loadSettings(): Promise<Settings> {
   return invoke<Settings>('load_settings')
 }
 
-export function saveSettings(settings: Settings): Promise<void> {
-  return invoke<void>('save_settings', { settings })
+/** Changes some of the settings and answers with all of them. The core does
+ *  the read-modify-write, so the recent list written by an opening file in the
+ *  same moment is not put back the way it was. */
+export function updateSettings(patch: SettingsPatch): Promise<Settings> {
+  return invoke<Settings>('update_settings', { patch })
+}
+
+/** One tab as the window left it. Positions are the editor's own units. */
+export interface SessionTab {
+  path: string | null
+  draft: string | null
+  pinned: boolean
+  anchor: number
+  head: number
+  top: number
+}
+
+/** What the window had open: the tabs in strip order, which one was in front,
+ *  and what stood in the second pane when the window was split. */
+export interface Session {
+  tabs: SessionTab[]
+  active: number | null
+  beside: number | null
+  focused: 0 | 1
+}
+
+export function loadSession(): Promise<Session> {
+  return invoke<Session>('load_session')
+}
+
+export function saveSession(session: Session): Promise<void> {
+  return invoke<void>('save_session', { session })
+}
+
+/** Whether the system gave scheda the quick-note key, and why not. */
+export interface QuickNoteStatus {
+  key: string
+  registered: boolean
+  error: string | null
+}
+
+export function quickNoteStatus(): Promise<QuickNoteStatus> {
+  return invoke<QuickNoteStatus>('quick_note_status')
+}
+
+/** Brings up the quick-note window, as its system-wide key does. */
+export function showQuickNote(): Promise<void> {
+  return invoke<void>('show_quick_note')
+}
+
+/** Asks, with the system's save dialog, where quick notes should go. Answers
+ *  with the path, or null when the dialog was closed. */
+export function chooseQuickNoteFile(): Promise<string | null> {
+  return invoke<string | null>('choose_quick_note_file')
+}
+
+/** The core wrote a file on the window's behalf from somewhere else — a quick
+ *  note — and a tab showing it may be behind. */
+export function onFileWritten(handler: (path: string) => void): Promise<UnlistenFn> {
+  return listen<string>('scheda://file-written', (event) => handler(event.payload))
 }
 
 /** Records a file as most recently opened and returns the new list. The core

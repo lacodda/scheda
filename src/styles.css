@@ -207,9 +207,63 @@ body {
   flex-direction: column;
 }
 
+/* One pane or two side by side. A pane is where one tab is shown; the reading
+   column below is computed inside each, so two notes read at their own width
+   rather than one note stretched across the window. */
 .editor-host {
+  position: relative;
+  display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
+}
+
+.pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-host--split .pane + .pane {
+  border-left: 1px solid var(--border);
+}
+
+/* Which of two panes the keys go to: a line along its top, in the colour the
+   active tab carries, so the two say the same thing. */
+.pane--focused::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Where a dragged tab would go. Drawn over the half it would take. */
+.editor-host--drop-first::after,
+.editor-host--drop-second::after {
+  content: "";
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border: 2px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.editor-host--drop-first::after {
+  left: 0;
+}
+
+.editor-host--drop-second::after {
+  right: 0;
 }
 
 .editor-host .cm-editor {
@@ -1923,4 +1977,391 @@ body {
   width: 0;
   height: 0;
   border: 0;
+}
+
+/* ------------------------------------------------------------ tab extras -- */
+
+/* The tab shown in the other pane: in front too, but not where the keys go.
+   The same line as the active tab, in the quiet colour. */
+.tab--beside {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--muted);
+}
+
+.tab--pinned {
+  padding-left: 0.6rem;
+}
+
+.tab-pin {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.tab--active .tab-pin {
+  color: var(--accent);
+}
+
+.tab--dragged {
+  opacity: 0.45;
+}
+
+/* Where a dragged tab would land in the strip: a bar before that tab, or
+   after the last one. */
+.tab--drop-before {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.tab-drop-end {
+  flex: 0 0 2px;
+  background: var(--accent);
+}
+
+.tabs--dragging,
+.tabs--dragging .tab {
+  cursor: grabbing;
+}
+
+.tree-menu button:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.tree-menu button:disabled:hover {
+  background: none;
+  color: var(--muted);
+}
+
+/* -------------------------------------------------------------- settings -- */
+
+/* Over the text like the palettes, and wider: it is read rather than typed
+   into, and a row with its explanation beside it wants the room. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  width: min(44rem, calc(100vw - 3rem));
+  max-height: 76vh;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 34%);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.settings:focus {
+  outline: none;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.6rem 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-close {
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.settings-close:hover {
+  background: var(--active-line);
+  color: var(--text);
+}
+
+.settings-body {
+  overflow-y: auto;
+  padding: 0 1.1rem 1rem;
+}
+
+.settings-section h3 {
+  margin: 1.1rem 0 0.4rem;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.settings-hint {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.settings-control {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.settings-note {
+  margin: 0.2rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-note--notice {
+  color: var(--accent);
+}
+
+.settings-button,
+.settings-segment,
+.settings-chord,
+.settings-stepper button {
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--status-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-button:hover,
+.settings-segment:hover,
+.settings-chord:hover,
+.settings-stepper button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.settings-button:disabled,
+.settings-stepper button:disabled {
+  color: var(--muted);
+}
+
+.settings-segments {
+  display: flex;
+}
+
+.settings-segment {
+  border-radius: 0;
+}
+
+.settings-segment + .settings-segment {
+  margin-left: -1px;
+}
+
+.settings-segment:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.settings-segment:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.settings-segment--on {
+  position: relative;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.settings-stepper {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.settings-stepper button {
+  width: 1.8rem;
+  padding: 0.2rem 0;
+}
+
+.settings-value {
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.settings-range {
+  width: 9rem;
+  accent-color: var(--accent);
+}
+
+.settings-check {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-check input {
+  accent-color: var(--accent);
+}
+
+/* A switch rather than a checkbox: the setting is on or off now, not a choice
+   waiting for a button to be pressed. */
+.settings-switch {
+  position: relative;
+  width: 2.1rem;
+  height: 1.2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--status-bg);
+}
+
+.settings-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transform: translateY(-50%);
+  transition: left 120ms ease;
+}
+
+.settings-switch--on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settings-switch--on .settings-switch-knob {
+  left: calc(100% - 0.95rem);
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-switch-knob {
+    transition: none;
+  }
+}
+
+.settings-chord {
+  min-width: 6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-chord--listening {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.settings-filter {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.2rem 0 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-filter:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.settings-keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-key-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-key-title {
+  min-width: 0;
+}
+
+.settings-key-chords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.settings-chip {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: center;
+  padding: 0.1rem 0.2rem 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--status-bg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-chip button {
+  padding: 0 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+}
+
+.settings-chip button:hover {
+  color: var(--accent);
+}
+
+.settings-chip--add {
+  padding: 0.1rem 0.5rem;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+.settings-link:hover {
+  color: var(--accent);
 }

@@ -9,7 +9,9 @@
 // settings and searches text is a different feature wearing this one's shortcut
 // — and the product this belongs to is a notepad.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { findFiles, type FileHit } from './core'
+import { findFiles, loadSettings, type FileHit } from './core'
+import { match } from './fuzzy'
+import { basename, samePath } from './paths'
 
 /** How long typing pauses before the vault is searched again.
  *
@@ -52,7 +54,8 @@ function Panel({
   onClose: () => void
 }) {
   const [query, setQuery] = useState('')
-  const [hits, setHits] = useState<FileHit[]>([])
+  const [found, setFound] = useState<FileHit[]>([])
+  const [recent, setRecent] = useState<string[]>([])
   const [at, setAt] = useState(0)
   const field = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLUListElement>(null)
@@ -63,21 +66,37 @@ function Panel({
     field.current?.focus()
   }, [])
 
+  // The files opened lately, from every vault and from none. Read once as the
+  // panel opens: the list does not change while somebody is choosing from it.
+  useEffect(() => {
+    let current = true
+    void loadSettings()
+      .then((settings) => {
+        if (current) setRecent(settings.recent)
+      })
+      .catch(() => {
+        // No list is an ordinary answer; the vault's files are still here.
+      })
+    return () => {
+      current = false
+    }
+  }, [])
+
   useEffect(() => {
     if (documentPath === null) return
     let current = true
     const timer = setTimeout(() => {
       void findFiles(documentPath, query)
-        .then((found) => {
+        .then((answer) => {
           if (!current) return
-          setHits(found)
+          setFound(answer)
           // Back to the top on every new query: the cursor belongs to the list
           // in front of you, and keeping its index across a search leaves it
           // pointing at whatever happens to be in that row now.
           setAt(0)
         })
         .catch(() => {
-          if (current) setHits([])
+          if (current) setFound([])
         })
     }, SETTLE_MS)
     return () => {
@@ -85,6 +104,8 @@ function Panel({
       clearTimeout(timer)
     }
   }, [documentPath, query])
+
+  const hits = withRecent(found, recent, query, documentPath)
 
   // The highlighted row is kept in view. Without this, holding the down arrow
   // walks the cursor off the bottom of a scrolling panel and the list stops
@@ -140,11 +161,7 @@ function Panel({
         />
         {hits.length === 0 ? (
           <p className="palette-empty">
-            {documentPath === null
-              ? 'No file open'
-              : query === ''
-                ? 'This file is not in a vault'
-                : 'Nothing matches'}
+            {query !== '' ? 'Nothing matches' : documentPath === null ? 'No file open' : 'This file is not in a vault'}
           </p>
         ) : (
           <ul className="palette-list" ref={list} role="listbox">
@@ -158,7 +175,9 @@ function Panel({
                   // The row under the pointer becomes the row Enter would take,
                   // so the mouse and the keyboard never disagree about which
                   // file is about to open.
-                  onPointerEnter={() => setAt(index)}
+                  onPointerMove={(event) => {
+                    if (movedOver(event)) setAt(index)
+                  }}
                   onClick={() => choose(hit)}
                 >
                   <span className="palette-name">
@@ -173,6 +192,46 @@ function Panel({
       </div>
     </div>
   )
+}
+
+/** The vault's answer with the recent files worked in.
+ *
+ *  Before anything is typed, the recent files lead: "the one I was just in" is
+ *  the commonest reason to open this panel, and it is a question about the
+ *  person's week rather than about the vault. Once letters are typed the
+ *  vault's ranking leads, and recent files from outside the vault follow when
+ *  they match — a note on the Desktop is still one keystroke away. */
+export function withRecent(
+  vault: FileHit[],
+  recent: string[],
+  query: string,
+  documentPath: string | null,
+): FileHit[] {
+  const inVault = (path: string) => vault.some((hit) => samePath(hit.path, path))
+  const candidates = recent.filter((path) => documentPath === null || !samePath(path, documentPath))
+  const rows: FileHit[] = []
+  for (const path of candidates) {
+    const name = basename(path)
+    const found = match(query, name)
+    if (!found) continue
+    if (query !== '' && inVault(path)) continue
+    rows.push({ path, name, folder: path.slice(0, Math.max(path.length - name.length - 1, 0)), matched: found.at })
+  }
+  if (query === '') {
+    return [...rows, ...vault.filter((hit) => !rows.some((row) => samePath(row.path, hit.path)))]
+  }
+  return [...vault, ...rows]
+}
+
+/** Whether the pointer really moved over a row, rather than the row arriving
+ *  under a pointer that stayed where it was.
+ *
+ *  A list opened under a resting mouse gets a hover event for whichever row
+ *  lands beneath it, and taking that as a choice sends Enter to that row
+ *  instead of the first one — found live, when typing `pin` and pressing Enter
+ *  ran a command three rows down. Only movement counts as pointing. */
+export function movedOver(event: { movementX: number; movementY: number }): boolean {
+  return event.movementX !== 0 || event.movementY !== 0
 }
 
 /** A name with the matched letters in bold.

@@ -4,7 +4,7 @@
 import { EditorState } from '@codemirror/state'
 import { EditorView, runScopeHandlers } from '@codemirror/view'
 import { afterEach, describe, expect, it } from 'vitest'
-import { isFocusing, sectionAt, setFocusing } from './focus'
+import { isFocusing, sectionAt, setFocusing, toggleFocus } from './focus'
 import { showFrontMatter, toggleFrontMatter } from './frontmatter'
 import { toggleReading } from './reading'
 import { moveSection } from './sections'
@@ -151,12 +151,13 @@ describe('focus mode', () => {
 
   it('fades every line outside it, and stops when switched off', () => {
     const v = view(SECTIONS, SECTIONS.indexOf('second'))
-    press(v, 'D', { ctrlKey: true, shiftKey: true, keyCode: 68 })
+    // The key is the window's (`commands.ts`); what it runs is this.
+    toggleFocus(v)
     expect(isFocusing()).toBe(true)
     const faded = [...v.dom.querySelectorAll('.cm-focus-faded')].map((line) => line.textContent)
     expect(faded).toContain('first')
     expect(faded).not.toContain('second')
-    press(v, 'D', { ctrlKey: true, shiftKey: true, keyCode: 68 })
+    toggleFocus(v)
     expect(v.dom.querySelectorAll('.cm-focus-faded')).toHaveLength(0)
   })
 

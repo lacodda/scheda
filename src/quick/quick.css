@@ -1,0 +1,83 @@
+/* The quick-note window: a field with a line above and below it.
+ *
+ * The window has no frame of its own (decorations: false), so the border and
+ * the rounded edge are drawn here; the system adds the shadow. */
+
+#quick {
+  height: 100%;
+}
+
+.quick {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.quick-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem 0.35rem;
+  font-size: 12px;
+  user-select: none;
+}
+
+.quick-title {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.quick-target {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-choose {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.quick-field {
+  flex: 1;
+  margin: 0 0.9rem;
+  padding: 0.3rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  resize: none;
+}
+
+.quick-field:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+.quick-foot {
+  padding: 0.4rem 0.9rem 0.5rem;
+  color: var(--muted);
+  font-size: 11px;
+  user-select: none;
+}
+
+.quick-foot kbd {
+  font-family: inherit;
+}
+
+.quick-problem {
+  color: var(--callout-danger);
+}

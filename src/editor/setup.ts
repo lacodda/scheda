@@ -5,21 +5,21 @@
 // before the first character reaches the screen. What is here was added one
 // piece at a time, each because something needed it.
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { codeFolding, foldAll, foldCode, syntaxHighlighting, unfoldAll, unfoldCode } from '@codemirror/language'
+import { codeFolding, syntaxHighlighting } from '@codemirror/language'
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search'
 import { type Extension } from '@codemirror/state'
 import { EditorView, drawSelection, highlightActiveLine, keymap } from '@codemirror/view'
 import { wikilinkCompletion } from './complete'
 import { markdownDecorations } from './decorations'
 import { bracketClosing, smartEditKeymap } from './edits'
-import { focusMode, toggleFocus } from './focus'
+import { focusMode } from './focus'
 import { frontMatterFold } from './frontmatter'
 import { schedaHighlightStyle } from './highlight'
 import { markdownImages } from './images'
 import { imagePaste } from './paste'
 import { linkPeek } from './peek'
 import { mermaidDiagrams } from './mermaid'
-import { reading, toggleReading } from './reading'
+import { reading } from './reading'
 import { schedaMarkdown } from './markdown'
 import { spelling } from './spelling'
 import { tableKeymap } from './table-edit'
@@ -85,16 +85,12 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
     schedaTheme,
     // Search bindings first: `Ctrl+F` and `Escape` have defaults in the base
     // keymap that would otherwise win.
+    // Reading mode, focus mode and folding are commands of the window rather
+    // than keys of the editor: they are in the command palette and their keys
+    // can be changed, so they live in `src/commands.ts` with the rest. What is
+    // left here is typing — the keys whose meaning depends on where in the
+    // text the caret is.
     keymap.of([
-      // Reading mode. Before the defaults: `Ctrl+E` is "move to line end" in
-      // the base keymap, and Obsidian's binding is the one a reader expects.
-      // Folding, on the keys editors have used for it since long before this
-      // one. `Ctrl+Shift+[` and `]` are what CodeMirror's own fold keymap uses;
-      // the alternates are what a hand reaches for.
-      { key: 'Mod-Shift-[', run: foldCode },
-      { key: 'Mod-Shift-]', run: unfoldCode },
-      { key: 'Mod-Alt-[', run: foldAll },
-      { key: 'Mod-Alt-]', run: unfoldAll },
       // Markdown's own edits first. Not because the base bindings would win —
       // a mutation moving these after the defaults changed nothing, since the
       // base commands decline and the queue reaches ours anyway — but because
@@ -104,16 +100,6 @@ export function schedaSetup(options: { closeBrackets?: boolean } = {}): Extensio
       // commands decline everywhere else and the list bindings get the key.
       ...tableKeymap,
       ...smartEditKeymap,
-      // Focus mode. `D` for dim, which is what it does to everything but the
-      // section being written; nothing in the base keymap uses it.
-      { key: 'Mod-Shift-d', run: toggleFocus },
-      {
-        key: 'Mod-e',
-        run: (view) => {
-          view.dispatch({ effects: toggleReading.of() })
-          return true
-        },
-      },
       ...searchKeymap,
       ...defaultKeymap,
       ...historyKeymap,

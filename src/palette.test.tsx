@@ -6,7 +6,7 @@
 // in the wrong place, or a name cut through the middle of a character.
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Marked } from './palette'
+import { Marked, withRecent } from './palette'
 
 /** The rendered name, with the bold runs marked by `[` and `]` so a test reads
  *  as the thing somebody would see rather than as a tree of elements. */
@@ -42,5 +42,25 @@ describe('the matched letters', () => {
 
   it('handle a match that reaches the last character', () => {
     expect(shown('abc', [2])).toBe('ab[c]')
+  })
+})
+
+describe('the recent files in the list', () => {
+  const hit = (path: string) => ({ path, name: path.split('/').pop()!, folder: '', matched: [] })
+  const vault = [hit('/v/plan.md'), hit('/v/diary.md')]
+  const recent = ['/v/diary.md', '/desk/todo.md', '/v/now.md']
+
+  it('lead before anything is typed, without the note already in front', () => {
+    const rows = withRecent(vault, recent, '', '/v/now.md')
+    expect(rows.map((row) => row.path)).toEqual(['/v/diary.md', '/desk/todo.md', '/v/plan.md'])
+  })
+
+  it('follow the vault once letters are typed, and only from outside it', () => {
+    const rows = withRecent([hit('/v/diary.md')], recent, 'dia', '/v/now.md')
+    // The diary is in the vault's answer already; the Desktop note is not.
+    expect(rows.map((row) => row.path)).toEqual(['/v/diary.md'])
+    const todo = withRecent([], recent, 'td', null)
+    expect(todo.map((row) => row.path)).toEqual(['/desk/todo.md'])
+    expect(todo[0].folder).toBe('/desk')
   })
 })

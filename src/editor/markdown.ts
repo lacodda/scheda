@@ -248,6 +248,13 @@ const CODE_LANGUAGES = [
   }),
 ]
 
+/** The languages a fenced block is coloured in, by the name written after the
+ *  backticks. What the block palette offers, so it never offers a name the
+ *  editor would then leave uncoloured. */
+export function codeLanguageNames(): string[] {
+  return CODE_LANGUAGES.map((language) => language.name)
+}
+
 /** Resolves the word after the backticks to a grammar, or null for "leave it as
  *  plain text". A fence can carry more than a name — ```js title="x" is common
  *  — so only the first word is looked up. */

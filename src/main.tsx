@@ -54,7 +54,7 @@ async function start() {
     // looks exactly like a blank tab the launcher produced. A splash decided
     // downstream would therefore have to guess, and the one thing it must
     // never do is appear over a file (see `src/splash.tsx`).
-    mountShell(editor, { launchedBare: file === null })
+    mountShell(editor, { launchedWith: file?.path ?? null })
   } catch (error) {
     reportFailure('the status bar failed to load', error)
   }

@@ -8,17 +8,20 @@ pub mod document;
 pub mod export;
 pub mod files;
 pub mod frontmatter;
+pub mod inbox;
 pub mod index;
 pub mod links;
 pub mod network;
 pub mod notes;
 pub mod obsidian;
 pub mod quick;
+mod quicknote;
 pub mod rename;
 pub mod replace;
 pub mod root;
 pub mod scratch;
 pub mod search;
+mod session;
 mod settings;
 pub mod startup;
 pub mod tags;
@@ -106,19 +109,36 @@ fn open_file(path: String) -> Result<OpenFile, CommandError> {
 }
 
 /// Writes edited text back in the shape the file was read with.
+///
+/// With `expected`, only while the file still holds that text: a save nobody
+/// asked for — autosave — must never be the thing that overwrites what another
+/// program wrote a moment ago. The answer is then false, nothing is written,
+/// and the external change reaches the window the ordinary way, where a
+/// conflict is put to the person rather than settled by a timer (ADR 0007).
+/// Without it, the person pressed `Ctrl+S` and the text on screen is what
+/// they asked for.
 #[tauri::command]
 fn save_file(
     notes: tauri::State<'_, index::NoteIndex>,
     path: String,
     text: String,
     shape: DocumentShape,
-) -> Result<(), CommandError> {
+    expected: Option<String>,
+) -> Result<bool, CommandError> {
     let path = PathBuf::from(path);
+    if let Some(expected) = expected {
+        match document::read(&path) {
+            Ok(on_disk) if on_disk.text == expected => {}
+            // Gone, changed or undecodable: in every case not the file the tab
+            // last saw, and not ours to write to without asking.
+            _ => return Ok(false),
+        }
+    }
     document::write(&path, &text, &shape)?;
     // Told now rather than left to the watcher, so a panel asked the moment the
     // save returns is not answered from the note as it was before it.
     notes.changed(&[path]);
-    Ok(())
+    Ok(true)
 }
 
 /// Turns a link written in a document into a URL the webview may load.
@@ -403,11 +423,143 @@ fn load_settings() -> Result<settings::Settings, CommandError> {
     Ok(settings::load()?)
 }
 
-/// Replaces the stored settings wholesale.
+/// Changes some of the settings and answers with all of them.
+///
+/// The read-modify-write is here for the reason the recent list's is: the file
+/// is also written by every file that opens, and a window writing back a whole
+/// copy would undo those. A changed quick-note key is taken from the system at
+/// once — "applied without a restart" includes the key that is not the
+/// window's.
 #[tauri::command]
-fn save_settings(settings: settings::Settings) -> Result<(), CommandError> {
-    settings::save(&settings)?;
-    Ok(())
+fn update_settings(
+    app: tauri::AppHandle,
+    patch: settings::SettingsPatch,
+) -> Result<settings::Settings, CommandError> {
+    let key_changed = patch.quick_note_key.is_some();
+    let updated = settings::modify(|current| current.apply(patch))?;
+    if key_changed {
+        quicknote::register(&app, &updated.quick_note_key);
+    }
+    Ok(updated)
+}
+
+/// What the window had open when it was last seen.
+#[tauri::command]
+fn load_session() -> session::Session {
+    session::load()
+}
+
+/// Keeps what the window has open, for the next launch.
+#[tauri::command]
+fn save_session(session: session::Session) -> Result<(), CommandError> {
+    session::save(&session).map_err(|error| CommandError {
+        message: error.to_string(),
+        read_only: false,
+    })
+}
+
+/// Brings up the quick-note window, as the system-wide key does.
+///
+/// Async so the window is built off the thread that answers commands: making a
+/// webview from a synchronous command blocks the loop that has to create it.
+#[tauri::command]
+async fn show_quick_note(app: tauri::AppHandle) -> Result<(), CommandError> {
+    quicknote::show(&app).map_err(|error| CommandError {
+        message: error.to_string(),
+        read_only: false,
+    })
+}
+
+/// Puts the quick-note window away. Its text stays in it for next time.
+#[tauri::command]
+fn hide_quick_note(app: tauri::AppHandle) {
+    quicknote::hide(&app);
+}
+
+/// Whether the quick-note key is held, and why not when it is not.
+#[tauri::command]
+fn quick_note_status(app: tauri::AppHandle) -> quicknote::Status {
+    quicknote::status(&app)
+}
+
+/// The file quick notes go to, with the name the small window shows for it.
+#[derive(Serialize)]
+struct QuickNoteTarget {
+    path: Option<String>,
+    name: Option<String>,
+}
+
+#[tauri::command]
+fn quick_note_target() -> Result<QuickNoteTarget, CommandError> {
+    let path = settings::load()?.quick_note_file;
+    let name = path.as_deref().map(|path| {
+        Path::new(path)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string())
+    });
+    Ok(QuickNoteTarget { path, name })
+}
+
+/// Asks where quick notes should go, with the system's own save dialog so a
+/// file that does not exist yet can be named. Answers with the path chosen, or
+/// nothing when the dialog was closed.
+///
+/// Asked from the core so the small window needs no dialog permission of its
+/// own: it calls scheda's commands and nothing else.
+#[tauri::command]
+async fn choose_quick_note_file(app: tauri::AppHandle) -> Result<Option<String>, CommandError> {
+    use tauri_plugin_dialog::DialogExt as _;
+    let chosen = app
+        .dialog()
+        .file()
+        .set_title("Where should quick notes go?")
+        .set_file_name("Inbox.md")
+        .add_filter("Markdown", &["md", "markdown", "txt"])
+        .blocking_save_file();
+    let Some(path) = chosen.and_then(|chosen| chosen.into_path().ok()) else {
+        return Ok(None);
+    };
+    let path = path.to_string_lossy().into_owned();
+    settings::modify(|current| {
+        current.apply(settings::SettingsPatch {
+            quick_note_file: Some(Some(path.clone())),
+            ..Default::default()
+        })
+    })?;
+    Ok(Some(path))
+}
+
+/// Adds a quick note to the end of the chosen file.
+///
+/// The stamp comes from the window because the window knows the local time and
+/// the core, without a timezone database, does not. The main window is told
+/// the file was written, so a tab showing it takes the new line — the watcher
+/// would only say so for a file inside the vault it is watching.
+#[tauri::command]
+fn append_quick_note(
+    app: tauri::AppHandle,
+    notes: tauri::State<'_, index::NoteIndex>,
+    text: String,
+    stamp: String,
+) -> Result<bool, CommandError> {
+    let Some(path) = settings::load()?.quick_note_file else {
+        return Err(CommandError {
+            message: "choose a file for quick notes first".into(),
+            read_only: false,
+        });
+    };
+    let path = PathBuf::from(path);
+    let written = inbox::append(&path, &text, &stamp)?;
+    if written {
+        notes.changed(std::slice::from_ref(&path));
+        let _ = app.emit_to(
+            "main",
+            FILE_WRITTEN_EVENT,
+            path.to_string_lossy().into_owned(),
+        );
+    }
+    Ok(written)
 }
 
 /// Records a file as most recently opened.
@@ -417,19 +569,13 @@ fn save_settings(settings: settings::Settings) -> Result<(), CommandError> {
 /// back a list that does not know about the other.
 #[tauri::command]
 fn remember_recent(path: String) -> Result<Vec<String>, CommandError> {
-    let mut current = settings::load()?;
-    current.remember(&path);
-    settings::save(&current)?;
-    Ok(current.recent)
+    Ok(settings::modify(|current| current.remember(&path))?.recent)
 }
 
 /// Drops a path from the recent list — for a file that has gone.
 #[tauri::command]
 fn forget_recent(path: String) -> Result<Vec<String>, CommandError> {
-    let mut current = settings::load()?;
-    current.forget(&path);
-    settings::save(&current)?;
-    Ok(current.recent)
+    Ok(settings::modify(|current| current.forget(&path))?.recent)
 }
 
 /// Points the folder watcher at the vault of a document, so edits made
@@ -1160,8 +1306,16 @@ pub fn run() {
     // Read the file before anything else exists. A window that opens with the
     // text already in hand is the whole point of the ordering (ADR 0001); a
     // window that opens and then asks for a file has already lost the frame.
-    let preloaded = invocation
-        .file
+    //
+    // A launch with no file puts back the one that was in front when the window
+    // last closed, read here for the same reason: the restored window should
+    // show its text in the first frame, not a blank one that fills a moment
+    // later. The rest of the session waits until after that frame.
+    let front = match invocation.file.as_deref() {
+        Some(path) => Some(path.to_path_buf()),
+        None => session::load().front_file(),
+    };
+    let preloaded = front
         .as_deref()
         .filter(|path| path.is_file())
         .and_then(|path| match document::read(path) {
@@ -1213,6 +1367,17 @@ pub fn run() {
             }
             focus_main_window(app);
         }))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    // Pressed, not released: the window should be there by the
+                    // time the fingers leave the keys.
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        let _ = quicknote::show(app);
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         // The dialog only ever returns a path; reading and writing it stays in
         // the core, so the webview still never touches the disk.
@@ -1222,6 +1387,25 @@ pub fn run() {
         .manage(VaultIndex::default())
         .manage(index::NoteIndex::new(index::directory()))
         .manage(Searches::default())
+        .manage(quicknote::Held::default())
+        .setup(|app| {
+            // After the window, like everything that is not the text. A key
+            // another program holds is not a reason to fail a launch; the
+            // settings screen says what happened.
+            let key = settings::load()
+                .map(|settings| settings.quick_note_key)
+                .unwrap_or_else(|_| settings::DEFAULT_QUICK_NOTE_KEY.to_string());
+            quicknote::register(app.handle(), &key);
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // The main window going is scheda quitting. The quick-note window,
+            // hidden rather than closed between uses, would otherwise keep the
+            // process alive with nothing on screen.
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.app_handle().exit(0);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             take_preloaded,
             open_file,
@@ -1261,7 +1445,15 @@ pub fn run() {
             apply_replace,
             undo_replace,
             load_settings,
-            save_settings,
+            update_settings,
+            load_session,
+            save_session,
+            show_quick_note,
+            hide_quick_note,
+            quick_note_status,
+            quick_note_target,
+            choose_quick_note_file,
+            append_quick_note,
             remember_recent,
             forget_recent
         ])
@@ -1274,6 +1466,10 @@ const OPEN_FILE_EVENT: &str = "scheda://open-file";
 
 /// The event for a second launch whose file could not be read.
 const OPEN_FAILED_EVENT: &str = "scheda://open-failed";
+
+/// The event for a file the core wrote on the window's behalf from somewhere
+/// else — a quick note — so a tab showing it can catch up.
+const FILE_WRITTEN_EVENT: &str = "scheda://file-written";
 
 /// Brings the running window forward, since the user just asked for it by
 /// launching the application again.
