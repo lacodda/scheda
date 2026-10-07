@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.13.0] - 2026-10-07
+
+### Bug Fixes
+- Keep the hover card's wrapper out of the page layout
+
+### Features
+- Make the editor a package, @lacodda/scheda-editor
+
 ## [0.12.0] - 2026-09-30
 
 ### Bug Fixes
