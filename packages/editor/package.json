@@ -1,6 +1,7 @@
 {
   "name": "@lacodda/scheda-editor",
   "version": "0.13.0",
+  "private": true,
   "description": "scheda's markdown editor for CodeMirror 6: decorations drawn over the source, tables, tasks, callouts, wikilinks, pictures and a reading mode.",
   "license": "MIT",
   "type": "module",
@@ -68,9 +69,5 @@
     "jsdom": "^30.1.2",
     "typescript": "^6.0.3",
     "vitest": "^5.0.3"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

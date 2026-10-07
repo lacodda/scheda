@@ -65,6 +65,39 @@ jobs:
         env:
           NOTES: ${{ steps.notes.outputs.content }}
 
+  # The editor package travels with the release rather than through a registry
+  # (ADR 0015): a program installs it from this release by URL. The tarball is
+  # the one `check:package` packed, unpacked and imported by name.
+  editor:
+    name: editor package
+    needs: draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check and pack the editor package
+        run: node tools/check-package.mjs --out editor-dist
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('node:fs')
+            for (const name of fs.readdirSync('editor-dist')) {
+              const data = fs.readFileSync(`editor-dist/${name}`)
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: ${{ needs.draft.outputs.release_id }},
+                name,
+                data,
+                headers: { 'content-type': 'application/gzip', 'content-length': data.length },
+              })
+            }
+
   bundle:
     name: ${{ matrix.target }}
     needs: draft

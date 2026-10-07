@@ -8,8 +8,11 @@ The editor knows markdown and nothing about files. Where a picture lives, which 
 
 ## Install
 
+The package is attached to every [scheda release](https://github.com/lacodda/scheda/releases) rather than published to a registry. Install it by URL, with the version you want in both places:
+
 ```sh
-npm install @lacodda/scheda-editor @codemirror/state @codemirror/view @codemirror/language
+pnpm add https://github.com/lacodda/scheda/releases/download/vX.Y.Z/lacodda-scheda-editor-X.Y.Z.tgz
+pnpm add @codemirror/state @codemirror/view @codemirror/language
 ```
 
 ## Use

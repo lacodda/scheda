@@ -1,6 +1,7 @@
 # 0014 — The editor is a package of this repository
 
-Accepted, 2026-10-07.
+Accepted, 2026-10-07. How the package is distributed - npm, below - is
+replaced by ADR 0015: it is attached to each release and installed by URL.
 
 ## Context
 

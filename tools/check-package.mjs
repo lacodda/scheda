@@ -10,8 +10,12 @@
 // It also holds the package's surface: the names it exports are listed below,
 // and adding or dropping one is a change to what every program using the
 // editor may rely on, so it is made here on purpose rather than by accident.
+//
+// The package reaches no registry: it is attached to each release, and a
+// program installs it from there by URL (ADR 0015). `--out <dir>` keeps the
+// tarball this check passed, so what the release carries is what was checked.
 import { execSync, execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +23,8 @@ import { gunzipSync } from 'node:zlib'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const editor = join(root, 'packages', 'editor')
+const outAt = process.argv.indexOf('--out')
+const out = outAt === -1 ? null : process.argv[outAt + 1]
 
 /** What the package exports, in alphabetical order. */
 const SURFACE = [
@@ -139,6 +145,12 @@ try {
   const extra = exported.filter((name) => !SURFACE.includes(name))
   if (missing.length > 0) failures.push(`the package no longer exports ${missing.join(', ')}`)
   if (extra.length > 0) failures.push(`the package now also exports ${extra.join(', ')} — list it here if it is meant to`)
+
+  if (out !== null && failures.length === 0) {
+    mkdirSync(out, { recursive: true })
+    copyFileSync(join(temp, tarball), join(out, tarball))
+    console.log(`kept ${join(out, tarball)}`)
+  }
 } finally {
   // The link first, on its own: removing the folder must not walk into the
   // workspace's node_modules through it.

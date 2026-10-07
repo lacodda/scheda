@@ -3,10 +3,11 @@ title: The editor as a package
 description: scheda's markdown editor for any program built on CodeMirror 6 - what it draws, what it asks of the program around it, and the colours it reads.
 ---
 
-The editor you type into in scheda is published on its own, as
-[`@lacodda/scheda-editor`](https://www.npmjs.com/package/@lacodda/scheda-editor),
-for any program built on [CodeMirror 6](https://codemirror.net/). It is the same
-code scheda runs, released with it under the same version number.
+The editor you type into in scheda is also a package of its own,
+`@lacodda/scheda-editor`, for any program built on
+[CodeMirror 6](https://codemirror.net/). It is the same code scheda runs,
+released with it under the same version number and attached to every
+[release](https://github.com/lacodda/scheda/releases) - it is not in a registry.
 
 What comes with it is everything [Markup scheda draws](/scheda/reference/markup/)
 and [Writing](/scheda/reference/writing/) describe: the markdown is drawn over its
@@ -17,9 +18,15 @@ the program, and the editor asks the program for it.
 
 ## Install
 
+From the release, by URL - put the version you want in both places:
+
 ```sh
-npm install @lacodda/scheda-editor @codemirror/state @codemirror/view @codemirror/language
+pnpm add https://github.com/lacodda/scheda/releases/download/vX.Y.Z/lacodda-scheda-editor-X.Y.Z.tgz
+pnpm add @codemirror/state @codemirror/view @codemirror/language
 ```
+
+The lockfile keeps the tarball's checksum, so the next install gets the same
+bytes. `npm install` takes the same URL.
 
 The three CodeMirror packages are peer dependencies: your program builds the
 `EditorState` and the `EditorView` with them, and the editor has to use the very
@@ -192,6 +199,6 @@ padding and height of the editor are the program's to set on its own elements.
 ## Versions
 
 The package is released with scheda, from the same repository and under the same
-version number: `@lacodda/scheda-editor@0.13.0` is the editor scheda 0.13.0
+version number: the tarball attached to scheda vX.Y.Z is the editor that release
 shipped. Until scheda 1.0 any minor version may change what is described here;
 1.0 freezes it.
