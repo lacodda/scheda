@@ -11,7 +11,7 @@ pnpm tauri build    # installers for this platform
 ```
 
 The repository is a pnpm workspace of two: the window at the root, and the
-editor in `packages/editor`, published on its own as `@lacodda/scheda-editor`
+editor in `packages/editor`, released on its own as `@lacodda/scheda-editor`
 (ADR 0014). The window reads the editor from its source, so a change to either
 shows up in `pnpm tauri dev` without building anything first.
 
@@ -36,22 +36,18 @@ mark, a missing trailing newline, text that is not UTF-8 - runs as part of
 touches reading or writing a file has to keep it green: scheda's promise is that
 a file comes back byte for byte.
 
-## The editor package
+## Releases
 
-It is released with the window, under the same version number, and published
-to npm when the release is (`.github/workflows/npm.yml`, by trusted publishing).
+A tag drafts the release on three platforms (`.github/workflows/release.yml`):
+the Windows NSIS installer, the macOS app and the Linux AppImage - exactly what
+`tools/install.ps1` and `tools/install.sh` download, and nothing beside them -
+plus the editor package's tarball, which is how programs install
+`@lacodda/scheda-editor`. Nothing goes to a registry (ADR 0015).
 
-The very first version cannot go that way: npm attaches a trusted publisher
-only to a package that already exists. So once, by hand, from a logged-in npm:
-
-```sh
-cd packages/editor
-npm publish --provenance=false
-```
-
-`prepack` builds it and copies the licence in. Then, on npmjs.com, the
-package's settings get a trusted publisher - GitHub Actions, `lacodda/scheda`,
-workflow `npm.yml` - and every later version goes up from CI with provenance.
+The draft is installed and checked on a real machine before it is published.
+Publishing it runs `.github/workflows/install.yml`, which installs the new
+release with the scripts on Windows, macOS and Linux and checks the version
+they installed.
 
 ## Architecture decisions
 

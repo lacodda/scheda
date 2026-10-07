@@ -32,7 +32,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "app", "appimage"],
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"

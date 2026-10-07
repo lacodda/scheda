@@ -1,6 +1,6 @@
 ---
 title: Opening .md with scheda
-description: How scheda registers itself as a markdown handler on Windows, and why the final choice is yours.
+description: How scheda registers itself as a markdown handler on Windows and Linux, and why the final choice is yours.
 ---
 
 Installing scheda on Windows registers it as a handler for `.md`, `.markdown`,
@@ -59,3 +59,18 @@ scheda --register      # put it back
 ```
 
 Both are meant for the installer and print nothing on success.
+
+## On Linux
+
+The [install script](/scheda/getting-started/#install) writes a launcher entry,
+`~/.local/share/applications/scheda.desktop`, that declares `text/markdown`.
+That puts scheda in the applications menu and in **Open with** for markdown
+files, and leaves whichever editor was the default where it was. To make
+scheda the default:
+
+```sh
+xdg-mime default scheda.desktop text/markdown
+```
+
+macOS has no registration yet: open a file with scheda from the terminal, or
+through Finder's *Open With → Other…*.

@@ -7,19 +7,34 @@ scheda is a markdown notepad. You double-click a `.md` file, the text is on
 screen, and the markup is drawn over it without hiding what you typed. When you
 save, the file goes back to disk with the bytes it arrived with.
 
-Today scheda is a notepad: tabs, find and replace, recent files, a theme, and
-an installer that offers itself as the handler for `.md`. There is no file tree
-and no `[[links]]` yet — those arrive with the vault. What is already here is
-the part everything else depends on: a file that opens fast and comes back
-unharmed.
+Open a single file and scheda is a notepad. Open a folder - or a file inside an
+Obsidian vault - and the same window grows a file tree, `[[links]]` between
+notes, tags and search across the vault. Underneath both is the part everything
+else depends on: a file that opens fast and comes back unharmed.
 
 ## Install
 
-Download the build for your platform from the
-[releases page](https://github.com/lacodda/scheda/releases) and run it. The
-Windows installer registers scheda as a markdown handler, so it shows up under
-*Open with* — see [Opening .md with scheda](/scheda/reference/file-associations/)
-for how to make it the default.
+One command, on Windows in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.ps1 | iex
+```
+
+and on macOS (Apple silicon) or Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.sh | sh
+```
+
+Run it again to update. It installs for your account only and needs no
+administrator. On Windows it registers scheda as a handler for markdown, so it
+shows up under *Open with*; on Linux it adds scheda to the applications menu with
+the same offer. See [Opening .md with scheda](/scheda/reference/file-associations/)
+for making it the default. On macOS and Linux it also puts `scheda` in
+`~/.local/bin`, for [the command line](/scheda/reference/the-command-line/).
+
+To install a particular release, set `SCHEDA_VERSION` to its tag (`vX.Y.Z`)
+before running the command.
 
 Building from source needs [Rust](https://rustup.rs/), Node 22 and pnpm:
 

@@ -78,13 +78,17 @@ against a 500 ms gate on every build.
 
 ## Install
 
-Grab the build for your platform from the
-[latest release](https://github.com/lacodda/scheda/releases/latest): `.msi` or
-`.exe` for Windows, `.dmg` for macOS, `.AppImage`, `.deb` or `.rpm` for Linux.
+```powershell
+irm https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.ps1 | iex   # Windows
+```
 
-The Windows installer registers scheda as a markdown handler - it appears under
-*Open with*, and making it the default is one click in Settings, because
-Windows does not let a program take that decision for you.
+```sh
+curl -fsSL https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.sh | sh   # macOS (Apple silicon), Linux
+```
+
+The same command updates an installed scheda. It installs for your account
+only, needs no administrator, and offers scheda as a handler for markdown - it
+appears under *Open with*, and making it the default stays your choice.
 
 ## Status
 
