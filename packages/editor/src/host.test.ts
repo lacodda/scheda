@@ -180,6 +180,12 @@ describe('the hover card', () => {
     const card = document.body.querySelector('.cm-md-peek')
     expect(card).not.toBeNull()
     expect(card!.parentElement!.className).toBe(v.themeClasses)
+    // Without a box of its own: the theme gives the editor's root
+    // `height: 100%` and CodeMirror `display: flex !important`, and a wrapper
+    // that took them lengthened the page by a window — found by comparing
+    // screenshots of the window before and after the move. Read as computed,
+    // because a plain inline `display` loses to CodeMirror's `!important`.
+    expect(getComputedStyle(card!.parentElement!).display).toBe('contents')
     v.destroy()
     // And it leaves with the editor.
     expect(document.body.querySelector('.cm-md-peek')).toBeNull()

@@ -68,6 +68,13 @@ class Card {
   constructor(themeClasses: string) {
     this.wrapper = document.createElement('div')
     this.wrapper.className = themeClasses
+    // No box of its own. The theme's rules for the editor's root reach anything
+    // with these classes — `height: 100%`, and CodeMirror's own
+    // `display: flex !important` — and a wrapper that took them added a
+    // window's height of empty page below the window. Only an inline
+    // `!important` outranks CodeMirror's. The card is still its child for the
+    // selectors and for what it inherits.
+    this.wrapper.style.setProperty('display', 'contents', 'important')
     this.element = document.createElement('div')
     this.element.className = 'cm-md-peek'
     this.element.setAttribute('role', 'tooltip')
