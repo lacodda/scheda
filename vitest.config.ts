@@ -22,6 +22,11 @@ export default mergeConfig(
       // The package runs under its own configuration — the one it is published
       // with — and this one adds the window's tests beside it.
       projects: ['packages/editor', { extends: true, test: { name: 'scheda' } }],
+      // Not one worker per core. Each starts its own jsdom, and vitest gives a
+      // worker sixty seconds to answer; with sixteen starting while cargo
+      // builds beside them, some did not, and the gate went red on tests that
+      // had not run. Four is the number kilna settled on for the same reason.
+      maxWorkers: 4,
     },
   }),
 )
