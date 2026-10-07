@@ -31,6 +31,10 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Check the layout
         run: node tools/check-layout.mjs
+      # The editor package as a program installing it would get it: packed,
+      # unpacked and imported by a Node process of its own.
+      - name: Check the editor package
+        run: pnpm check:package
 
   backend:
     name: ${{ matrix.os }}

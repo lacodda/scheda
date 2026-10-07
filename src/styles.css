@@ -89,6 +89,51 @@
   --scrollbar-thumb-hover: #a89c8c;
 }
 
+/* The editor's colours, in this window's palette.
+ *
+ * The editor package draws with `--editor-<name>` and falls back to dowel's
+ * tokens for any it is not given. scheda keeps a palette of its own, so it says
+ * here, once, which of its colours plays each role. Declared on the root beside
+ * the palette, so a theme switch reaches the editor through the same variables. */
+:root {
+  --editor-bg: var(--bg);
+  --editor-text: var(--text);
+  --editor-heading: var(--heading);
+  --editor-muted: var(--muted);
+  --editor-accent: var(--accent);
+  --editor-border: var(--border);
+  --editor-panel: var(--status-bg);
+  --editor-active-line: var(--active-line);
+  --editor-selection: var(--selection);
+  --editor-match: var(--match);
+  --editor-match-active: var(--match-active);
+  --editor-code: var(--code);
+  --editor-code-bg: var(--code-bg);
+  --editor-link-missing: var(--link-missing);
+  --editor-quote-rule: var(--quote-rule);
+  --editor-quote-text: var(--quote-text);
+  --editor-highlight-bg: var(--highlight-bg);
+  --editor-highlight-text: var(--highlight-text);
+  --editor-table-border: var(--table-border);
+  --editor-table-head-bg: var(--table-head-bg);
+  --editor-callout-note: var(--callout-note);
+  --editor-callout-tip: var(--callout-tip);
+  --editor-callout-success: var(--callout-success);
+  --editor-callout-question: var(--callout-question);
+  --editor-callout-warning: var(--callout-warning);
+  --editor-callout-danger: var(--callout-danger);
+  --editor-callout-example: var(--callout-example);
+  --editor-callout-quote: var(--callout-quote);
+  --editor-tok-keyword: var(--tok-keyword);
+  --editor-tok-string: var(--tok-string);
+  --editor-tok-number: var(--tok-number);
+  --editor-tok-comment: var(--tok-comment);
+  --editor-tok-function: var(--tok-function);
+  --editor-tok-type: var(--tok-type);
+  --editor-tok-property: var(--tok-property);
+  --editor-tok-punctuation: var(--tok-punctuation);
+}
+
 /* Following the system, unless the user has explicitly chosen light. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -1037,58 +1082,6 @@ body {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* The card that appears when a `[[link]]` is hovered.
- *
- * In the body rather than inside the editor: a card inside a scrolling,
- * line-wrapped document is clipped by it, and fixed positioning in the body is
- * the arrangement that survives both. The editor's own stylesheet is the theme;
- * this element is not in it, so it belongs here.
- *
- * dowel's PreviewCard is not used and its reasons are in `peek.ts`. What is kept
- * from it: the card is a shortcut for the person who can see it, so it is out of
- * the accessibility tree and everything in it is also in the note it quotes. */
-.cm-md-peek {
-  position: fixed;
-  z-index: 70;
-  width: min(24rem, calc(100vw - 2rem));
-  max-height: 14rem;
-  overflow: hidden;
-  padding: 0.6rem 0.8rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 26%);
-  /* The pointer travels from the link onto the card and has to be able to rest
-     there, which is the whole trick of a hover card — so it takes the pointer
-     rather than letting it through. */
-  pointer-events: auto;
-}
-
-.cm-md-peek[hidden] {
-  display: none;
-}
-
-.cm-md-peek-title {
-  margin-bottom: 0.35rem;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.cm-md-peek-body {
-  /* The note's opening as text, not as markup: rendering it would mean a second
-     renderer for the same format, and two renderers disagree. The source is
-     recognisable enough to tell you which note this is, which is all a card is
-     for. */
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  /* The core sends four hundred characters; this is the guard for a note whose
-     opening is four hundred characters of one word. */
-  overflow-wrap: break-word;
 }
 
 /* ------------------------------------------------------------- network -- */

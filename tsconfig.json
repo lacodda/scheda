@@ -15,7 +15,12 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "types": ["vite/client", "node"],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"] },
+    // The editor package is read from its source inside this repository, so a
+    // change to it is typechecked and tested here without building it first.
+    // Its manifest names the source under this condition; anyone installing it
+    // from the registry gets the built files.
+    "customConditions": ["scheda-source"]
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts", "eslint.config.js"]
 }

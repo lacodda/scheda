@@ -31,12 +31,16 @@ import {
   type OpenFile,
   type Session,
 } from '../core'
+import {
+  documentPath,
+  forgetDocument,
+  schedaEditor,
+  setBracketClosing,
+  setDocumentPath,
+  setSpelling,
+} from '@lacodda/scheda-editor'
 import { isInside, samePath } from '../paths'
-import { setBracketClosing } from './edits'
-import { documentPath, forgetAssets, setDocumentPath } from './images'
-import { setSpelling } from './spelling'
-import { forgetEmbeds, forgetLinks } from './wikilinks'
-import { schedaSetup } from './setup'
+import { schedaHost } from './host'
 
 /** A document with a filename, or an unnamed buffer that has never been saved. */
 export interface Tab {
@@ -227,7 +231,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
         // With the window's current answer on bracket closing, so a tab opened
         // after the setting changed does not come up with the answer the
         // window started with.
-        ...schedaSetup({ closeBrackets: options.closeBrackets }),
+        ...schedaEditor({ host: schedaHost, closeBrackets: options.closeBrackets }),
         listening,
         EditorState.readOnly.of(readOnly),
         // Which file this is. Embedded pictures are resolved relative to it,
@@ -677,14 +681,11 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       tab.orphaned = false
       // The document moved, so its relative links resolve from somewhere else
       // now — and the state carrying the old path has to be told, whether it is
-      // the live one or a stashed one.
-      forgetAssets(from)
-      // Its wikilinks too. A wikilink resolves against the vault rather than
-      // against the note, so most of them still land where they did — but the
-      // answers are filed under the old path, and a cache nobody can reach is a
-      // cache that only grows.
-      forgetLinks(from)
-      forgetEmbeds(from)
+      // the live one or a stashed one. Its wikilinks too: a wikilink resolves
+      // against the vault rather than against the note, so most of them still
+      // land where they did — but the answers are filed under the old path, and
+      // a cache nobody can reach is a cache that only grows.
+      forgetDocument(schedaHost, from)
       const index = paneShowing(tab.id)
       if (index !== -1) {
         panes[index].view.dispatch({ effects: setDocumentPath.of(to) })
@@ -830,11 +831,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       // Whatever it was before, this tab now names a file that exists.
       tab.orphaned = false
       // The document moved, so its relative links point somewhere else now.
-      if (previous) {
-        forgetAssets(previous)
-        forgetLinks(previous)
-        forgetEmbeds(previous)
-      }
+      if (previous) forgetDocument(schedaHost, previous)
       handle.view.dispatch({ effects: setDocumentPath.of(path) })
       // A file saved under a new name is no longer the read-only thing it may
       // have been opened as: the bytes just written are ours and are UTF-8.

@@ -37,17 +37,24 @@ import { Picker } from './picker'
 import { samePath } from './paths'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
-import { outlineOf } from './editor/outline'
+import {
+  WORDS_PER_MINUTE,
+  blocks,
+  bodyWords,
+  countWords,
+  forgetNotes,
+  isFocusing,
+  outlineOf,
+  readingMinutes,
+  setFocusing,
+  toggleReading,
+  type Block,
+} from '@lacodda/scheda-editor'
 import { FileTree } from './tree'
 import { NetworkPanel } from './network'
 import { RenamePreview, UndoBar } from './rename'
 import { undoRename, type RenameApplied } from './core'
-import { isFocusing, setFocusing } from './editor/focus'
-import { toggleReading } from './editor/reading'
-import { blocks, type Block } from './editor/insert'
-import { WORDS_PER_MINUTE, bodyWords, countWords, readingMinutes } from './editor/words'
-import { forgetPeeks } from './editor/peek'
-import { forgetAllEmbeds, forgetAllLinks, setFollowLink } from './editor/wikilinks'
+import { schedaHost, setFollowLink } from './editor/host'
 import { RecentFiles } from './recent'
 import { Mark, ResizeEdges, WindowButtons, useTitleBarGestures } from './titlebar'
 import { Splash, useSlowStart } from './splash'
@@ -735,9 +742,7 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
       // `[[link]]` in any open tab, and the window cannot know which without
       // resolving them all again — which is what dropping the answers makes
       // happen, lazily, on the next draw.
-      forgetAllLinks()
-      forgetAllEmbeds()
-      forgetPeeks()
+      forgetNotes(schedaHost)
 
       for (const path of changes.removed) {
         editor.orphan(path)

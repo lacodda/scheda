@@ -44,6 +44,7 @@ export default defineConfig({
 					label: 'Reference',
 					items: [{ autogenerate: { directory: 'reference' } }],
 				},
+				{ label: 'The editor as a package', slug: 'editor-package' },
 			],
 		}),
 	],

@@ -26,8 +26,10 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: docs/pnpm-lock.yaml
+      # The site keeps its own lockfile outside the repository's workspace, and
+      # pnpm would otherwise install the workspace above it instead.
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-workspace
         working-directory: docs
       - name: Build
         run: pnpm build

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 // The default import, not a named one: a JSON module has only a default export
@@ -14,6 +14,13 @@ export default defineConfig({
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    // The editor package from its source rather than its build: its manifest
+    // names the source under this condition (see tsconfig.json).
+    conditions: ['scheda-source', ...defaultClientConditions],
+  },
+  // The same for code Vite runs outside a page — the test runner's modules.
+  ssr: {
+    resolve: { conditions: ['scheda-source', ...defaultServerConditions] },
   },
   clearScreen: false,
   build: {

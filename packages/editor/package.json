@@ -1,0 +1,76 @@
+{
+  "name": "@lacodda/scheda-editor",
+  "version": "0.12.0",
+  "description": "scheda's markdown editor for CodeMirror 6: decorations drawn over the source, tables, tasks, callouts, wikilinks, pictures and a reading mode.",
+  "license": "MIT",
+  "type": "module",
+  "author": "Kirill Lakhtachev <lahtachev@gmail.com>",
+  "homepage": "https://lacodda.github.io/scheda/editor-package/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lacodda/scheda.git",
+    "directory": "packages/editor"
+  },
+  "bugs": {
+    "url": "https://github.com/lacodda/scheda/issues"
+  },
+  "keywords": [
+    "codemirror",
+    "markdown",
+    "editor",
+    "wikilinks",
+    "obsidian"
+  ],
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "scheda-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepack": "node ../../tools/prepare-package.mjs"
+  },
+  "peerDependencies": {
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/lang-rust": "^6.0.2",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/search": "^6.7.2",
+    "@lezer/highlight": "^1.2.5",
+    "@lezer/markdown": "^1.7.2",
+    "mermaid": "12.1.0"
+  },
+  "devDependencies": {
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@types/node": "^26.6.4",
+    "jsdom": "^30.1.2",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

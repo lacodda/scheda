@@ -1,7 +1,8 @@
 //! Guards the facts that must agree before a version is tagged.
 //!
-//! scheda states its version in three files — the crate manifest, the Tauri
-//! config and `package.json` — and describes itself in two of them. Nothing
+//! scheda states its version in four files — the crate manifest, the Tauri
+//! config, `package.json` and the editor package's manifest — and describes
+//! itself in two of them. Nothing
 //! fails when one of the three is left behind: the build is green, the bundle
 //! is produced, and the installer simply advertises a version that was never
 //! released. The mismatch only becomes visible after the tag, which is the one
@@ -83,6 +84,21 @@ fn every_manifest_states_the_same_version() {
 }
 
 #[test]
+fn the_editor_package_is_released_with_the_window() {
+    // The package is built from this repository and published by the same tag,
+    // so a program that pins `@lacodda/scheda-editor@X` gets the editor scheda X
+    // shipped. A package left a version behind would be published under a
+    // number that names a different editor.
+    let crate_version = cargo_field("version");
+    let package_version = json_field("packages/editor/package.json", "version");
+
+    assert_eq!(
+        package_version, crate_version,
+        "packages/editor/package.json says {package_version} while Cargo.toml says {crate_version}"
+    );
+}
+
+#[test]
 fn the_product_is_described_the_same_way_everywhere() {
     let crate_description = cargo_field("description");
     let npm_description = json_field("package.json", "description");
@@ -115,8 +131,22 @@ fn there_is_exactly_one_readme() {
 fn readme_links_are_absolute() {
     // Relative links work on GitHub and break everywhere the README is
     // re-rendered — crates.io, npm, the docs site. Images too: a relative
-    // `src` shows a broken frame on every page but one.
-    let readme = read("README.md");
+    // `src` shows a broken frame on every page but one. The editor package's
+    // README is the page npm shows for it, so it is held to the same rule.
+    let mut offenders = Vec::new();
+    for file in ["README.md", "packages/editor/README.md"] {
+        offenders.extend(relative_links(file));
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "a README has relative links, which break wherever it is re-rendered: {offenders:?}"
+    );
+}
+
+/// The links in a markdown file that point at something relative to it.
+fn relative_links(file: &str) -> Vec<String> {
+    let readme = read(file);
     let mut offenders = Vec::new();
 
     for (number, line) in readme.lines().enumerate() {
@@ -132,15 +162,11 @@ fn readme_links_are_absolute() {
                     && !target.starts_with('#')
                     && !target.starts_with("mailto:");
                 if local && !target.is_empty() {
-                    offenders.push(format!("line {}: {target}", number + 1));
+                    offenders.push(format!("{file} line {}: {target}", number + 1));
                 }
                 rest = &rest[at + marker.len()..];
             }
         }
     }
-
-    assert!(
-        offenders.is_empty(),
-        "the README has relative links, which break wherever it is re-rendered: {offenders:?}"
-    );
+    offenders
 }

@@ -1,0 +1,620 @@
+// The editor's own look. Kept as a CodeMirror theme rather than a stylesheet so
+// the decoration classes and their styling stay in one place — and so a program
+// using the editor has nothing to import but the editor. The colours are the
+// program's, through the custom properties `tokens.ts` names.
+import { EditorView } from '@codemirror/view'
+import { FONT_SIZE, token } from './tokens.js'
+
+/** The kinds Obsidian ships, mapped onto the eight colours the palette
+ *  defines. Several names mean the same thing — `tip` and `hint`, `danger` and
+ *  `error` — and Obsidian treats them as aliases, so scheda does too. */
+type CalloutColour =
+  | 'note'
+  | 'tip'
+  | 'success'
+  | 'question'
+  | 'warning'
+  | 'danger'
+  | 'example'
+  | 'quote'
+
+const CALLOUT_COLOURS: Record<string, CalloutColour> = {
+  note: 'note',
+  abstract: 'note',
+  summary: 'note',
+  tldr: 'note',
+  info: 'note',
+  todo: 'note',
+  tip: 'tip',
+  hint: 'tip',
+  important: 'tip',
+  success: 'success',
+  check: 'success',
+  done: 'success',
+  question: 'question',
+  help: 'question',
+  faq: 'question',
+  warning: 'warning',
+  caution: 'warning',
+  attention: 'warning',
+  failure: 'danger',
+  fail: 'danger',
+  missing: 'danger',
+  danger: 'danger',
+  error: 'danger',
+  bug: 'danger',
+  example: 'example',
+  quote: 'quote',
+  cite: 'quote',
+}
+
+/** One rule per callout kind: the quote rule in the kind's colour, and the
+ *  kind's colour again, very faintly, behind the block. */
+function calloutColours(): Record<string, Record<string, string>> {
+  const rules: Record<string, Record<string, string>> = {}
+  for (const [kind, colour] of Object.entries(CALLOUT_COLOURS)) {
+    rules[`.cm-md-callout-${kind}`] = {
+      borderLeftColor: token(`callout-${colour}`),
+      color: token('text'),
+      fontStyle: 'normal',
+      // `color-mix` keeps the tint honest in both themes: it is the kind's own
+      // colour, thinned into whatever the background happens to be.
+      backgroundColor: `color-mix(in srgb, ${token(`callout-${colour}`)} 8%, transparent)`,
+    }
+  }
+  return rules
+}
+
+export const schedaTheme = EditorView.theme({
+  '&': {
+    // The size comes from the settings, through a variable the stylesheet sets;
+    // stating it here would quietly win over whatever the user chose.
+    fontSize: FONT_SIZE,
+    height: '100%',
+    color: token('text'),
+    backgroundColor: token('bg'),
+  },
+  '.cm-scroller': {
+    fontFamily: 'ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace',
+    lineHeight: '1.7',
+    padding: '1.5rem 0',
+  },
+  // The reading column is set on the content's own width, not with a max-width
+  // and auto margins: CodeMirror measures line wrapping against the content
+  // element, so constraining it that way leaves the text hugging one edge and
+  // wrapping against the wrong width. Padding the scroller keeps the layout
+  // CodeMirror expects and still centres the column.
+  '.cm-content': {
+    caretColor: token('accent'),
+    padding: '0',
+  },
+  '.cm-line': {
+    padding: '0 1rem',
+  },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: token('accent'), borderLeftWidth: '2px' },
+  '.cm-activeLine': { backgroundColor: token('active-line') },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: token('selection'),
+  },
+
+  // Markup drawn over the source. Sizes stay close to the body text: this is a
+  // notepad that shows structure, not a preview pane.
+  '.cm-md-h1': { fontSize: '1.55em', fontWeight: '700', color: token('heading') },
+  '.cm-md-h2': { fontSize: '1.35em', fontWeight: '700', color: token('heading') },
+  '.cm-md-h3': { fontSize: '1.2em', fontWeight: '600', color: token('heading') },
+  '.cm-md-h4': { fontSize: '1.1em', fontWeight: '600', color: token('heading') },
+  '.cm-md-h5': { fontWeight: '600', color: token('heading') },
+  '.cm-md-h6': { fontWeight: '600', color: token('muted') },
+  '.cm-md-strong': { fontWeight: '700', color: token('heading') },
+  '.cm-md-emphasis': { fontStyle: 'italic' },
+  '.cm-md-strike': { textDecoration: 'line-through', color: token('muted') },
+  '.cm-md-code': {
+    fontSize: '0.92em',
+    padding: '0.1em 0.35em',
+    borderRadius: '4px',
+    backgroundColor: token('code-bg'),
+    color: token('code'),
+  },
+  // Inside a table the pill has to occupy exactly its characters, or the
+  // columns it sits in stop lining up — measured: `Ctrl+Shift+O` in the pill
+  // above is 12.21 characters wide where the source has 12, and the error
+  // accumulates across a row.
+  //
+  // So the width comes back to the text's own, and the background is painted
+  // outside it with a spread shadow rather than with padding. `box-shadow`
+  // adds nothing to layout, which is the whole point of using it here.
+  '.cm-md-table-line .cm-md-code': {
+    fontSize: '1em',
+    padding: '0.1em 0',
+    boxShadow: `0 0 0 0.25ch ${token('code-bg')}`,
+  },
+  '.cm-md-link': { color: token('accent') },
+
+  // ----------------------------------------------------------- wikilinks --
+
+  // A wikilink is drawn as its label, brackets and all replaced by a widget: the
+  // label of `[[plan|the plan]]` is not a substring of the source in the place it
+  // has to appear, so there is nothing for a mark to style.
+  //
+  // Underlined rather than only coloured. The accent is already the colour of an
+  // ordinary markdown link, and a reader should be able to tell a link that goes
+  // to a note in this vault from one that goes to the web — the underline is what
+  // says "this one is inside".
+  '.cm-md-wikilink': {
+    color: token('accent'),
+    textDecoration: 'underline',
+    textDecorationStyle: 'solid',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '0.18em',
+    cursor: 'pointer',
+    borderRadius: '2px',
+  },
+  '.cm-md-wikilink:hover': {
+    textDecorationThickness: '2px',
+  },
+  // Reachable by keyboard, so the focus has to be visible. The same ring the
+  // rest of the window uses.
+  '.cm-md-wikilink:focus-visible, .cm-md-embed-head:focus-visible': {
+    outline: `2px solid ${token('accent')}`,
+    outlineOffset: '1px',
+  },
+  // A link to a note that has not been written yet. Dashed and dimmer, the way
+  // Obsidian draws one — not because it is broken but because it is an
+  // invitation: clicking it offers to write the note.
+  '.cm-md-wikilink-missing': {
+    color: token('link-missing'),
+    textDecorationStyle: 'dashed',
+  },
+
+  // ------------------------------------------------------------- embeds --
+
+  // `![[note]]` shown as a card in the flow of the text: the note's name along
+  // the top, its opening under it. The whole line is replaced, like a picture's
+  // is, because a hidden line keeps its height and leaves a blank band above
+  // every embed.
+  '.cm-md-embed': {
+    margin: '0.4rem 1rem 0.6rem',
+    padding: '0.5rem 0.8rem 0.6rem',
+    background: token('panel'),
+    border: `1px solid ${token('border')}`,
+    borderLeft: `3px solid ${token('accent')}`,
+    borderRadius: '5px',
+  },
+  '.cm-md-embed-head': {
+    display: 'block',
+    marginBottom: '0.3rem',
+    fontSize: '0.85em',
+    color: token('accent'),
+    textDecoration: 'underline',
+    textUnderlineOffset: '0.18em',
+    cursor: 'pointer',
+    borderRadius: '2px',
+  },
+  // The quoted text, dimmer than the note it sits in: it belongs to another
+  // note, and the reader should be able to see the join.
+  '.cm-md-embed-body': {
+    color: token('quote-text'),
+    whiteSpace: 'pre-wrap',
+    // No scrollbar and no height limit fought over: the core sends an opening,
+    // not a note, so there is nothing here to overflow.
+    fontSize: '0.95em',
+  },
+
+  '.cm-md-highlight': {
+    backgroundColor: token('highlight-bg'),
+    color: token('highlight-text'),
+    borderRadius: '3px',
+    padding: '0.05em 0.15em',
+  },
+
+  // Syntax markers on an inactive line. Collapsed to nothing rather than made
+  // transparent: leaving the width behind is the tell of a fake WYSIWYG.
+  '.cm-md-marker-hidden': { display: 'none' },
+
+  // ------------------------------------------------------------- blocks --
+
+  // Lists. The indent is hanging: a wrapped item lines up under its own text
+  // rather than sliding back under the bullet, which is the difference between
+  // a list that reads as a list and one that reads as ragged paragraphs.
+  //
+  // `text-indent` is negative by exactly the padding, so the first line starts
+  // where the bullet is and every wrapped line starts one indent in. This costs
+  // no measurement and survives any font size.
+  '.cm-md-list-line': {
+    paddingLeft: '2.6rem',
+    textIndent: '-1.6rem',
+  },
+  '.cm-md-list-mark': { color: token('accent') },
+
+  // Checkboxes. Sized in `em` so they follow the reading size.
+  '.cm-md-task': {
+    appearance: 'none',
+    width: '0.95em',
+    height: '0.95em',
+    margin: '0 0.35em 0 0',
+    verticalAlign: '-0.1em',
+    border: `1.5px solid ${token('muted')}`,
+    borderRadius: '3px',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    boxSizing: 'border-box',
+    position: 'relative',
+  },
+  '.cm-md-task:checked': {
+    borderColor: token('accent'),
+    backgroundColor: token('accent'),
+  },
+  // The tick, drawn rather than loaded: an inline SVG in a data URI is blocked
+  // by the content policy, which is how the window's own mark went missing
+  // once already.
+  //
+  // Two crossed gradients were the first attempt and they made a roof, not a
+  // tick — visible only in a screenshot of the running app. A clipped box is
+  // unambiguous: the polygon *is* the tick's outline.
+  '.cm-md-task:checked::after': {
+    content: '""',
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    backgroundColor: token('bg'),
+    clipPath:
+      'polygon(20% 52%, 32% 40%, 42% 52%, 68% 22%, 80% 34%, 42% 78%)',
+  },
+
+  // Quotes. The rule is drawn with a border on the line, so it runs unbroken
+  // down a wrapped paragraph.
+  '.cm-md-quote-line': {
+    paddingLeft: '1.6rem',
+    borderLeft: `3px solid ${token('quote-rule')}`,
+    marginLeft: '1rem',
+    color: token('quote-text'),
+    fontStyle: 'italic',
+  },
+
+  // Callouts. A quote that named its kind: the rule takes the kind's colour and
+  // the whole block gets a tint of it, so it reads as a panel without a border
+  // box that would fight the text column.
+  '.cm-md-callout-head': { fontWeight: '600' },
+  ...calloutColours(),
+
+  // Tables. The cells are not laid out in a grid — that would be a rendering,
+  // and the source is the truth — but the delimiters are dimmed so the columns
+  // read as columns.
+  '.cm-md-table-line': {
+    backgroundColor: token('table-head-bg'),
+    borderLeft: `3px solid ${token('table-border')}`,
+    paddingLeft: '0.7rem',
+    marginLeft: '1rem',
+  },
+  '.cm-md-table-delimiter': { color: token('muted'), opacity: '0.7' },
+  // The space that lines a column up. Inline-block so its width counts, and
+  // nothing inside it: it is layout standing in for characters that are not
+  // there, and it must not be selectable or copyable.
+  '.cm-md-table-pad': {
+    display: 'inline-block',
+    userSelect: 'none',
+  },
+
+  // Fenced and indented code, as a block. The inline `.cm-md-code` above is a
+  // different thing and keeps its pill.
+  '.cm-md-code-line': {
+    backgroundColor: token('code-bg'),
+    paddingLeft: '1.7rem',
+    marginLeft: '1rem',
+  },
+
+  // ------------------------------------------------------------ pictures --
+
+  // Drawn under the line that names it, never in place of it: the source stays
+  // there to be edited (ADR 0002).
+  '.cm-md-image': {
+    padding: '0.4rem 1rem 0.6rem',
+  },
+  '.cm-md-image img': {
+    display: 'block',
+    maxWidth: '100%',
+    // A tall picture must not push the text off screen; the reader can open the
+    // file itself for the full thing.
+    maxHeight: '60vh',
+    borderRadius: '6px',
+    border: `1px solid ${token('border')}`,
+  },
+  // A picture that failed to decode leaves nothing behind. The line above still
+  // says what was meant, which beats a broken-image glyph sitting in the prose.
+  '.cm-md-image-failed': { display: 'none' },
+
+  // ------------------------------------------------------------ diagrams --
+
+  // A mermaid block in reading mode. Centred and scaled down to the column,
+  // like a picture; the placeholder and a refusal are quiet text in the same
+  // box, so nothing jumps when the drawing arrives.
+  '.cm-mermaid': {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '0.6rem 1rem',
+    color: token('muted'),
+    fontSize: '0.85em',
+  },
+  '.cm-mermaid svg': {
+    maxWidth: '100%',
+    height: 'auto',
+  },
+  '.cm-mermaid--failed': {
+    display: 'block',
+  },
+  '.cm-mermaid-reason': {
+    margin: '0 0 0.4rem',
+  },
+  '.cm-mermaid--failed pre': {
+    margin: '0',
+    padding: '0.5rem 0.7rem',
+    backgroundColor: token('code-bg'),
+    color: token('text'),
+    whiteSpace: 'pre-wrap',
+  },
+
+  // -------------------------------------------------------- front matter --
+
+  '.cm-md-frontmatter-header': {
+    display: 'block',
+    width: 'calc(100% - 2rem)',
+    margin: '0 1rem 0.4rem',
+    padding: '0.35rem 0.7rem',
+    textAlign: 'left',
+    font: 'inherit',
+    fontSize: '0.85em',
+    color: token('muted'),
+    background: token('panel'),
+    border: `1px solid ${token('border')}`,
+    borderRadius: '5px',
+    cursor: 'pointer',
+  },
+  '.cm-md-frontmatter-header:hover': {
+    color: token('accent'),
+    borderColor: token('accent'),
+  },
+
+  // The form the header opens into: a key column and a control column, in the
+  // header's own frame so the two read as one thing opened and closed.
+  '.cm-fm-form': {
+    display: 'grid',
+    gap: '0.25rem',
+    width: 'calc(100% - 2rem)',
+    margin: '0 1rem 0.4rem',
+    padding: '0.35rem 0.7rem 0.55rem',
+    fontFamily: 'system-ui, "Segoe UI", sans-serif',
+    fontSize: '0.85em',
+    background: token('panel'),
+    border: `1px solid ${token('border')}`,
+    borderRadius: '5px',
+    boxSizing: 'border-box',
+  },
+  '.cm-fm-bar': {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '0.15rem',
+  },
+  '.cm-fm-fold, .cm-fm-source, .cm-fm-back': {
+    padding: '0',
+    font: 'inherit',
+    color: token('muted'),
+    background: 'none',
+    border: '0',
+    cursor: 'pointer',
+  },
+  '.cm-fm-fold:hover, .cm-fm-source:hover, .cm-fm-back:hover': { color: token('accent') },
+  '.cm-fm-back': {
+    marginLeft: '0.8rem',
+    fontSize: '0.8em',
+    fontFamily: 'system-ui, "Segoe UI", sans-serif',
+  },
+  '.cm-fm-row': {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(5rem, 11rem) 1fr auto',
+    alignItems: 'center',
+    gap: '0.6rem',
+    minHeight: '1.8rem',
+  },
+  '.cm-fm-key': {
+    overflow: 'hidden',
+    color: token('muted'),
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  '.cm-fm-input, .cm-fm-add, .cm-fm-pill-add': {
+    minWidth: '0',
+    padding: '0.15rem 0.4rem',
+    font: 'inherit',
+    color: token('text'),
+    background: token('bg'),
+    border: `1px solid ${token('border')}`,
+    borderRadius: '4px',
+    outline: 'none',
+  },
+  '.cm-fm-input:focus, .cm-fm-add:focus, .cm-fm-pill-add:focus': { borderColor: token('accent') },
+  '.cm-fm-input:disabled': { color: token('text'), background: 'transparent', borderColor: 'transparent' },
+  '.cm-fm-add': { justifySelf: 'start', width: '11rem', marginTop: '0.2rem' },
+  '.cm-fm-check': { justifySelf: 'start', margin: '0', accentColor: token('accent') },
+  '.cm-fm-pills': { display: 'flex', flexWrap: 'wrap', gap: '0.3rem', alignItems: 'center' },
+  '.cm-fm-pill': {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.2rem',
+    padding: '0.05rem 0.45rem',
+    color: token('text'),
+    background: token('code-bg'),
+    borderRadius: '999px',
+  },
+  '.cm-fm-pill-remove, .cm-fm-remove': {
+    padding: '0 0.2rem',
+    font: 'inherit',
+    lineHeight: '1',
+    color: token('muted'),
+    background: 'none',
+    border: '0',
+    cursor: 'pointer',
+  },
+  '.cm-fm-pill-remove:hover, .cm-fm-remove:hover': { color: token('accent') },
+  '.cm-fm-pill-add': { width: '6rem' },
+  '.cm-fm-complex': {
+    overflow: 'hidden',
+    color: token('muted'),
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+
+  // ------------------------------------------------------------ focus mode --
+
+  // Everything but the section being written, faded. Not hidden: where the
+  // section sits among the others is part of writing it.
+  '.cm-line.cm-focus-faded': { opacity: '0.3', transition: 'opacity 120ms ease-out' },
+  '&.cm-focusing .cm-activeLine': { backgroundColor: 'transparent' },
+
+  // ---------------------------------------------------------- reading mode --
+
+  // No caret, no active line: nothing that says "your cursor is here", because
+  // in reading mode it is not anywhere that matters.
+  // `!important` because the base theme draws the caret through
+  // `.cm-focused .cm-cursor`, which outranks a class on the editor. The gate
+  // caught this: the class was applied and the caret stayed on screen anyway.
+  '&.cm-reading .cm-cursor, &.cm-reading .cm-dropCursor': { display: 'none !important' },
+  '&.cm-reading .cm-activeLine': { backgroundColor: 'transparent' },
+
+  // A horizontal rule. The three dashes stay in the text — they are the
+  // document — but they are dimmed and the line is drawn under them.
+  '.cm-md-rule': { color: token('muted'), opacity: '0.5' },
+  // Dashes drawn as the line they stand for. The characters keep their place —
+  // the width is unchanged, so a table's columns still line up — and a rule is
+  // painted through the middle of them.
+  '.cm-md-drawn-rule': {
+    color: 'transparent',
+    position: 'relative',
+  },
+  '.cm-md-drawn-rule::after': {
+    content: '""',
+    position: 'absolute',
+    left: '0',
+    right: '0',
+    top: '50%',
+    borderTop: `1px solid ${token('table-border')}`,
+  },
+  '.cm-md-rule-line': {
+    borderBottom: `1px solid ${token('border')}`,
+  },
+
+  // Search. CodeMirror's panel is plain HTML controls, which look like nothing
+  // else in the window until they are told otherwise.
+  //
+  // Every selector here is prefixed with `&`, which compiles to the theme's own
+  // class: the base theme styles panels as `&light .cm-panels`, and a bare
+  // `.cm-panels` loses to it on specificity — which is why the panel came up
+  // grey with black text on a dark window.
+  '& .cm-panels': {
+    backgroundColor: token('panel'),
+    color: token('text'),
+    borderBottom: `1px solid ${token('border')}`,
+  },
+  '& .cm-panels.cm-panels-top': { borderBottom: `1px solid ${token('border')}` },
+  '& .cm-panel.cm-search': {
+    // Browser-drawn controls (the checkboxes especially) take their colours
+    // from color-scheme, not from ours, and stay white on a dark panel without
+    // it. `inherit` follows the root, which is what the theme setting drives.
+    colorScheme: 'inherit',
+    padding: '0.5rem 0.75rem',
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+    fontSize: '12px',
+  },
+  '& .cm-panel.cm-search input, & .cm-panel.cm-search button, & .cm-panel.cm-search label': {
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+  },
+  '& .cm-panel.cm-search input:not([type=checkbox])': {
+    padding: '0.25rem 0.4rem',
+    border: `1px solid ${token('border')}`,
+    borderRadius: '4px',
+    backgroundColor: token('bg'),
+    color: token('text'),
+  },
+  '& .cm-panel.cm-search input:not([type=checkbox]):focus': {
+    outline: 'none',
+    borderColor: token('accent'),
+  },
+  '& .cm-panel.cm-search button:not([name=close])': {
+    padding: '0.25rem 0.6rem',
+    marginLeft: '0.3rem',
+    border: `1px solid ${token('border')}`,
+    borderRadius: '4px',
+    backgroundColor: token('bg'),
+    backgroundImage: 'none',
+    color: token('text'),
+  },
+  '& .cm-panel.cm-search button:not([name=close]):hover': {
+    borderColor: token('accent'),
+    color: token('accent'),
+  },
+  '& .cm-panel.cm-search label': { color: token('muted') },
+  '& .cm-panel.cm-search [name=close]': {
+    color: token('muted'),
+    fontSize: '16px',
+    padding: '0 0.3rem',
+  },
+  '& .cm-panel.cm-search [name=close]:hover': { color: token('accent') },
+
+  // Matches. The current one has to stand apart from the rest, or "next match"
+  // moves something the eye cannot follow.
+  '& .cm-searchMatch': { backgroundColor: token('match') },
+  '& .cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: token('match-active'),
+    outline: `1px solid ${token('accent')}`,
+  },
+  '& .cm-selectionMatch': { backgroundColor: token('match') },
+
+  // The card that appears when a `[[link]]` is hovered.
+  //
+  // In the body rather than inside the editor: a card inside a scrolling,
+  // line-wrapped document is clipped by it, and fixed positioning in the body
+  // is the arrangement that survives both. It hangs in a wrapper carrying this
+  // theme's classes (`peek.ts`), which is what lets these rules reach it.
+  //
+  // dowel's PreviewCard is not used and its reasons are in `peek.ts`. What is
+  // kept from it: the card is a shortcut for the person who can see it, so it
+  // is out of the accessibility tree and everything in it is also in the note
+  // it quotes.
+  '.cm-md-peek': {
+    position: 'fixed',
+    zIndex: '70',
+    width: 'min(24rem, calc(100vw - 2rem))',
+    maxHeight: '14rem',
+    overflow: 'hidden',
+    padding: '0.6rem 0.8rem 0.7rem',
+    border: `1px solid ${token('border')}`,
+    borderRadius: '6px',
+    background: token('bg'),
+    boxShadow: '0 8px 28px rgb(0 0 0 / 26%)',
+    // The pointer travels from the link onto the card and has to be able to
+    // rest there, which is the whole trick of a hover card — so it takes the
+    // pointer rather than letting it through.
+    pointerEvents: 'auto',
+  },
+  '.cm-md-peek[hidden]': { display: 'none' },
+  '.cm-md-peek-title': {
+    marginBottom: '0.35rem',
+    color: token('accent'),
+    fontSize: '13px',
+    fontWeight: '600',
+  },
+  '.cm-md-peek-body': {
+    // The note's opening as text, not as markup: rendering it would mean a
+    // second renderer for the same format, and two renderers disagree. The
+    // source is recognisable enough to tell you which note this is, which is
+    // all a card is for.
+    color: token('text'),
+    fontSize: '13px',
+    lineHeight: '1.5',
+    whiteSpace: 'pre-wrap',
+    // The host sends a short opening; this is the guard for one whose opening
+    // is four hundred characters of one word.
+    overflowWrap: 'break-word',
+  },
+})

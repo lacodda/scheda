@@ -8,7 +8,7 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
-      // The decoration tests mount a real CodeMirror view. Asserting against
+      // The tab and pane tests mount real CodeMirror views. Asserting against
       // rendered spans is the only way to prove what the reader actually sees.
       environment: 'jsdom',
       // Both extensions: a test that renders a component is written in JSX,
@@ -16,8 +16,12 @@ export default mergeConfig(
       // without ever running.
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
       // The rectangles jsdom does not have and CodeMirror asks for; see the
-      // file for why a missing one fails tests at random.
-      setupFiles: ['src/test/dom.ts'],
+      // file for why a missing one fails tests at random. The editor package
+      // keeps it, since every view it mounts needs it.
+      setupFiles: ['packages/editor/test/dom.ts'],
+      // The package runs under its own configuration — the one it is published
+      // with — and this one adds the window's tests beside it.
+      projects: ['packages/editor', { extends: true, test: { name: 'scheda' } }],
     },
   }),
 )

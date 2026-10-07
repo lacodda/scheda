@@ -10,9 +10,13 @@
 // the text is on screen (ADR 0001).
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { exportPage, inlinePicture, resolveAsset, resolveWikilinks } from './core'
-import { renderPage, resourcesOf, type Resources } from './editor/html'
-import { draw } from './editor/mermaid'
-import { relativeFrom } from './editor/wikilinks'
+import {
+  drawDiagram,
+  relativeFrom,
+  renderPage,
+  resourcesOf,
+  type Resources,
+} from '@lacodda/scheda-editor'
 import { basename, dirname } from './paths'
 import type { EditorHandle } from './editor/mount'
 
@@ -50,7 +54,7 @@ async function resourcesFor(editor: EditorHandle, forFile: boolean): Promise<Res
   for (const source of new Set(wanted.diagrams)) {
     // Light, whatever the window is: paper is white, and so is a page opened in
     // somebody else's browser. A diagram that does not draw stays its code.
-    const svg = await draw(source, 'default').catch(() => null)
+    const svg = await drawDiagram(source, 'default').catch(() => null)
     if (svg !== null) diagrams.set(source, svg)
   }
   return { images, diagrams }

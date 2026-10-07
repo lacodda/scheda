@@ -8,8 +8,7 @@
 import { type DragEvent, useEffect, useState } from 'react'
 import { EditorSelection } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { outlineOf, type Heading } from './editor/outline'
-import { moveSection } from './editor/sections'
+import { moveSection, outlineOf, type Heading } from '@lacodda/scheda-editor'
 import type { EditorHandle } from './editor/mount'
 
 /** Re-reads the outline whenever the document changes.

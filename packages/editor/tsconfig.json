@@ -1,0 +1,21 @@
+{
+  // Node's own resolution, not a bundler's: the package is opened by Node as
+  // often as by Vite — a test runner loads it as it was published — and Node
+  // refuses an import without an extension. `nodenext` makes the compiler
+  // refuse it first.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

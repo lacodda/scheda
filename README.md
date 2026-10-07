@@ -103,6 +103,9 @@ keyboard, the markup it draws, settings, file associations, and why a file is
 saved byte for byte. Architecture decision records are in
 [`docs/adr`](https://github.com/lacodda/scheda/tree/main/docs/adr).
 
+The editor itself is a package for any CodeMirror 6 program:
+[`@lacodda/scheda-editor`](https://lacodda.github.io/scheda/editor-package/).
+
 Building it yourself:
 [CONTRIBUTING.md](https://github.com/lacodda/scheda/blob/main/CONTRIBUTING.md).
 
