@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.14.0] - 2026-10-07
+
+### Build
+- Attach the package to each release instead of publishing it to npm
+
+### Features
+- Install scheda with one command per platform
+
 ## [0.13.0] - 2026-10-07
 
 ### Bug Fixes

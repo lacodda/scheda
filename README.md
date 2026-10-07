@@ -92,7 +92,7 @@ appears under *Open with*, and making it the default stays your choice.
 
 ## Status
 
-v0.13.0, in daily use. Everything above works, including file management from
+v0.14.0, in daily use. Everything above works, including file management from
 the tree - into the recycle bin, never an unlink - folder watching, use as
 `$EDITOR`, and an index of the vault kept in scheda's own directory and checked
 against the disk on every open. Checked on every build against a corpus of deliberately awkward
