@@ -437,7 +437,7 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
       if (!current) return
       applyAppearance(current)
       editor.configure({
-        closeBrackets: current.close_brackets,
+        closeBrackets: current.closeBrackets,
         spellcheck: current.spellcheck,
         autosave: current.autosave,
       })

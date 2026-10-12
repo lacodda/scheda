@@ -18,9 +18,22 @@
 //! start of the text) and are only ever handed back to the editor; the core
 //! stores them without reading anything into them. A file that changed since is
 //! the window's to clamp, because only the window knows how long it now is.
+//!
+//! The format is frozen and numbered like the settings' (ADR 0016).
 
+use crate::stored::{self, Found, Kind};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// The session file's formats. 0 is everything before formats were numbered
+/// (up to 0.14), already in the shape 1 froze.
+pub const FORMAT: Kind = Kind {
+    name: "session",
+    first: 0,
+    current: 1,
+    steps: &[stored::numbered],
+    pretty: true,
+};
 
 /// One tab as it was left.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -68,10 +81,8 @@ impl Session {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
-    #[error("{0}")]
-    Io(#[from] std::io::Error),
-    #[error("the session file is not valid JSON: {0}")]
-    Malformed(#[from] serde_json::Error),
+    #[error(transparent)]
+    Write(#[from] stored::WriteError),
     #[error("{0}")]
     Settings(#[from] crate::settings::SettingsError),
 }
@@ -85,24 +96,30 @@ fn file_path() -> Result<PathBuf, SessionError> {
 /// open over a file of tab positions has its priorities backwards — but the
 /// file is left where it is for anybody who wants to look.
 pub fn load() -> Session {
-    let Ok(path) = file_path() else {
-        return Session::default();
-    };
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
+    file_path().map(|path| load_from(&path)).unwrap_or_default()
+}
+
+fn load_from(path: &Path) -> Session {
+    match stored::read(path, &FORMAT) {
+        Ok(Found::Read(session)) => session,
+        Ok(Found::Newer { value, .. }) => value.unwrap_or_default(),
+        Ok(Found::Missing) | Err(_) => Session::default(),
+    }
 }
 
 /// Writes the session whole.
+///
+/// Not over a session a newer scheda left: that window's tabs come back when
+/// that version runs again, and this one starts from what it read.
 pub fn save(session: &Session) -> Result<(), SessionError> {
-    let path = file_path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+    save_to(&file_path()?, session)
+}
+
+fn save_to(path: &Path, session: &Session) -> Result<(), SessionError> {
+    match stored::write(path, &FORMAT, session) {
+        Ok(()) | Err(stored::WriteError::Newer { .. }) => Ok(()),
+        Err(error) => Err(error.into()),
     }
-    let text = serde_json::to_string_pretty(session)?;
-    crate::settings::write_atomically(&path, text.as_bytes())?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -168,5 +185,21 @@ mod tests {
                 .expect("parses");
         assert_eq!(newer.tabs[0].path.as_deref(), Some("/b.md"));
         assert!(!newer.tabs[0].pinned);
+    }
+
+    #[test]
+    fn a_session_from_before_formats_is_read_and_a_newer_one_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.json");
+        std::fs::write(&path, r#"{"tabs":[{"path":"/a.md","head":4}],"active":0}"#).unwrap();
+        let session = load_from(&path);
+        assert_eq!(session.front_file(), Some(PathBuf::from("/a.md")));
+        assert_eq!(session.tabs[0].head, 4);
+
+        let newer = r#"{"format":2,"tabs":[{"path":"/b.md"}],"active":0,"windows":[]}"#;
+        std::fs::write(&path, newer).unwrap();
+        assert_eq!(load_from(&path).front_file(), Some(PathBuf::from("/b.md")));
+        save_to(&path, &Session::default()).expect("a refused write is not an error");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), newer);
     }
 }

@@ -20,13 +20,13 @@ export function apply(settings: Settings) {
     root.setAttribute('data-theme', settings.theme)
   }
 
-  root.style.setProperty('--editor-font-size', `${settings.font_size}px`)
+  root.style.setProperty('--editor-font-size', `${settings.fontSize}px`)
   // Zero means the full window. Expressed as `100%` rather than `none` because
   // the stylesheet computes the reading column's padding from this value, and
   // `calc((100% - none) / 2)` is not a length — it silently drops the rule and
   // takes the padding with it.
   root.style.setProperty(
     '--column-width',
-    settings.column_width > 0 ? `${settings.column_width}rem` : '100%',
+    settings.columnWidth > 0 ? `${settings.columnWidth}rem` : '100%',
   )
 }

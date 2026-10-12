@@ -41,6 +41,7 @@ use crate::frontmatter;
 use crate::links;
 use crate::network::relative_to;
 use crate::notes;
+use crate::stored::{self, Found, Kind};
 use crate::tags;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -49,10 +50,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// The version of the stored format. Written into every file; a file carrying
-/// another number is not read but rebuilt. Frozen at 1.0, after which a change
-/// is a migration rather than a rebuild.
-pub const FORMAT: u32 = 1;
+/// The stored format (ADR 0011, frozen by ADR 0016). A file of an older
+/// format is migrated rather than rebuilt — its tombstones are the one part a
+/// fresh reading cannot give back — and a file of a newer one is not read and
+/// not written over.
+pub const FORMAT: Kind = Kind {
+    name: "index",
+    first: 1,
+    current: 1,
+    steps: &[],
+    pretty: false,
+};
 
 /// How long a tombstone is kept.
 ///
@@ -131,7 +139,6 @@ pub struct Tombstone {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
-    pub format: u32,
     /// The root it indexes, so a file found under the wrong key is refused.
     pub root: String,
     /// Keyed by the path from the root, with forward slashes, case as written.
@@ -142,7 +149,6 @@ pub struct Snapshot {
 impl Snapshot {
     pub fn empty(root: &Path) -> Self {
         Self {
-            format: FORMAT,
             root: root.to_string_lossy().into_owned(),
             notes: BTreeMap::new(),
             tombstones: BTreeMap::new(),
@@ -480,24 +486,23 @@ pub fn file_for(dir: &Path, root: &Path) -> PathBuf {
 
 /// Reads a stored index, or `None` when there is none to trust.
 ///
-/// A file of another format, of another root, or one that does not parse is
-/// not an error to show anybody: the index is a cache of a reading, and the
-/// answer to a cache that cannot be used is to read again.
+/// A file of another root, a newer format, or one that does not parse is not
+/// an error to show anybody: the index is a cache of a reading, and the answer
+/// to a cache that cannot be used is to read again. An older format is
+/// migrated on the way in.
 pub fn load(dir: &Path, root: &Path) -> Option<Snapshot> {
-    let bytes = std::fs::read(file_for(dir, root)).ok()?;
-    let snapshot: Snapshot = serde_json::from_slice(&bytes).ok()?;
-    (snapshot.format == FORMAT && Path::new(&snapshot.root) == root).then_some(snapshot)
+    match stored::read::<Snapshot>(&file_for(dir, root), &FORMAT).ok()? {
+        Found::Read(snapshot) => (Path::new(&snapshot.root) == root).then_some(snapshot),
+        Found::Missing | Found::Newer { .. } => None,
+    }
 }
 
 /// Writes an index through a temporary file and a rename, so a crash leaves
-/// either the old file or the new one and never half of one.
-pub fn save(dir: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)?;
-    let target = file_for(dir, Path::new(&snapshot.root));
-    let temporary = target.with_extension("json.tmp");
-    let bytes = serde_json::to_vec(snapshot).map_err(std::io::Error::other)?;
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(&temporary, &target)
+/// either the old file or the new one and never half of one. Refused when a
+/// newer scheda wrote the file there: the index of this run then lives in
+/// memory only.
+pub fn save(dir: &Path, snapshot: &Snapshot) -> Result<(), stored::WriteError> {
+    stored::write(&file_for(dir, Path::new(&snapshot.root)), &FORMAT, snapshot)
 }
 
 /// Where indexes live: `%LOCALAPPDATA%\scheda\index` on Windows, the XDG data
@@ -826,20 +831,29 @@ mod tests {
     }
 
     #[test]
-    fn a_stored_index_of_another_format_or_root_is_not_trusted() {
+    fn a_stored_index_of_a_newer_format_or_another_root_is_not_trusted() {
         let vault = tempfile::tempdir().unwrap();
         let store = tempfile::tempdir().unwrap();
         let root = vault.path();
 
-        let mut snapshot = Snapshot::empty(root);
-        snapshot.format = FORMAT + 1;
-        save(store.path(), &snapshot).unwrap();
+        // A newer scheda's index is neither read nor written over.
+        let newer = format!(
+            r#"{{"format":{},"root":{},"notes":{{}},"tombstones":{{}}}}"#,
+            FORMAT.current + 1,
+            serde_json::to_string(&root.to_string_lossy()).unwrap()
+        );
+        std::fs::write(file_for(store.path(), root), &newer).unwrap();
         assert!(load(store.path(), root).is_none());
+        assert!(save(store.path(), &Snapshot::empty(root)).is_err());
+        assert_eq!(
+            std::fs::read_to_string(file_for(store.path(), root)).unwrap(),
+            newer
+        );
 
         // Written under this root's key, but claiming another root.
         let mut stranger = Snapshot::empty(root);
         stranger.root = "/somewhere/else".into();
-        let bytes = serde_json::to_vec(&stranger).unwrap();
+        let bytes = stored::render(&stranger, &FORMAT).unwrap();
         std::fs::write(file_for(store.path(), root), bytes).unwrap();
         assert!(load(store.path(), root).is_none());
     }
@@ -850,7 +864,7 @@ mod tests {
         let store = tempfile::tempdir().unwrap();
         save(store.path(), &Snapshot::empty(vault.path())).unwrap();
         let text = std::fs::read_to_string(file_for(store.path(), vault.path())).unwrap();
-        assert!(text.contains(&format!("\"format\":{FORMAT}")));
+        assert!(text.starts_with(&format!("{{\"format\":{},", FORMAT.current)));
     }
 
     #[test]

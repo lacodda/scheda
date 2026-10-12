@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "root": "/vault",
+  "notes": {
+    "plan.md": {
+      "size": 120,
+      "modified": 1760000000123456789,
+      "hash": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "readable": true,
+      "headings": ["Plan"],
+      "links": [
+        { "target": "diary", "line": 3, "context": "see [[diary]]" }
+      ],
+      "tags": [
+        { "name": "draft", "line": null, "context": "tags: [draft]" },
+        { "name": "work", "line": 4, "context": "#work" }
+      ],
+      "fields": {
+        "status": ["draft"]
+      }
+    },
+    "scan.md": {
+      "size": 3,
+      "modified": 1760000000000000000,
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "readable": false,
+      "headings": [],
+      "links": [],
+      "tags": [],
+      "fields": {}
+    }
+  },
+  "tombstones": {
+    "old.md": {
+      "hash": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+      "removed": 1759000000000
+    }
+  }
+}

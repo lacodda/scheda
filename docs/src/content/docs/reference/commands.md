@@ -47,4 +47,7 @@ with a key is typing — on a Polish or German keyboard it makes a letter — an
 is never taken for a shortcut.
 
 The changes are kept in `settings.json` under `keys`, by command id. Only the
-changes: a command you have not touched follows its default.
+changes: a command you have not touched follows its default. The ids are part
+of the settings format and do not change between versions; a command that is
+ever renamed takes the keys you gave it along (see [What scheda
+keeps](/scheda/reference/what-scheda-keeps/)).

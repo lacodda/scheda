@@ -75,6 +75,14 @@ export const COMMANDS: readonly CommandSpec[] = [
   { id: 'autosave.toggle', title: 'Autosave: On or off', keys: [] },
 ]
 
+/** Ids a command was known by before it was renamed, and the id it has now.
+ *
+ *  The settings keep a rebound key under the id the command had when it was
+ *  rebound, and ids are frozen with the settings file (ADR 0016): a command
+ *  renamed without a line here would quietly drop the keys somebody chose for
+ *  it. Empty until a command is renamed. */
+export const RENAMED: Readonly<Record<string, string>> = {}
+
 const BY_ID = new Map(COMMANDS.map((command) => [command.id, command]))
 
 const handlers = new Map<string, Handler>()
@@ -112,9 +120,19 @@ export function available(): CommandSpec[] {
   return COMMANDS.filter((command) => handlers.has(command.id))
 }
 
-/** Takes the person's changes to the keys, as the settings hold them. */
-export function setOverrides(keys: Record<string, string[]>): void {
-  overrides = { ...keys }
+/** Takes the person's changes to the keys, as the settings hold them. A key
+ *  kept under an old id goes to the command that id became, unless the
+ *  command's own id has keys too — that one is the later change. */
+export function setOverrides(
+  keys: Record<string, string[]>,
+  renamed: Readonly<Record<string, string>> = RENAMED,
+): void {
+  overrides = {}
+  for (const [id, chords] of Object.entries(keys)) {
+    const now = renamed[id] ?? id
+    if (now !== id && now in keys) continue
+    overrides[now] = chords
+  }
   changed()
 }
 

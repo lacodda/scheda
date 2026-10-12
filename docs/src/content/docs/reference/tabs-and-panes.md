@@ -62,7 +62,8 @@ the window was split. The next launch puts it back.
 
 The session is kept in scheda's own directory, beside the settings
 (`session.json`), never in a vault. It is written a moment after the window
-settles and once more as it closes.
+settles and once more as it closes. Where exactly, and what an older or newer
+version of scheda does with it, is in [What scheda keeps](/scheda/reference/what-scheda-keeps/).
 
 ## Recent files
 

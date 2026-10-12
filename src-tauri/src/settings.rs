@@ -7,10 +7,80 @@
 //! The file is written whole on every change. It is a few hundred bytes and
 //! changes when a person does something, so nothing here is worth the machinery
 //! that would make partial writes safe.
+//!
+//! Its format is frozen and numbered (ADR 0016): reading and writing go through
+//! `stored`, which brings an older file up to date and never writes over one a
+//! newer scheda left.
 
+use crate::stored::{self, Found, Kind};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+/// The settings file's formats.
+///
+/// 0 is everything before formats were numbered (up to 0.14), with its fields
+/// in snake case and a system-wide key recorded as `Shift+Win+N`; 1 spells the
+/// fields the way the session and the index do, and every chord with `Win`
+/// first, as the window writes it.
+pub const FORMAT: Kind = Kind {
+    name: "settings",
+    first: 0,
+    current: 1,
+    steps: &[to_format_1],
+    pretty: true,
+};
+
+/// Format 0 to 1: the same fields in camel case, the same chords in one order.
+fn to_format_1(fields: &mut Map<String, Value>) {
+    const RENAMED: [(&str, &str); 5] = [
+        ("font_size", "fontSize"),
+        ("column_width", "columnWidth"),
+        ("close_brackets", "closeBrackets"),
+        ("quick_note_file", "quickNoteFile"),
+        ("quick_note_key", "quickNoteKey"),
+    ];
+    for (old, new) in RENAMED {
+        if let Some(value) = fields.remove(old) {
+            fields.insert(new.to_string(), value);
+        }
+    }
+    let reorder = |chord: &mut Value| {
+        if let Value::String(text) = chord {
+            *text = in_order(text);
+        }
+    };
+    if let Some(key) = fields.get_mut("quickNoteKey") {
+        reorder(key);
+    }
+    if let Some(Value::Object(keys)) = fields.get_mut("keys") {
+        for list in keys.values_mut() {
+            if let Value::Array(list) = list {
+                list.iter_mut().for_each(reorder);
+            }
+        }
+    }
+}
+
+/// A chord with its modifiers in the window's one order: `Win`, `Ctrl`,
+/// `Alt`, `Shift`, then the key. Anything else is left where it stood.
+fn in_order(chord: &str) -> String {
+    let Some((modifiers, key)) = chord.rsplit_once('+') else {
+        return chord.to_string();
+    };
+    let rank = |modifier: &str| {
+        ["Win", "Ctrl", "Alt", "Shift"]
+            .iter()
+            .position(|known| *known == modifier)
+            .unwrap_or(4)
+    };
+    let mut modifiers: Vec<&str> = modifiers.split('+').collect();
+    modifiers.sort_by_key(|modifier| rank(modifier));
+    modifiers.push(key);
+    modifiers.join("+")
+}
 
 /// How many paths the recent list keeps.
 ///
@@ -34,8 +104,8 @@ pub enum Theme {
 /// Every field has a default, and unknown fields are ignored on read: a
 /// settings file written by a newer version has to open in an older one without
 /// taking the window with it.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     pub theme: Theme,
     /// Editor font size in pixels.
@@ -111,7 +181,7 @@ impl Default for Settings {
 /// copy of the settings it read a minute ago would put that list back the way
 /// it was.
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct SettingsPatch {
     pub theme: Option<Theme>,
     pub font_size: Option<u16>,
@@ -196,10 +266,10 @@ impl Settings {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {
-    #[error("{0}")]
-    Io(#[from] std::io::Error),
-    #[error("the settings file is not valid JSON: {0}")]
-    Malformed(#[from] serde_json::Error),
+    #[error(transparent)]
+    Read(#[from] stored::ReadError),
+    #[error(transparent)]
+    Write(#[from] stored::WriteError),
     #[error("this platform has no application data directory")]
     NoDataDirectory,
 }
@@ -216,18 +286,41 @@ fn file_path() -> Result<PathBuf, SettingsError> {
     Ok(directory()?.join("settings.json"))
 }
 
+/// The settings while the file on disk belongs to a newer scheda. Changes are
+/// made to this copy and last as long as the process: the newer file is not
+/// this version's to write.
+static HELD: Mutex<Option<(PathBuf, Settings)>> = Mutex::new(None);
+
+fn held(path: &Path) -> Option<Settings> {
+    let held = HELD.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    held.as_ref()
+        .filter(|(at, _)| at == path)
+        .map(|(_, settings)| settings.clone())
+}
+
+fn hold(path: &Path, settings: Settings) {
+    let mut held = HELD.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    *held = Some((path.to_path_buf(), settings));
+}
+
 /// Reads the settings, falling back to the defaults.
 ///
 /// A missing file is the normal first run. A *corrupt* one is not silently
 /// replaced: it is left on disk and reported, because the alternative is
 /// throwing away a file someone may have been editing by hand.
 pub fn load() -> Result<Settings, SettingsError> {
-    let path = file_path()?;
-    match std::fs::read_to_string(&path) {
-        Ok(text) => Ok(serde_json::from_str(&text)?),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Settings::default()),
-        Err(error) => Err(error.into()),
+    load_from(&file_path()?)
+}
+
+fn load_from(path: &Path) -> Result<Settings, SettingsError> {
+    if let Some(settings) = held(path) {
+        return Ok(settings);
     }
+    Ok(match stored::read(path, &FORMAT)? {
+        Found::Missing => Settings::default(),
+        Found::Read(settings) => settings,
+        Found::Newer { value, .. } => value.unwrap_or_default(),
+    })
 }
 
 /// Reads the settings, changes them and writes them back, as one step.
@@ -236,36 +329,50 @@ pub fn load() -> Result<Settings, SettingsError> {
 /// settings screen writes whatever it changed, and two of those interleaved
 /// would each write back a file that does not know about the other.
 pub fn modify(change: impl FnOnce(&mut Settings)) -> Result<Settings, SettingsError> {
-    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    modify_at(&file_path()?, change)
+}
+
+fn modify_at(path: &Path, change: impl FnOnce(&mut Settings)) -> Result<Settings, SettingsError> {
+    static WRITING: Mutex<()> = Mutex::new(());
     let _held = WRITING
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let mut current = load()?;
+    let mut current = load_from(path)?;
     change(&mut current);
-    save(&current)?;
+    match stored::write(path, &FORMAT, &current) {
+        Ok(()) => {}
+        // The change still happens, for as long as this process runs; the
+        // settings screen says it will not outlive it.
+        Err(stored::WriteError::Newer { .. }) => hold(path, current.clone()),
+        Err(error) => return Err(error.into()),
+    }
     Ok(current)
 }
 
-/// Writes the settings, creating the directory on first use.
-pub fn save(settings: &Settings) -> Result<(), SettingsError> {
-    let path = file_path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let text = serde_json::to_string_pretty(settings)?;
-    write_atomically(&path, text.as_bytes())?;
-    Ok(())
+/// The settings file as the settings screen describes it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileStatus {
+    /// Where it is, for a person who wants to open it.
+    pub path: String,
+    /// The format of the file when a newer scheda wrote it. While this is
+    /// set, changes apply to the window and are not saved.
+    pub newer: Option<u32>,
 }
 
-/// Writes through a temporary file in the same directory, then renames.
-///
-/// A settings file truncated by a crash mid-write reads as corrupt on the next
-/// launch, and the user loses their recent list to a power cut. The rename is
-/// atomic on both platforms that matter.
-pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(&temporary, path)
+pub fn status() -> Result<FileStatus, SettingsError> {
+    status_of(&file_path()?)
+}
+
+fn status_of(path: &Path) -> Result<FileStatus, SettingsError> {
+    let newer = match stored::read::<Settings>(path, &FORMAT) {
+        Ok(Found::Newer { format, .. }) => Some(format),
+        _ => None,
+    };
+    Ok(FileStatus {
+        path: path.to_string_lossy().into_owned(),
+        newer,
+    })
 }
 
 #[cfg(test)]
@@ -362,13 +469,13 @@ mod tests {
     #[test]
     fn null_clears_the_quick_note_file_and_absence_keeps_it() {
         let mut settings = Settings::default();
-        settings.apply(serde_json::from_str(r#"{"quick_note_file":"/inbox.md"}"#).expect("parses"));
+        settings.apply(serde_json::from_str(r#"{"quickNoteFile":"/inbox.md"}"#).expect("parses"));
         assert_eq!(settings.quick_note_file.as_deref(), Some("/inbox.md"));
 
         settings.apply(serde_json::from_str(r#"{"autosave":true}"#).expect("parses"));
         assert_eq!(settings.quick_note_file.as_deref(), Some("/inbox.md"));
 
-        settings.apply(serde_json::from_str(r#"{"quick_note_file":null}"#).expect("parses"));
+        settings.apply(serde_json::from_str(r#"{"quickNoteFile":null}"#).expect("parses"));
         assert_eq!(settings.quick_note_file, None);
     }
 
@@ -381,6 +488,77 @@ mod tests {
             ..Default::default()
         });
         assert!(settings.recent.is_empty());
+    }
+
+    #[test]
+    fn a_file_from_before_formats_keeps_every_setting() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(
+            &path,
+            r#"{"theme":"dark","font_size":18,"column_width":0.0,"close_brackets":true,
+                "quick_note_file":"/inbox.md","quick_note_key":"","keys":{"file.save":[]}}"#,
+        )
+        .unwrap();
+
+        let settings = load_from(&path).unwrap();
+        assert_eq!(settings.font_size, 18);
+        assert_eq!(settings.column_width, 0.0);
+        assert!(settings.close_brackets);
+        assert_eq!(settings.quick_note_file.as_deref(), Some("/inbox.md"));
+        assert_eq!(settings.quick_note_key, "");
+        assert_eq!(settings.keys["file.save"], Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_chord_from_before_formats_is_put_in_the_one_order() {
+        assert_eq!(in_order("Shift+Win+N"), "Win+Shift+N");
+        assert_eq!(in_order("Shift+Alt+Ctrl+P"), "Ctrl+Alt+Shift+P");
+        assert_eq!(in_order("Ctrl+\\"), "Ctrl+\\");
+        assert_eq!(in_order("F5"), "F5");
+        assert_eq!(in_order(""), "");
+
+        let mut fields = serde_json::from_str::<Map<String, Value>>(
+            r#"{"quick_note_key":"Shift+Win+N","keys":{"file.save":["Shift+Ctrl+S","F2"]}}"#,
+        )
+        .unwrap();
+        to_format_1(&mut fields);
+        assert_eq!(fields["quickNoteKey"], "Win+Shift+N");
+        assert_eq!(fields["keys"]["file.save"][0], "Ctrl+Shift+S");
+        assert_eq!(fields["keys"]["file.save"][1], "F2");
+    }
+
+    #[test]
+    fn a_newer_file_is_used_and_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let newer = r#"{"format":9,"theme":"light","fontSize":20,"somethingNew":true}"#;
+        std::fs::write(&path, newer).unwrap();
+
+        assert_eq!(load_from(&path).unwrap().font_size, 20);
+        assert_eq!(status_of(&path).unwrap().newer, Some(9));
+
+        // A change is made and kept for the rest of the run...
+        let changed = modify_at(&path, |settings| settings.font_size = 12).unwrap();
+        assert_eq!(changed.font_size, 12);
+        assert_eq!(load_from(&path).unwrap().font_size, 12);
+        modify_at(&path, |settings| settings.remember("/a.md")).unwrap();
+        let both = load_from(&path).unwrap();
+        assert_eq!((both.font_size, both.recent.len()), (12, 1));
+
+        // ...and the file is the newer version's, as it was.
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), newer);
+    }
+
+    #[test]
+    fn a_corrupt_file_is_reported_and_not_written_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, "{ \"theme\": ").unwrap();
+
+        assert!(load_from(&path).is_err());
+        assert!(modify_at(&path, |settings| settings.autosave = true).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ \"theme\": ");
     }
 
     #[test]

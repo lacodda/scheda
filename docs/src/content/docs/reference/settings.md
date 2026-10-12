@@ -30,41 +30,45 @@ to commit, sync or explain.
 | Linux | `~/.config/scheda/settings.json` |
 | macOS | `~/Library/Application Support/scheda/settings.json` |
 
-The file can still be edited by hand; scheda reads it when it starts.
+The file can still be edited by hand; scheda reads it when it starts. The foot
+of the settings screen shows where it is.
 
 ## What is in it
 
 ```json
 {
+  "format": 1,
   "theme": "system",
-  "font_size": 15,
-  "column_width": 46.0,
+  "fontSize": 15,
+  "columnWidth": 46.0,
   "recent": [],
-  "close_brackets": false,
+  "closeBrackets": false,
   "spellcheck": false,
   "autosave": false,
   "keys": {},
-  "quick_note_file": null,
-  "quick_note_key": "Win+Shift+N"
+  "quickNoteFile": null,
+  "quickNoteKey": "Win+Shift+N"
 }
 ```
 
 | Field | What it does |
 | --- | --- |
+| `format` | The format of the file - see [What scheda keeps](/scheda/reference/what-scheda-keeps/#formats). Written by scheda; leave it as it is. |
 | `theme` | `system`, `light` or `dark`. `system` follows the operating system, which is what a notepad should do unasked. |
-| `font_size` | Editor font size in pixels. |
-| `column_width` | The width of the reading column, in `rem`. `0` means the full window. |
+| `fontSize` | Editor font size in pixels. |
+| `columnWidth` | The width of the reading column, in `rem`. `0` means the full window. |
 | `recent` | The last twelve files you opened, most recent first. Shown on an empty window. |
-| `close_brackets` | Whether an opening bracket types its partner. See below. |
+| `closeBrackets` | Whether an opening bracket types its partner. See below. |
 | `spellcheck` | Whether misspelt words are underlined. See below. |
 | `autosave` | Whether a file is written a moment after typing stops. See below. |
 | `keys` | The shortcuts you changed, by command id. Only the changes. |
-| `quick_note_file` | Where quick notes go; `null` until you choose. |
-| `quick_note_key` | The system-wide quick-note key; empty turns it off. |
+| `quickNoteFile` | Where quick notes go; `null` until you choose. |
+| `quickNoteKey` | The system-wide quick-note key; empty turns it off. Keys are written with their modifiers in one order: `Win`, `Ctrl`, `Alt`, `Shift`. |
 
-Every field has a default and unknown fields are ignored, so a settings file
-written by a newer scheda still opens in an older one. Numbers are held to a
-usable range: the text size to 10–32 pixels, the column to 24–120 `rem` or `0`
+Every field has a default and unknown fields are ignored. A file written by an
+older scheda is brought up to date, and one written by a newer scheda is used
+and never written over - see [What scheda keeps](/scheda/reference/what-scheda-keeps/).
+Numbers are held to a usable range: the text size to 10–32 pixels, the column to 24–120 `rem` or `0`
 for the full window.
 
 What the window had open — its tabs and panes — is kept beside this file in
@@ -89,10 +93,10 @@ enough to scroll — or short enough not to.
 There is no setting for it. The bar appears where the content scrolls, at the
 window's edge, and gets out of the way otherwise.
 
-## `close_brackets`
+## `closeBrackets`
 
 ```json
-{ "close_brackets": true }
+{ "closeBrackets": true }
 ```
 
 Off by default. With it on, typing an opening bracket or quote inserts its

@@ -5,8 +5,8 @@
 // firing a command instead, a rebound key still running the old command, or an
 // editor command stealing a key from a search field.
 import { afterEach, describe, expect, it } from 'vitest'
-import { boundElsewhere, commandFor, handle, installKeys, keysFor, run, setOverrides, COMMANDS } from './commands'
-import { chordOf, isShortcut, showChord } from './keys'
+import { boundElsewhere, commandFor, handle, installKeys, keysFor, run, setOverrides, COMMANDS, RENAMED } from './commands'
+import { chordOf, isChord, isShortcut, showChord } from './keys'
 import { match, rank } from './fuzzy'
 import { stampOf } from './quick/stamp'
 
@@ -49,7 +49,7 @@ describe('a chord', () => {
 
   it('takes the Windows key only where a system-wide key is being recorded', () => {
     const event = key({ key: 'n', code: 'KeyN', metaKey: true, shiftKey: true })
-    expect(chordOf(event, true)).toBe('Shift+Win+N')
+    expect(chordOf(event, true)).toBe('Win+Shift+N')
     // In the window, Cmd on a Mac is Ctrl.
     expect(chordOf(event)).toBe('Ctrl+Shift+N')
   })
@@ -64,6 +64,75 @@ describe('a chord', () => {
 
   it('shows arrows as arrows', () => {
     expect(showChord('Ctrl+Alt+Right')).toBe('Ctrl+Alt+→')
+  })
+
+  it('has one spelling, and what is recorded is always in it', () => {
+    expect(isChord('Win+Shift+N')).toBe(true)
+    expect(isChord('Ctrl+Alt+Shift+P')).toBe(true)
+    expect(isChord('Ctrl+\\')).toBe(true)
+    expect(isChord('F12')).toBe(true)
+    // The same chords spelt another way, and things that are not chords.
+    expect(isChord('Shift+Win+N')).toBe(false)
+    expect(isChord('Shift+Ctrl+P')).toBe(false)
+    expect(isChord('Ctrl+p')).toBe(false)
+    expect(isChord('Ctrl+Shift')).toBe(false)
+    expect(isChord('Ctrl+F25')).toBe(false)
+    const recorded = [
+      key({ key: 'n', code: 'KeyN', metaKey: true, shiftKey: true, ctrlKey: true, altKey: true }),
+      key({ key: '{', code: 'BracketLeft', ctrlKey: true, shiftKey: true }),
+      key({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }),
+      key({ key: 'F5', code: 'F5' }),
+    ]
+    for (const event of recorded) {
+      for (const withWin of [false, true]) {
+        const chord = chordOf(event, withWin)
+        expect(chord !== null && isChord(chord), String(chord)).toBe(true)
+      }
+    }
+  })
+})
+
+// Every command id that ever shipped. The settings keep rebound keys under
+// these ids, and the settings file is frozen (ADR 0016): an id that goes away
+// takes somebody's key with it. A renamed command keeps its old id in RENAMED;
+// a new command adds its id here, which freezes it too.
+const SHIPPED = [
+  'palette.commands', 'file.goTo', 'insert.block', 'file.new', 'file.open', 'file.save', 'file.saveAs',
+  'file.print', 'file.export', 'file.obsidian', 'tab.close', 'tab.closeOthers', 'tab.closeAll', 'tab.reopen',
+  'tab.pin', 'tab.next', 'tab.previous', 'pane.split', 'pane.first', 'pane.second', 'view.reading', 'view.focus',
+  'panel.tree', 'panel.outline', 'panel.network', 'panel.tags', 'search.vault', 'search.replace', 'fold.section',
+  'unfold.section', 'fold.all', 'unfold.all', 'quick.note', 'settings.open', 'theme.system', 'theme.light',
+  'theme.dark', 'autosave.toggle',
+]
+
+describe('the ids of the commands', () => {
+  afterEach(() => setOverrides({}))
+
+  it('keep every id that shipped, or say what it became', () => {
+    const ids = new Set(COMMANDS.map((command) => command.id))
+    for (const id of SHIPPED) {
+      expect(ids.has(id) || ids.has(RENAMED[id]), `${id} is gone without a line in RENAMED`).toBe(true)
+    }
+  })
+
+  it('are all on the list of shipped ids', () => {
+    for (const command of COMMANDS) {
+      expect(SHIPPED, `${command.id} is new: add it to SHIPPED`).toContain(command.id)
+    }
+  })
+
+  it('write their default keys in the one notation', () => {
+    for (const command of COMMANDS) {
+      for (const chord of command.keys) expect(isChord(chord), `${command.id}: ${chord}`).toBe(true)
+    }
+  })
+
+  it('carry a key kept under an old id to the new one', () => {
+    setOverrides({ 'file.keep': ['Ctrl+K'] }, { 'file.keep': 'file.save' })
+    expect(keysFor('file.save')).toEqual(['Ctrl+K'])
+    // The command's own id is the later change, and wins.
+    setOverrides({ 'file.keep': ['Ctrl+K'], 'file.save': ['Ctrl+J'] }, { 'file.keep': 'file.save' })
+    expect(keysFor('file.save')).toEqual(['Ctrl+J'])
   })
 })
 

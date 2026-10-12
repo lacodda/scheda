@@ -36,6 +36,13 @@ mark, a missing trailing newline, text that is not UTF-8 - runs as part of
 touches reading or writing a file has to keep it green: scheda's promise is that
 a file comes back byte for byte.
 
+What scheda keeps of its own - the settings, the session, the index - is frozen
+and numbered (ADR 0016). Changing what one of them stores means a new format:
+raise `current` in its `Kind`, add a step from the previous format, add a sample
+to `src-tauri/tests/formats` with its line in `FROZEN`, and leave the earlier
+samples as they are. The tests say which of these is missing. Command ids are
+frozen with the settings: a renamed command keeps its old id in `RENAMED`.
+
 ## Releases
 
 A tag drafts the release on three platforms (`.github/workflows/release.yml`):

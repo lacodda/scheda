@@ -257,12 +257,12 @@ export type Theme = 'system' | 'light' | 'dark'
  *  directory — never in the folder the user opened (ADR 0003). */
 export interface Settings {
   theme: Theme
-  font_size: number
-  column_width: number
+  fontSize: number
+  columnWidth: number
   recent: string[]
   /** Whether an opening bracket or quote types its closing partner. Off by
    *  default: in prose the guess is wrong more often than right. */
-  close_brackets: boolean
+  closeBrackets: boolean
   /** Whether the system spell checker underlines misspelt words. Off by
    *  default: code, paths and names are all misspellings to it. */
   spellcheck: boolean
@@ -272,17 +272,28 @@ export interface Settings {
    *  absent here keeps its default, and an empty list means no key. */
   keys: Record<string, string[]>
   /** The file quick notes are added to, once one has been chosen. */
-  quick_note_file: string | null
+  quickNoteFile: string | null
   /** The system-wide key for a quick note; empty when it is off. */
-  quick_note_key: string
+  quickNoteKey: string
 }
 
-/** A change to some settings. `quick_note_file: null` clears the file, while
+/** A change to some settings. `quickNoteFile: null` clears the file, while
  *  leaving the field out leaves it alone. */
-export type SettingsPatch = Partial<Omit<Settings, 'recent'>> & { clear_recent?: boolean }
+export type SettingsPatch = Partial<Omit<Settings, 'recent'>> & { clearRecent?: boolean }
 
 export function loadSettings(): Promise<Settings> {
   return invoke<Settings>('load_settings')
+}
+
+/** Where the settings file is, and the format of it when a newer scheda wrote
+ *  it — then changes reach the window and not the file (ADR 0016). */
+export interface SettingsStatus {
+  path: string
+  newer: number | null
+}
+
+export function settingsStatus(): Promise<SettingsStatus> {
+  return invoke<SettingsStatus>('settings_status')
 }
 
 /** Changes some of the settings and answers with all of them. The core does

@@ -2134,6 +2134,18 @@ body {
   color: var(--accent);
 }
 
+/* The settings file's path, at the foot of the screen: a long one breaks where
+   it has to rather than pushing the panel sideways. */
+.settings-file {
+  margin-top: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.settings-file code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11.5px;
+}
+
 .settings-button,
 .settings-segment,
 .settings-chord,

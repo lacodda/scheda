@@ -1,0 +1,8 @@
+# The samples of every format that shipped, by the hash of what each says
+# (its JSON re-serialised with sorted keys). A line here never changes: a
+# new format adds a sample and a line (ADR 0016).
+index/1.json a89628222034190e653559746077e12a153b375bd8e4baaa00b0b4409c13b736
+session/0.json a3bc5c3319f48a25125ed40a710589dcac345012066968f92f92d26349f323cc
+session/1.json 082f50c127c0fbde3a11be03e706a904d95a2aa6240c998054c4478b22423cbe
+settings/0.json d42b23c114c4723f0d17c8f0d096e5437fe66ebb4784954c28908f17a85b6ccc
+settings/1.json 6f8c495419708d754dee766c852f913fafbf3046026486f8d646da6d737748c3

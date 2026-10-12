@@ -3,7 +3,11 @@
 // A shortcut is stored, compared and shown as a string — `Ctrl+Shift+P` — so
 // that the settings file, the command palette, the settings screen and the key
 // handler all speak about the same thing in the same words. Modifiers come in
-// one fixed order, which is what makes two spellings of one chord impossible.
+// one fixed order — `Win`, `Ctrl`, `Alt`, `Shift`, the order Windows itself
+// writes them in — which is what makes two spellings of one chord impossible.
+//
+// The notation is part of the settings file, and frozen with it (ADR 0016): a
+// change to it is a new settings format with a step that rewrites old chords.
 //
 // The letter is the one the keyboard types when it types Latin, and the key's
 // place on the keyboard when it does not. `Ctrl+P` on a Russian layout arrives
@@ -62,11 +66,11 @@ export function chordOf(event: KeyboardEvent, withWin = false): string | null {
   if (key === null) return null
 
   const parts: string[] = []
+  if (withWin && event.metaKey) parts.push('Win')
   // Cmd on a Mac is the same finger and the same meaning as Ctrl elsewhere.
   if (event.ctrlKey || (event.metaKey && !withWin)) parts.push('Ctrl')
   if (event.altKey) parts.push('Alt')
   if (event.shiftKey) parts.push('Shift')
-  if (withWin && event.metaKey) parts.push('Win')
   parts.push(key)
   return parts.join('+')
 }
@@ -85,6 +89,18 @@ function mainKey(event: KeyboardEvent): string | null {
   if (named) return named[1]
   if (Object.values(NAMED).includes(event.key)) return event.key
   return null
+}
+
+const KEYS = new Set(Object.values(NAMED))
+
+/** Whether text is a chord in this notation: the modifiers it holds in their
+ *  one order, then one key by the name `chordOf` gives it. `Shift+Win+N` is
+ *  not one — it is `Win+Shift+N` spelt a second way. */
+export function isChord(text: string): boolean {
+  const parts = /^(Win\+)?(Ctrl\+)?(Alt\+)?(Shift\+)?(.+)$/.exec(text)
+  if (!parts) return false
+  const key = parts[5]
+  return /^[A-Z0-9]$/.test(key) || /^F([1-9]|1[0-9]|2[0-4])$/.test(key) || KEYS.has(key)
 }
 
 /** Whether a chord could be a shortcut at all. A bare letter is typing, and so

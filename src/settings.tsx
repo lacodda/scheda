@@ -10,7 +10,16 @@
 // rest of the time.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { boundElsewhere, COMMANDS, keysFor, registry, setRecording, type CommandSpec } from './commands'
-import { chooseQuickNoteFile, quickNoteStatus, showQuickNote, type QuickNoteStatus, type Settings, type Theme } from './core'
+import {
+  chooseQuickNoteFile,
+  quickNoteStatus,
+  settingsStatus,
+  showQuickNote,
+  type QuickNoteStatus,
+  type Settings,
+  type SettingsStatus,
+  type Theme,
+} from './core'
 import { match } from './fuzzy'
 import { chordOf, isShortcut, showChord } from './keys'
 import { settings as store } from './settings-store'
@@ -23,9 +32,11 @@ function useSettings(): Settings | null {
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const current = useSettings()
   const panel = useRef<HTMLDivElement>(null)
+  const [file, setFile] = useState<SettingsStatus | null>(null)
 
   useEffect(() => {
     void store.load()
+    settingsStatus().then(setFile, () => {})
     panel.current?.focus()
   }, [])
 
@@ -59,11 +70,22 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           <p className="settings-note">Reading the settings…</p>
         ) : (
           <div className="settings-body">
+            {file?.newer != null && (
+              <p className="settings-note settings-note--notice" role="status">
+                These settings were written by a newer version of scheda (format {file.newer}). Changes apply to
+                this window and are not saved, so the newer version finds its file as it left it.
+              </p>
+            )}
             <Appearance current={current} />
             <Writing current={current} />
             <QuickNote current={current} />
             <Keyboard />
             <Recent current={current} />
+            {file && (
+              <p className="settings-note settings-file">
+                Kept in <code>{file.path}</code>
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -113,7 +135,7 @@ const THEMES: { value: Theme; label: string }[] = [
 ]
 
 function Appearance({ current }: { current: Settings }) {
-  const full = current.column_width === 0
+  const full = current.columnWidth === 0
   return (
     <section className="settings-section">
       <h3>Appearance</h3>
@@ -134,25 +156,25 @@ function Appearance({ current }: { current: Settings }) {
         </div>
       </Row>
       <Row label="Text size" hint="In pixels, 10 to 32">
-        <Stepper value={current.font_size} min={10} max={32} label="Text size" onChange={(value) => change({ font_size: value })} />
+        <Stepper value={current.fontSize} min={10} max={32} label="Text size" onChange={(value) => change({ fontSize: value })} />
       </Row>
-      <Row label="Reading column" hint={full ? 'The whole window' : `${current.column_width} rem wide`}>
+      <Row label="Reading column" hint={full ? 'The whole window' : `${current.columnWidth} rem wide`}>
         <input
           type="range"
           className="settings-range"
           min={24}
           max={120}
           step={2}
-          value={full ? 120 : current.column_width}
+          value={full ? 120 : current.columnWidth}
           disabled={full}
           aria-label="Reading column width"
-          onChange={(event) => change({ column_width: Number(event.target.value) })}
+          onChange={(event) => change({ columnWidth: Number(event.target.value) })}
         />
         <label className="settings-check">
           <input
             type="checkbox"
             checked={full}
-            onChange={(event) => change({ column_width: event.target.checked ? 0 : 46 })}
+            onChange={(event) => change({ columnWidth: event.target.checked ? 0 : 46 })}
           />
           Full width
         </label>
@@ -195,7 +217,7 @@ function Writing({ current }: { current: Settings }) {
         <Toggle on={current.autosave} label="Autosave" onChange={(on) => change({ autosave: on })} />
       </Row>
       <Row label="Close brackets" hint="An opening bracket or quote types its partner">
-        <Toggle on={current.close_brackets} label="Close brackets" onChange={(on) => change({ close_brackets: on })} />
+        <Toggle on={current.closeBrackets} label="Close brackets" onChange={(on) => change({ closeBrackets: on })} />
       </Row>
       <Row label="Spell check" hint="Underlines misspelt words, in the system's language">
         <Toggle on={current.spellcheck} label="Spell check" onChange={(on) => change({ spellcheck: on })} />
@@ -219,7 +241,7 @@ function QuickNote({ current }: { current: Settings }) {
     return () => {
       live = false
     }
-  }, [current.quick_note_key])
+  }, [current.quickNoteKey])
 
   return (
     <section className="settings-section">
@@ -228,12 +250,12 @@ function QuickNote({ current }: { current: Settings }) {
         A key that works from any program while scheda is open. It brings up a small window; what you type there is added
         to the end of one file, with the date and time.
       </p>
-      <Row label="File" hint={current.quick_note_file ?? 'Not chosen yet'}>
+      <Row label="File" hint={current.quickNoteFile ?? 'Not chosen yet'}>
         <button type="button" className="settings-button" onClick={() => void chooseQuickNoteFile().then(() => store.update({}))}>
           Choose…
         </button>
-        {current.quick_note_file && (
-          <button type="button" className="settings-button" onClick={() => change({ quick_note_file: null })}>
+        {current.quickNoteFile && (
+          <button type="button" className="settings-button" onClick={() => change({ quickNoteFile: null })}>
             Forget
           </button>
         )}
@@ -241,20 +263,20 @@ function QuickNote({ current }: { current: Settings }) {
       <Row
         label="Key"
         hint={
-          current.quick_note_key === ''
+          current.quickNoteKey === ''
             ? 'Off'
-            : status && status.key === current.quick_note_key && !status.registered && status.error
+            : status && status.key === current.quickNoteKey && !status.registered && status.error
               ? `Not available: ${status.error}`
               : undefined
         }
       >
         <ChordRecorder
-          chord={current.quick_note_key}
+          chord={current.quickNoteKey}
           withWin
-          onRecord={(chord) => change({ quick_note_key: chord })}
+          onRecord={(chord) => change({ quickNoteKey: chord })}
         />
-        {current.quick_note_key !== '' && (
-          <button type="button" className="settings-button" onClick={() => change({ quick_note_key: '' })}>
+        {current.quickNoteKey !== '' && (
+          <button type="button" className="settings-button" onClick={() => change({ quickNoteKey: '' })}>
             Turn off
           </button>
         )}
@@ -426,7 +448,7 @@ function Recent({ current }: { current: Settings }) {
           type="button"
           className="settings-button"
           disabled={current.recent.length === 0}
-          onClick={() => change({ clear_recent: true })}
+          onClick={() => change({ clearRecent: true })}
         >
           Clear the list
         </button>

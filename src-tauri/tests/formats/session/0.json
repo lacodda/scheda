@@ -1,0 +1,23 @@
+{
+  "tabs": [
+    {
+      "path": "/notes/plan.md",
+      "draft": null,
+      "pinned": true,
+      "anchor": 10,
+      "head": 14,
+      "top": 3
+    },
+    {
+      "path": null,
+      "draft": "1760000000000-0",
+      "pinned": false,
+      "anchor": 0,
+      "head": 5,
+      "top": 0
+    }
+  ],
+  "active": 1,
+  "beside": 0,
+  "focused": 1
+}

@@ -24,6 +24,7 @@ pub mod search;
 mod session;
 mod settings;
 pub mod startup;
+pub mod stored;
 pub mod tags;
 pub mod tree;
 pub mod vault;
@@ -421,6 +422,13 @@ impl From<settings::SettingsError> for CommandError {
 #[tauri::command]
 fn load_settings() -> Result<settings::Settings, CommandError> {
     Ok(settings::load()?)
+}
+
+/// Where the settings file is, and whether a newer scheda wrote it — in which
+/// case changes reach the window and not the file.
+#[tauri::command]
+fn settings_status() -> Result<settings::FileStatus, CommandError> {
+    Ok(settings::status()?)
 }
 
 /// Changes some of the settings and answers with all of them.
@@ -1445,6 +1453,7 @@ pub fn run() {
             apply_replace,
             undo_replace,
             load_settings,
+            settings_status,
             update_settings,
             load_session,
             save_session,

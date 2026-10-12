@@ -97,7 +97,7 @@ await page.addInitScript((text) => {
         }
       }
       if (command === 'load_settings') {
-        return { theme: 'system', font_size: 15, column_width: 46.0, recent: [], close_brackets: false }
+        return { theme: 'system', fontSize: 15, columnWidth: 46.0, recent: [], closeBrackets: false }
       }
       // Drafts and file operations: the shell asks for these on mount and the
       // tree asks on every menu item. Answering with null would leave the
