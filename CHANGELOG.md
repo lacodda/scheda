@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.15.0] - 2026-10-12
+
+### Features
+- Freeze and number the files scheda keeps
+
+### Testing
+- Run vitest on four workers
+
 ## [0.14.0] - 2026-10-07
 
 ### Build

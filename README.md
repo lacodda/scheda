@@ -92,13 +92,14 @@ appears under *Open with*, and making it the default stays your choice.
 
 ## Status
 
-v0.14.0, in daily use. Everything above works, including file management from
+v0.15.0, in daily use. Everything above works, including file management from
 the tree - into the recycle bin, never an unlink - folder watching, use as
 `$EDITOR`, and an index of the vault kept in scheda's own directory and checked
-against the disk on every open. Checked on every build against a corpus of deliberately awkward
-files, and against the owner's own 5000-note vault before release. What landed
-in each version:
-[CHANGELOG](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md).
+against the disk on every open. What scheda keeps of its own is in numbered,
+frozen formats: an older file is migrated, a newer one is never written over.
+Checked on every build against a corpus of deliberately awkward files, and
+against the owner's own 5000-note vault before release. What landed in each
+version: [CHANGELOG](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md).
 
 ## Documentation
 

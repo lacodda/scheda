@@ -3066,7 +3066,7 @@ dependencies = [
 
 [[package]]
 name = "scheda"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "dirs 6.0.0",
  "notify",
