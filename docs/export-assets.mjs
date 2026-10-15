@@ -4,12 +4,15 @@
 import sharp from "sharp";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ASSETS = "C:/Projects/scheda/assets";
+// Resolved from this script, so it runs from any clone on any machine.
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ASSETS = path.join(ROOT, "assets");
 // The icons the built application ships with. Generated from the same masters
 // as everything else: keeping them by hand is how they fell two weeks behind
 // the approved mark and shipped the pre-identity orange tile in kilna v0.28-v0.32.
-const APP_ICONS = "C:/Projects/scheda/src-tauri/icons";
+const APP_ICONS = path.join(ROOT, "src-tauri", "icons");
 
 // The three levels of the mark. Which one a raster takes is decided by
 // `levelFor` below, never by habit.
