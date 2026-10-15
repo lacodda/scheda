@@ -287,7 +287,10 @@ export const schedaTheme = EditorView.theme({
     paddingLeft: '0.7rem',
     marginLeft: '1rem',
   },
-  '.cm-md-table-delimiter': { color: token('muted'), opacity: '0.7' },
+  // Marks, not text: the columns already show what the pipes mark. Drawn in
+  // the colour for marks rather than faded with an opacity, which is a colour
+  // nobody measured.
+  '.cm-md-table-delimiter': { color: token('faint') },
   // The space that lines a column up. Inline-block so its width counts, and
   // nothing inside it: it is layout standing in for characters that are not
   // there, and it must not be selectable or copyable.
@@ -482,8 +485,8 @@ export const schedaTheme = EditorView.theme({
   '&.cm-reading .cm-activeLine': { backgroundColor: 'transparent' },
 
   // A horizontal rule. The three dashes stay in the text — they are the
-  // document — but they are dimmed and the line is drawn under them.
-  '.cm-md-rule': { color: token('muted'), opacity: '0.5' },
+  // document — but they recede to a mark and the line is drawn under them.
+  '.cm-md-rule': { color: token('faint') },
   // Dashes drawn as the line they stand for. The characters keep their place —
   // the width is unchanged, so a table's columns still line up — and a rule is
   // painted through the middle of them.

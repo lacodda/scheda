@@ -9,6 +9,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { auditGlyphs } from './glyph-contrast.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
@@ -96,9 +97,24 @@ await page.addInitScript((text) => {
           readOnly: false,
         }
       }
+      // Every field the core answers with. A partial answer is not a smaller
+      // case of the real one: the settings screen read a key that was not
+      // there, threw, and took the whole shell down with it.
       if (command === 'load_settings') {
-        return { theme: 'system', fontSize: 15, columnWidth: 46.0, recent: [], closeBrackets: false }
+        return {
+          theme: 'system',
+          fontSize: 15,
+          columnWidth: 46.0,
+          recent: [],
+          closeBrackets: false,
+          spellcheck: false,
+          autosave: false,
+          keys: {},
+          quickNoteFile: null,
+          quickNoteKey: 'Win+Shift+N',
+        }
       }
+      if (command === 'settings_status') return { path: '/config/scheda/settings.json', newer: null }
       // Drafts and file operations: the shell asks for these on mount and the
       // tree asks on every menu item. Answering with null would leave the
       // console full of rejected promises and the failure list full of noise
@@ -582,6 +598,107 @@ check(
 check(tree.current === 1, `the open file is marked ${tree.current} times, expected once`)
 check(treeAgain === 0, 'Ctrl+Shift+E did not close the file tree again')
 
+// ------------------------------------------------------------- contrast --
+
+// Every glyph on the screens that carry the window's small text, in both
+// themes, against what it is drawn on — see `glyph-contrast.mjs` for what this
+// sees that the palette test cannot. The dark theme is reached both ways it
+// can be: by the user's choice and by the system's, since the stylesheet
+// states the dark palette once for each.
+const THEMES = [
+  ['light', 'light', 'light'],
+  ['dark', 'light', 'dark'],
+  ['dark by the system', 'dark', null],
+]
+const glyphs = []
+async function auditScene(scene) {
+  for (const [theme, scheme, attribute] of THEMES) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await page.evaluate((value) => {
+      if (value === null) delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = value
+    }, attribute)
+    await page.waitForTimeout(60)
+    glyphs.push({ scene, theme, ...(await page.evaluate(auditGlyphs)) })
+  }
+}
+
+// The measure first measures itself. A probe it must fail and one it must
+// pass: without them, an audit that stopped seeing anything — a walker that
+// finds no text, a colour that parses as transparent — passes every screen.
+const probe = await page.evaluate((source) => {
+  const audit = new Function(`return (${source})()`)
+  const host = document.createElement('div')
+  host.style.cssText = 'position:fixed;top:0;left:0;z-index:99;background:#ffffff;font-size:12px'
+  host.innerHTML =
+    '<span class="probe-grey" style="color:#999999">unreadable</span>' +
+    '<span class="probe-ink" style="color:#595959">readable</span>' +
+    '<span class="probe-faded" style="color:#595959;opacity:0.5">faded</span>'
+  document.body.append(host)
+  const { below } = audit()
+  host.remove()
+  return below.map((entry) => entry.where)
+}, auditGlyphs.toString())
+check(probe.includes('span.probe-grey'), 'the contrast audit passed #999 on white, so it measures nothing')
+check(!probe.includes('span.probe-ink'), 'the contrast audit failed #595959 on white, which clears 7:1')
+check(probe.includes('span.probe-faded'), 'the contrast audit does not see an opacity, which is what it is for')
+
+// The main window: a second tab behind the active one, so a tab at rest is on
+// screen, with both panels open beside the text.
+await page.click('.cm-content')
+await page.keyboard.press('Control+n')
+await page.waitForTimeout(200)
+await page.keyboard.press('Control+Shift+Tab')
+await page.waitForTimeout(200)
+await page.keyboard.press('Control+Shift+e')
+await page.waitForTimeout(300)
+await page.keyboard.press('Control+Shift+o')
+await page.waitForTimeout(300)
+const sceneShape = await page.evaluate(() => ({
+  tabs: document.querySelectorAll('.tab').length,
+  tree: document.querySelectorAll('.tree').length,
+  outline: document.querySelectorAll('.outline').length,
+}))
+check(
+  sceneShape.tabs === 2 && sceneShape.tree === 1 && sceneShape.outline === 1,
+  `the contrast scene is not set: ${JSON.stringify(sceneShape)}, expected two tabs and both panels`,
+)
+await auditScene('the window')
+await page.keyboard.press('Control+Shift+o')
+await page.keyboard.press('Control+Shift+e')
+await page.waitForTimeout(200)
+
+await page.keyboard.press('Control+Shift+b')
+await page.waitForTimeout(300)
+await auditScene('what links here')
+await page.keyboard.press('Control+Shift+b')
+await page.waitForTimeout(200)
+
+await page.keyboard.press('Control+,')
+await page.waitForTimeout(400)
+check((await page.locator('.settings').count()) === 1, 'Ctrl+, did not open the settings')
+await auditScene('the settings')
+await page.keyboard.press('Escape')
+await page.waitForTimeout(200)
+
+await page.keyboard.press('Control+Shift+p')
+await page.waitForTimeout(300)
+check((await page.locator('.palette').count()) === 1, 'Ctrl+Shift+P did not open the palette')
+await auditScene('the palette')
+await page.keyboard.press('Escape')
+await page.waitForTimeout(200)
+
+for (const { scene, theme, measured, below } of glyphs) {
+  // A screen with almost nothing measured is a screen that did not open.
+  check(measured >= 8, `${scene}, ${theme}: only ${measured} runs of text measured`)
+  for (const entry of below) {
+    failures.push(
+      `${scene}, ${theme}: ${entry.where} "${entry.text}" (${entry.size}) is ${entry.ratio}:1, ` +
+        `under ${entry.floor}:1 — ${entry.ink} on ${entry.ground}`,
+    )
+  }
+}
+
 await browser.close()
 server.close()
 
@@ -620,6 +737,10 @@ if (failures.length > 0) {
 }
 
 console.log('layout check passed')
+console.log(
+  `contrast: ${glyphs.reduce((sum, { measured }) => sum + measured, 0)} runs of text measured on ` +
+    `${new Set(glyphs.map(({ scene }) => scene)).size} screens in ${THEMES.length} themes, none under its floor`,
+)
 if (process.env.LAYOUT_VERBOSE) {
   console.log(JSON.stringify(layout, null, 2))
 }

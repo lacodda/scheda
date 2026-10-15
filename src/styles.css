@@ -34,8 +34,22 @@
   --bg: #fdfcfa;
   --text: #24211e;
   --heading: #16130f;
-  --muted: #8a8279;
-  --accent: #d9704a;
+  /* Secondary text: the status line, a tab at rest, a panel's headings, the
+     hints under a setting. Most of it is 11 or 12px, so it is held to the
+     4.5:1 small text needs on every ground it can stand on, the darkest of
+     which is a code block — `src/contrast.test.ts` measures it. */
+  --muted: #706860;
+  /* The one colour below that floor, and it is not for text: marks nobody
+     reads — a tab's cross at rest, a table's pipes, a disabled control — held
+     to the 3:1 a control needs instead. Which rules may use it is a list in
+     the same test, each with its reason. */
+  --faint: #8c847b;
+  /* The brand's terracotta at the lightness that reads as text on a light
+     ground, as dowel draws every product's accent in its light theme: the hue
+     and the chroma are the mark's, the lightness is 0.5. */
+  --accent: #a33f16;
+  /* What is written on an accent fill. */
+  --on-accent: #ffffff;
   --code: #a8452a;
   --code-bg: #f0ebe5;
   --active-line: #f5f1ec;
@@ -50,12 +64,12 @@
      "this one is a warning" at a glance. */
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
-  --link-missing: #b08a76;
+  --link-missing: #85614e;
   /* The two halves of a previewed change. Not red and green: the line that goes
      away is not an error and the one that arrives is not a success, and a
      product whose only strong colour is one accent should not grow a traffic
      light for a preview. Muted for what was, the accent for what will be. */
-  --was: #8a8279;
+  --was: #706860;
   --was-bg: #f0ebe5;
   --will-be: #a8452a;
   --will-be-bg: #f7e8e2;
@@ -70,19 +84,20 @@
   --callout-success: #3f9e57;
   --callout-question: #c08a2e;
   --callout-warning: #d08320;
-  --callout-danger: #cc4436;
+  --callout-danger: #c0382c;
   --callout-example: #8a63c4;
-  --callout-quote: #8a8279;
+  --callout-quote: #706860;
 
-  /* Tokens inside a code block. */
+  /* Tokens inside a code block, each readable as text on the block's ground —
+     a comment included: it is read, so it is not allowed to be a mark. */
   --tok-keyword: #a8452a;
-  --tok-string: #3f7d4e;
-  --tok-number: #9a6a1f;
-  --tok-comment: #96908a;
-  --tok-function: #2f7fa8;
-  --tok-type: #7a5aa8;
-  --tok-property: #2f8f78;
-  --tok-punctuation: #8a8279;
+  --tok-string: #387647;
+  --tok-number: #8f6010;
+  --tok-comment: #6e6863;
+  --tok-function: #1c7099;
+  --tok-type: #7959a7;
+  --tok-property: #077762;
+  --tok-punctuation: #706860;
 
   /* The overlay scrollbar (scrollbar.css) reads these. */
   --scrollbar-thumb: #cdc4b8;
@@ -100,6 +115,7 @@
   --editor-text: var(--text);
   --editor-heading: var(--heading);
   --editor-muted: var(--muted);
+  --editor-faint: var(--faint);
   --editor-accent: var(--accent);
   --editor-border: var(--border);
   --editor-panel: var(--status-bg);
@@ -140,8 +156,10 @@
   --bg: #17161a;
   --text: #ddd8d2;
   --heading: #f2eee9;
-  --muted: #837c74;
+  --muted: #968e86;
+  --faint: #756e66;
   --accent: #e08a68;
+  --on-accent: #17161a;
   --code: #7fd3b4;
   --code-bg: #23222a;
   --active-line: #1e1d23;
@@ -153,7 +171,7 @@
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
   --link-missing: #a38878;
-  --was: #8c857c;
+  --was: #968e86;
   --was-bg: #2a2723;
   --will-be: #e0906f;
   --will-be-bg: #33241e;
@@ -170,15 +188,15 @@
   --callout-warning: #e8a34a;
   --callout-danger: #e8695c;
   --callout-example: #ad8ae0;
-  --callout-quote: #837c74;
+  --callout-quote: #968e86;
   --tok-keyword: #e08a68;
   --tok-string: #8fd0a0;
   --tok-number: #e0b153;
-  --tok-comment: #6d675f;
+  --tok-comment: #908a81;
   --tok-function: #74b8dd;
   --tok-type: #b79ae8;
   --tok-property: #5fd0b0;
-  --tok-punctuation: #837c74;
+  --tok-punctuation: #968e86;
   --scrollbar-thumb: #3a3742;
   --scrollbar-thumb-hover: #56515f;
   }
@@ -190,8 +208,10 @@
   --bg: #17161a;
   --text: #ddd8d2;
   --heading: #f2eee9;
-  --muted: #837c74;
+  --muted: #968e86;
+  --faint: #756e66;
   --accent: #e08a68;
+  --on-accent: #17161a;
   --code: #7fd3b4;
   --code-bg: #23222a;
   --active-line: #1e1d23;
@@ -203,7 +223,7 @@
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
   --link-missing: #a38878;
-  --was: #8c857c;
+  --was: #968e86;
   --was-bg: #2a2723;
   --will-be: #e0906f;
   --will-be-bg: #33241e;
@@ -220,15 +240,15 @@
   --callout-warning: #e8a34a;
   --callout-danger: #e8695c;
   --callout-example: #ad8ae0;
-  --callout-quote: #837c74;
+  --callout-quote: #968e86;
   --tok-keyword: #e08a68;
   --tok-string: #8fd0a0;
   --tok-number: #e0b153;
-  --tok-comment: #6d675f;
+  --tok-comment: #908a81;
   --tok-function: #74b8dd;
   --tok-type: #b79ae8;
   --tok-property: #5fd0b0;
-  --tok-punctuation: #837c74;
+  --tok-punctuation: #968e86;
   --scrollbar-thumb: #3a3742;
   --scrollbar-thumb-hover: #56515f;
 }
@@ -581,18 +601,19 @@ body {
   border: 0;
   border-radius: 3px;
   background: none;
-  color: inherit;
   font-size: 14px;
   line-height: 1;
   cursor: default;
   /* Reserved rather than revealed on hover: a close button that appears under
-     the pointer is one the pointer was not aiming for. */
-  opacity: 0.45;
+     the pointer is one the pointer was not aiming for. Drawn in the colour for
+     marks rather than faded with an opacity: an opacity is a colour nobody
+     measured, and this one put the cross at 1.6:1 on a tab at rest. */
+  color: var(--faint);
 }
 
 .tab-close:hover {
   background: var(--active-line);
-  opacity: 1;
+  color: inherit;
 }
 
 /* The recent list, shown over an empty window. Positioned rather than placed in
@@ -1476,7 +1497,7 @@ body {
 }
 
 .search-action:disabled {
-  opacity: 0.5;
+  color: var(--faint);
 }
 
 .search-action--primary {
@@ -1794,7 +1815,7 @@ body {
 .rename-confirm {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .rename-cancel:hover {
@@ -1902,9 +1923,9 @@ body {
   color: var(--muted);
 }
 
-/* dowel draws the version in `faint`, a step below `dim`. scheda has no such
-   colour — its secondary text is all `--muted` — and the way to get one here
-   would be an opacity on top, which is what the first draft did: 11px at 0.75
+/* dowel draws the version in `faint`, a step below `dim`. scheda has a
+   `--faint` too, but only for marks nobody reads — a version is read. The
+   first draft got its quieter step from an opacity instead: 11px at 0.75
    measured 2.51:1 against the light background, where small text needs 4.5.
    A version nobody can read is not a quieter version, it is a missing one, so
    it is drawn in `--muted` like the rest and set apart by the mono face
@@ -2018,13 +2039,12 @@ body {
 }
 
 .tree-menu button:disabled {
-  color: var(--muted);
-  opacity: 0.6;
+  color: var(--faint);
 }
 
 .tree-menu button:disabled:hover {
   background: none;
-  color: var(--muted);
+  color: var(--faint);
 }
 
 /* -------------------------------------------------------------- settings -- */
@@ -2168,7 +2188,7 @@ body {
 
 .settings-button:disabled,
 .settings-stepper button:disabled {
-  color: var(--muted);
+  color: var(--faint);
 }
 
 .settings-segments {
@@ -2195,7 +2215,9 @@ body {
   position: relative;
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  /* White was right on the light accent and 2.6:1 on the dark one, which is
+     light; the partner follows the theme. */
+  color: var(--on-accent);
 }
 
 .settings-stepper {

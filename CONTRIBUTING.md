@@ -43,6 +43,13 @@ to `src-tauri/tests/formats` with its line in `FROZEN`, and leave the earlier
 samples as they are. The tests say which of these is missing. Command ids are
 frozen with the settings: a renamed command keeps its old id in `RENAMED`.
 
+Every colour a glyph is drawn in is measured (ADR 0017): text clears 4.5:1 on
+every ground in both themes, and `--faint` is for marks that are not read. A
+new colour goes into the palette in `src/styles.css`, in the light block and in
+both copies of the dark one; `src/contrast.test.ts` measures it, and
+`check:layout` measures the rendered page. A rule that needs `--faint` or an
+opacity adds itself, with its reason, to the lists in that test.
+
 ## Releases
 
 A tag drafts the release on three platforms (`.github/workflows/release.yml`):

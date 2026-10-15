@@ -15,6 +15,8 @@ const FALLBACKS = {
   text: 'var(--text)',
   heading: 'var(--ink)',
   muted: 'var(--dim)',
+  // Marks that are not read as text: a table's pipes, a rule's dashes.
+  faint: 'var(--faint)',
   accent: 'var(--accent)',
   border: 'var(--line-2)',
   panel: 'var(--raise)',

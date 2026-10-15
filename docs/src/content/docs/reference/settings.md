@@ -18,6 +18,15 @@ no Save button to forget.
 The theme and autosave are also commands, so `Ctrl+Shift+P` then `dark` is a
 quicker way to switch.
 
+## Both themes are readable
+
+Every colour scheda writes text in - the status line, a tab at rest, the hints
+under a setting, a comment in a code block - measures at least 4.5:1 against
+what it stands on, in the light theme and in the dark one: the WCAG AA level
+for small text. Marks that are not read - a tab's cross, a table's pipes, a
+disabled control - are drawn quieter, at 3:1. Both are measured on every build
+rather than judged by eye.
+
 ## The file
 
 scheda stores its settings in the application's own data directory — never in

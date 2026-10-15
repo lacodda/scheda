@@ -160,6 +160,7 @@ does, in its stylesheet. The list is also exported as `editorTokens`.
 | `--editor-text` | The text | `var(--text)` |
 | `--editor-heading` | Headings and strong text | `var(--ink)` |
 | `--editor-muted` | Quiet things: markers, labels, the last heading level | `var(--dim)` |
+| `--editor-faint` | Marks that are not read: a table's pipes, a rule's dashes | `var(--faint)` |
 | `--editor-accent` | Links, the caret, list markers, ticked tasks | `var(--accent)` |
 | `--editor-border` | Borders of pictures, panels and fields | `var(--line-2)` |
 | `--editor-panel` | What embeds, the front matter and the search panel sit on | `var(--raise)` |
