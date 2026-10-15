@@ -10,5 +10,9 @@ export default defineConfig({
     // The rectangles jsdom does not have and CodeMirror asks for; see the file
     // for why a missing one fails tests at random.
     setupFiles: ['test/dom.ts'],
+    // Four, as in the window's configuration, and for the same reason: each
+    // worker starts its own jsdom. The two have to agree — vitest refuses to
+    // run projects of one group on different numbers of workers.
+    maxWorkers: 4,
   },
 })

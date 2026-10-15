@@ -10,6 +10,9 @@ export default defineConfig({
 		starlight({
 			title: 'scheda',
 			titleDelimiter: '-',
+			// The 404 page is a content page (src/content/docs/404.md): Starlight's own
+			// route looks for that entry and warns on every build when it is missing.
+			disable404Route: true,
 			description:
 				'A markdown notepad that turns into a vault when there is a folder around it.',
 			logo: {
