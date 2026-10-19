@@ -100,6 +100,9 @@ export interface EditorHandle {
   readonly view: EditorView
   /** Every pane's view, for what applies to the whole window. */
   views: () => readonly EditorView[]
+  /** The element the panes live in: where the keys of the note's own
+   *  commands are answered. */
+  readonly host: HTMLElement
   tabs: () => readonly Tab[]
   active: () => Tab
   /** Called whenever a document, the tab list, a pane or the focus changes. */
@@ -516,6 +519,7 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       return panes[focused].view
     },
     views: () => panes.map((pane) => pane.view),
+    host,
     tabs: () => tabs,
     active,
     subscribe(listener) {

@@ -1,6 +1,8 @@
 # 0013 — Commands and their keys are data
 
-Accepted, 2026-09-30.
+Accepted, 2026-09-30. The key handler and the notation are superseded by
+[ADR 0018](0018-the-keys-are-the-lines-list-of-commands.md); the catalogue and the
+keys kept as changes stand.
 
 ## Context
 

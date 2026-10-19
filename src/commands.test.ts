@@ -2,11 +2,17 @@
 //
 // What a wrong answer here looks like on screen: a shortcut that stops working
 // the moment somebody switches to a Cyrillic layout, AltGr typing a letter and
-// firing a command instead, a rebound key still running the old command, or an
-// editor command stealing a key from a search field.
+// firing a command instead, a rebound key still running the old command, a key
+// the person gave a command kept by the editor instead, or an editor command
+// stealing a key from a search field.
+import { act, createElement, type ReactElement, type RefObject } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import { boundElsewhere, commandFor, handle, installKeys, keysFor, run, setOverrides, COMMANDS, RENAMED } from './commands'
-import { chordOf, isChord, isShortcut, showChord } from './keys'
+import table from '../src-tauri/tests/keys-1-to-2.json'
+import { applyKeys, boundElsewhere, clash, COMMANDS, keymapOf, keysFor, RENAMED, showKeys, useCommand } from './commands'
+import { isShortcut, isSystemKey, showSystemKey, systemKeyOf } from './system-key'
+import { useCommandList, type ListedCommand } from './ui/commands'
+import { keysOf, normalizeKeys } from './ui/shortcut'
 import { match, rank } from './fuzzy'
 import { stampOf } from './quick/stamp'
 
@@ -18,77 +24,37 @@ function key(init: KeyboardEventInit & { altGraph?: boolean }): KeyboardEvent {
   return event
 }
 
-describe('a chord', () => {
-  it('is written with its modifiers in one order', () => {
-    expect(chordOf(key({ key: 'p', code: 'KeyP', ctrlKey: true, shiftKey: true }))).toBe('Ctrl+Shift+P')
-    expect(chordOf(key({ key: 'P', code: 'KeyP', shiftKey: true, ctrlKey: true, altKey: true }))).toBe(
+describe('the system-wide key', () => {
+  it('is written with its modifiers in one order, the Windows key first', () => {
+    expect(systemKeyOf(key({ key: 'n', code: 'KeyN', metaKey: true, shiftKey: true }))).toBe('Win+Shift+N')
+    expect(systemKeyOf(key({ key: 'P', code: 'KeyP', shiftKey: true, ctrlKey: true, altKey: true }))).toBe(
       'Ctrl+Alt+Shift+P',
     )
   })
 
   it('is the physical key on a layout that does not type Latin', () => {
-    // Ctrl+P on a Russian layout arrives as `з`.
-    expect(chordOf(key({ key: 'з', code: 'KeyP', ctrlKey: true }))).toBe('Ctrl+P')
-  })
-
-  it('is the letter typed on a Latin layout that moves the keys', () => {
-    // A French keyboard's Z is where a US keyboard has W.
-    expect(chordOf(key({ key: 'z', code: 'KeyW', ctrlKey: true }))).toBe('Ctrl+Z')
-  })
-
-  it('names punctuation by the key, not what Shift made of it', () => {
-    expect(chordOf(key({ key: '{', code: 'BracketLeft', ctrlKey: true, shiftKey: true }))).toBe('Ctrl+Shift+[')
-    expect(chordOf(key({ key: '!', code: 'Digit1', ctrlKey: true, shiftKey: true }))).toBe('Ctrl+Shift+1')
-    expect(chordOf(key({ key: ',', code: 'Comma', ctrlKey: true }))).toBe('Ctrl+,')
+    expect(systemKeyOf(key({ key: 'т', code: 'KeyN', metaKey: true, shiftKey: true }))).toBe('Win+Shift+N')
   })
 
   it('is nothing while only a modifier is down, or when AltGr is typing', () => {
-    expect(chordOf(key({ key: 'Control', code: 'ControlLeft', ctrlKey: true }))).toBeNull()
-    expect(chordOf(key({ key: 'ń', code: 'KeyN', ctrlKey: true, altKey: true, altGraph: true }))).toBeNull()
+    expect(systemKeyOf(key({ key: 'Meta', code: 'MetaLeft', metaKey: true }))).toBeNull()
+    expect(systemKeyOf(key({ key: 'ń', code: 'KeyN', ctrlKey: true, altKey: true, altGraph: true }))).toBeNull()
   })
 
-  it('takes the Windows key only where a system-wide key is being recorded', () => {
-    const event = key({ key: 'n', code: 'KeyN', metaKey: true, shiftKey: true })
-    expect(chordOf(event, true)).toBe('Win+Shift+N')
-    // In the window, Cmd on a Mac is Ctrl.
-    expect(chordOf(event)).toBe('Ctrl+Shift+N')
-  })
-
-  it('must hold more than Shift to be a shortcut when the key types', () => {
+  it('must hold more than Shift when the key types', () => {
     expect(isShortcut('A')).toBe(false)
     expect(isShortcut('Shift+A')).toBe(false)
-    expect(isShortcut('Ctrl+A')).toBe(true)
+    expect(isShortcut('Win+A')).toBe(true)
     expect(isShortcut('F5')).toBe(true)
-    expect(isShortcut('Shift+Space')).toBe(false)
-  })
-
-  it('shows arrows as arrows', () => {
-    expect(showChord('Ctrl+Alt+Right')).toBe('Ctrl+Alt+→')
   })
 
   it('has one spelling, and what is recorded is always in it', () => {
-    expect(isChord('Win+Shift+N')).toBe(true)
-    expect(isChord('Ctrl+Alt+Shift+P')).toBe(true)
-    expect(isChord('Ctrl+\\')).toBe(true)
-    expect(isChord('F12')).toBe(true)
-    // The same chords spelt another way, and things that are not chords.
-    expect(isChord('Shift+Win+N')).toBe(false)
-    expect(isChord('Shift+Ctrl+P')).toBe(false)
-    expect(isChord('Ctrl+p')).toBe(false)
-    expect(isChord('Ctrl+Shift')).toBe(false)
-    expect(isChord('Ctrl+F25')).toBe(false)
-    const recorded = [
-      key({ key: 'n', code: 'KeyN', metaKey: true, shiftKey: true, ctrlKey: true, altKey: true }),
-      key({ key: '{', code: 'BracketLeft', ctrlKey: true, shiftKey: true }),
-      key({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }),
-      key({ key: 'F5', code: 'F5' }),
-    ]
-    for (const event of recorded) {
-      for (const withWin of [false, true]) {
-        const chord = chordOf(event, withWin)
-        expect(chord !== null && isChord(chord), String(chord)).toBe(true)
-      }
-    }
+    expect(isSystemKey('Win+Shift+N')).toBe(true)
+    expect(isSystemKey('Shift+Win+N')).toBe(false)
+    expect(isSystemKey('Ctrl+p')).toBe(false)
+    const recorded = systemKeyOf(key({ key: 'n', code: 'KeyN', metaKey: true, shiftKey: true, ctrlKey: true, altKey: true }))
+    expect(recorded !== null && isSystemKey(recorded)).toBe(true)
+    expect(showSystemKey('Win+Alt+Right')).toBe('Win+Alt+→')
   })
 })
 
@@ -106,8 +72,6 @@ const SHIPPED = [
 ]
 
 describe('the ids of the commands', () => {
-  afterEach(() => setOverrides({}))
-
   it('keep every id that shipped, or say what it became', () => {
     const ids = new Set(COMMANDS.map((command) => command.id))
     for (const id of SHIPPED) {
@@ -121,100 +85,277 @@ describe('the ids of the commands', () => {
     }
   })
 
-  it('write their default keys in the one notation', () => {
-    for (const command of COMMANDS) {
-      for (const chord of command.keys) expect(isChord(chord), `${command.id}: ${chord}`).toBe(true)
-    }
-  })
-
   it('carry a key kept under an old id to the new one', () => {
-    setOverrides({ 'file.keep': ['Ctrl+K'] }, { 'file.keep': 'file.save' })
-    expect(keysFor('file.save')).toEqual(['Ctrl+K'])
+    expect(keymapOf({ 'file.keep': ['Mod+K'] }, { 'file.keep': 'file.save' })).toEqual({ 'file.save': ['Mod+K'] })
     // The command's own id is the later change, and wins.
-    setOverrides({ 'file.keep': ['Ctrl+K'], 'file.save': ['Ctrl+J'] }, { 'file.keep': 'file.save' })
-    expect(keysFor('file.save')).toEqual(['Ctrl+J'])
+    expect(
+      keymapOf({ 'file.keep': ['Mod+K'], 'file.save': ['Mod+J'] }, { 'file.keep': 'file.save' }),
+    ).toEqual({ 'file.save': ['Mod+J'] })
   })
 })
 
-describe('the commands', () => {
-  const detach: (() => void)[] = []
-  let stop: (() => void) | null = null
+describe('the default keys', () => {
+  it('are written in the line notation, one spelling each', () => {
+    for (const command of COMMANDS) {
+      for (const keys of command.keys) {
+        // `Ctrl+Tab` is the one written with Ctrl, on purpose: it is Cmd+Tab
+        // only off a Mac, where the two are one key.
+        const spelled = keys.startsWith('Ctrl+') ? keys.replace('Ctrl+', 'Mod+') : keys
+        expect(normalizeKeys(keys, false), `${command.id}: ${keys}`).toBe(spelled)
+      }
+    }
+  })
 
+  it('are on no two commands, on either platform', () => {
+    const all = COMMANDS.flatMap((command) => command.keys.map((keys) => ({ id: command.id, keys })))
+    for (const [index, one] of all.entries()) {
+      for (const other of all.slice(index + 1)) {
+        expect(clash(one.keys, other.keys), `${one.id} and ${other.id}`).toBe(false)
+      }
+    }
+  })
+})
+
+// The settings step from format 1 to 2 (`src-tauri/src/settings.rs`) rewrites
+// every key a person rebound. It is right only if the string it writes is the
+// one dowel reads from the very key that format 1 recorded - on this layout or
+// on a Russian one. The same table drives the Rust test of the step.
+describe('a key rebound before 0.17', () => {
+  it.each(table.map((row) => [row.format1, row.format2, row] as const))(
+    '%s is %s, and pressing it still gives that',
+    (_, format2, row) => {
+      expect(keysOf(key(row.event), false)).toBe(format2)
+      expect(normalizeKeys(format2, false)).toBe(format2)
+    },
+  )
+})
+
+describe('keys as text', () => {
+  it('are each key under the name the line gives it', () => {
+    expect(showKeys('Mod+Shift+P', false)).toBe('Ctrl+Shift+P')
+    expect(showKeys('Mod+Shift+P', true)).toBe('⌘⇧P')
+    expect(showKeys('Mod+Alt+ArrowRight', false)).toBe('Ctrl+Alt+→')
+    expect(showKeys('G D', false)).toBe('G › D')
+  })
+
+  it('say Space and Tab in words off a Mac, where a keyboard does', () => {
+    expect(showKeys('Mod+Shift+Space', false)).toBe('Ctrl+Shift+Space')
+    expect(showKeys('Ctrl+Tab', false)).toBe('Ctrl+Tab')
+    expect(showKeys('Mod+Shift+Space', true)).toBe('⌘⇧␣')
+  })
+
+  it('are shown as written when they do not parse, rather than throwing', () => {
+    expect(showKeys('Hyper+K', false)).toBe('Hyper+K')
+  })
+})
+
+describe('two keys on one command', () => {
+  it('are the same keystroke however they are spelt', () => {
+    expect(clash('Ctrl+Tab', 'Mod+Tab')).toBe(true)
+    expect(clash('Mod+S', 'Mod+Shift+S')).toBe(false)
+    // A sequence begun by the other's key can never finish.
+    expect(clash('G', 'G D')).toBe(true)
+    expect(clash('Hyper+K', 'Mod+K')).toBe(false)
+  })
+
+  it('name the command keys would be taken from', () => {
+    expect(boundElsewhere('Mod+S', 'file.new', {}).map((command) => command.id)).toEqual(['file.save'])
+    expect(boundElsewhere('Mod+S', 'file.save', {})).toEqual([])
+    expect(boundElsewhere('Mod+S', 'file.new', { 'file.save': ['F2'] })).toEqual([])
+    expect(keysFor('file.save', { 'file.save': ['F2'] })).toEqual(['F2'])
+  })
+})
+
+const roots: Root[] = []
+
+/** Renders into a root of its own, as the other screens' tests do. */
+function render(element: ReactElement): void {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  roots.push(root)
+  act(() => root.render(element))
+}
+
+function cleanup(): void {
+  for (const root of roots.splice(0)) act(() => root.unmount())
+}
+
+/** Declares commands the way the shell does, and lists them back. */
+function Window({
+  ran,
+  notes,
+  listed,
+}: {
+  ran: string[]
+  notes: RefObject<Element | null>
+  listed?: (list: ListedCommand[]) => void
+}) {
+  useCommand('file.save', () => void ran.push('file.save'))
+  useCommand('file.goTo', () => void ran.push('file.goTo'))
+  useCommand('file.export', () => void ran.push('file.export'))
+  useCommand('palette.commands', () => void ran.push('palette.commands'))
+  useCommand('view.reading', () => void ran.push('view.reading'), { notes })
+  useCommand('pane.second', () => void ran.push('pane.second'), { enabled: false })
+  const list = useCommandList()
+  listed?.(list)
+  return null
+}
+
+describe('the commands', () => {
   afterEach(() => {
-    for (const off of detach.splice(0)) off()
-    stop?.()
-    stop = null
-    setOverrides({})
+    cleanup()
+    applyKeys({})
     document.body.innerHTML = ''
   })
 
-  it('have one id each, and no default key twice', () => {
-    const ids = COMMANDS.map((command) => command.id)
-    expect(new Set(ids).size).toBe(ids.length)
-    const keys = COMMANDS.flatMap((command) => command.keys)
-    expect(new Set(keys).size).toBe(keys.length)
-  })
+  /** The window: the panes the notes live in, a note in them that claims
+   *  `Ctrl+D` the way CodeMirror's keymap claims a key it binds, and a search
+   *  box beside them. */
+  function mount(listed?: (list: ListedCommand[]) => void) {
+    const host = document.createElement('div')
+    const note = document.createElement('div')
+    note.contentEditable = 'true'
+    host.append(note)
+    const field = document.createElement('input')
+    document.body.append(host, field)
+    const editorAnswered: string[] = []
+    note.addEventListener('keydown', (event) => {
+      if (event.defaultPrevented || !event.ctrlKey || event.code !== 'KeyD') return
+      editorAnswered.push('Ctrl+D')
+      event.preventDefault()
+    })
+    const ran: string[] = []
+    render(createElement(Window, { ran, notes: { current: host }, listed }))
+    return { note, field, ran, editorAnswered }
+  }
+
+  function press(target: Element, init: KeyboardEventInit & { altGraph?: boolean }): KeyboardEvent {
+    const event = key(init)
+    act(() => {
+      target.dispatchEvent(event)
+    })
+    return event
+  }
 
   it('run from their key, and the key goes no further', () => {
-    let saved = 0
-    detach.push(handle('file.save', () => void (saved += 1)))
-    stop = installKeys()
-
-    const event = key({ key: 's', code: 'KeyS', ctrlKey: true })
-    window.dispatchEvent(event)
-
-    expect(saved).toBe(1)
+    const { ran } = mount()
+    const event = press(document.body, { key: 's', code: 'KeyS', ctrlKey: true })
+    expect(ran).toEqual(['file.save'])
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('answer on a Russian layout, where the key types another letter', () => {
+    const { ran, note } = mount()
+    press(note, { key: 'з', code: 'KeyP', ctrlKey: true })
+    press(note, { key: 'ы', code: 'KeyS', ctrlKey: true })
+    expect(ran).toEqual(['file.goTo', 'file.save'])
+  })
+
+  it('leave AltGr to type its letter', () => {
+    // Polish ś is AltGr+S, which Windows delivers as Ctrl+Alt+S - the key of
+    // "Save as a web page".
+    const { ran, note } = mount()
+    const event = press(note, { key: 'ś', code: 'KeyS', ctrlKey: true, altKey: true, altGraph: true })
+    expect(ran).toEqual([])
+    expect(event.defaultPrevented).toBe(false)
+    press(note, { key: 's', code: 'KeyS', ctrlKey: true, altKey: true })
+    expect(ran).toEqual(['file.export'])
+  })
+
   it('answer to a rebound key and not to the old one', () => {
-    let saved = 0
-    detach.push(handle('file.save', () => void (saved += 1)))
-    stop = installKeys()
-    setOverrides({ 'file.save': ['Ctrl+Alt+W'] })
-
-    window.dispatchEvent(key({ key: 's', code: 'KeyS', ctrlKey: true }))
-    expect(saved).toBe(0)
-    window.dispatchEvent(key({ key: 'w', code: 'KeyW', ctrlKey: true, altKey: true }))
-    expect(saved).toBe(1)
-    expect(keysFor('file.save')).toEqual(['Ctrl+Alt+W'])
-    expect(commandFor('Ctrl+S')).toBeUndefined()
+    const { ran } = mount()
+    act(() => applyKeys({ 'file.save': ['Mod+Alt+W'] }))
+    press(document.body, { key: 's', code: 'KeyS', ctrlKey: true })
+    expect(ran).toEqual([])
+    press(document.body, { key: 'w', code: 'KeyW', ctrlKey: true, altKey: true })
+    expect(ran).toEqual(['file.save'])
   })
 
-  it('leave a key with nothing attached to the editor', () => {
-    stop = installKeys()
-    const event = key({ key: 's', code: 'KeyS', ctrlKey: true })
-    window.dispatchEvent(event)
+  it('answer to a key kept under the id a command had before it was renamed', () => {
+    const { ran } = mount()
+    act(() => applyKeys({ 'file.keep': ['Mod+K'] }, { 'file.keep': 'file.save' }))
+    press(document.body, { key: 'k', code: 'KeyK', ctrlKey: true })
+    expect(ran).toEqual(['file.save'])
+  })
+
+  it('take a key the person gave them from the editor that binds it', () => {
+    const { ran, note, editorAnswered } = mount()
+    act(() => applyKeys({ 'file.save': ['Mod+D'] }))
+    press(note, { key: 'd', code: 'KeyD', ctrlKey: true })
+    expect(ran).toEqual(['file.save'])
+    expect(editorAnswered, 'the editor answered the key as well').toEqual([])
+  })
+
+  it('answer in the note and in a field, wherever the person is', () => {
+    const { ran, note, field } = mount()
+    press(note, { key: 's', code: 'KeyS', ctrlKey: true })
+    press(field, { key: 's', code: 'KeyS', ctrlKey: true })
+    expect(ran).toEqual(['file.save', 'file.save'])
+  })
+
+  it('keep a note command in the note, out of a field beside it', () => {
+    const { ran, note, field } = mount()
+    const outside = press(field, { key: 'e', code: 'KeyE', ctrlKey: true })
+    expect(ran).toEqual([])
+    expect(outside.defaultPrevented).toBe(false)
+    press(note, { key: 'e', code: 'KeyE', ctrlKey: true })
+    expect(ran).toEqual(['view.reading'])
+  })
+
+  it('leave a key alone while the command cannot run', () => {
+    const { ran } = mount()
+    const event = press(document.body, { key: '2', code: 'Digit2', ctrlKey: true })
+    expect(ran).toEqual([])
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('keep editor commands out of fields', () => {
-    let toggled = 0
-    detach.push(handle('view.reading', () => void (toggled += 1)))
-    stop = installKeys()
-    const field = document.createElement('input')
-    document.body.appendChild(field)
-    field.focus()
-
-    const event = key({ key: 'e', code: 'KeyE', ctrlKey: true })
-    field.dispatchEvent(event)
-
-    expect(toggled).toBe(0)
-    expect(event.defaultPrevented).toBe(false)
+  it('are offered by the palette, a note command too, the palette itself not', () => {
+    let list: ListedCommand[] = []
+    mount((now) => {
+      list = now
+    })
+    const offered = list.filter((command) => command.run !== undefined).map((command) => command.id)
+    expect(offered).toContain('view.reading')
+    expect(offered).toContain('file.save')
+    expect(offered).not.toContain('palette.commands')
+    expect(offered).not.toContain('pane.second')
+    // Listed all the same, with their keys, under scheda's titles.
+    expect(list.find((command) => command.id === 'palette.commands')?.keys).toEqual(['Mod+Shift+P'])
+    expect(list.find((command) => command.id === 'view.reading')?.label).toBe('View: Reading mode')
   })
 
-  it('let a key through when the command declines it', () => {
-    detach.push(handle('pane.second', () => false))
-    stop = installKeys()
-    const event = key({ key: '2', code: 'Digit2', ctrlKey: true })
-    window.dispatchEvent(event)
-    expect(event.defaultPrevented).toBe(false)
-    expect(run('pane.second')).toBe(false)
-  })
-
-  it('name the command a chord would be taken from', () => {
-    expect(boundElsewhere('Ctrl+S', 'file.new').map((command) => command.id)).toEqual(['file.save'])
-    expect(boundElsewhere('Ctrl+S', 'file.save')).toEqual([])
+  it('refuse a note command declared without the notes, and a window command with them', () => {
+    function Wrong({ id, notes }: { id: string; notes?: RefObject<Element | null> }) {
+      useCommand(id, () => {}, { notes })
+      return null
+    }
+    const quiet = console.error
+    const thrown: unknown[] = []
+    console.error = () => {}
+    const onError = (event: ErrorEvent) => {
+      thrown.push(event.error)
+      event.preventDefault()
+    }
+    window.addEventListener('error', onError)
+    try {
+      for (const element of [
+        createElement(Wrong, { id: 'view.reading' }),
+        createElement(Wrong, { id: 'file.save', notes: { current: null } }),
+      ]) {
+        try {
+          render(element)
+        } catch (error) {
+          thrown.push(error)
+        }
+      }
+    } finally {
+      console.error = quiet
+      window.removeEventListener('error', onError)
+    }
+    const messages = thrown.map((error) => String((error as Error)?.message ?? error))
+    expect(messages.some((message) => /view\.reading is a command of the note/.test(message))).toBe(true)
+    expect(messages.some((message) => /file\.save is not a command of the note/.test(message))).toBe(true)
   })
 })
 

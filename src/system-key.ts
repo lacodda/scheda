@@ -1,20 +1,17 @@
-// Keys as data: one notation for every shortcut the window knows about.
+// The one key scheda asks the system for: the quick note, from any program.
 //
-// A shortcut is stored, compared and shown as a string — `Ctrl+Shift+P` — so
-// that the settings file, the command palette, the settings screen and the key
-// handler all speak about the same thing in the same words. Modifiers come in
-// one fixed order — `Win`, `Ctrl`, `Alt`, `Shift`, the order Windows itself
-// writes them in — which is what makes two spellings of one chord impossible.
+// The window's own keys are the line's notation (`src/ui/shortcut.tsx`, ADR
+// 0018). This one is not a key of the window - the core registers it with the
+// system's hook, which reads it - so it keeps the spelling that hook knows:
+// `Win`, `Ctrl`, `Alt`, `Shift`, in that one order, the order Windows itself
+// writes them in, then the key. The Windows key is exactly what a system-wide
+// key wants and what the line's notation refuses: inside a window nearly every
+// `Win` chord is the system's.
 //
-// The notation is part of the settings file, and frozen with it (ADR 0016): a
-// change to it is a new settings format with a step that rewrites old chords.
+// The spelling is part of the settings file, and frozen with it (ADR 0016).
 //
 // The letter is the one the keyboard types when it types Latin, and the key's
-// place on the keyboard when it does not. `Ctrl+P` on a Russian layout arrives
-// with `event.key` set to `з`; matching on that would make every shortcut in
-// the window stop working the moment somebody switches language to write a
-// sentence. The physical key is the answer there. On a Latin layout the
-// letter wins, so a French keyboard's `Ctrl+Z` is still the key marked Z.
+// place on the keyboard when it does not, as everywhere in the line.
 
 /** Keys named by what they are rather than what they type. */
 const NAMED: Record<string, string> = {
@@ -50,13 +47,9 @@ const NAMED: Record<string, string> = {
 /** The keys that are only ever held, never pressed on their own. */
 const MODIFIERS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'OS'])
 
-/** What a keyboard event is as a chord, or null when it is not one: a
- *  modifier on its own, or `AltGr` typing a character.
- *
- *  `withWin` lets the Windows key through as a modifier. The window's own
- *  shortcuts never use it — the system keeps nearly every `Win` chord for
- *  itself — but a system-wide key is exactly where it belongs. */
-export function chordOf(event: KeyboardEvent, withWin = false): string | null {
+/** What a keyboard event is as a system-wide key, or null when it is not one:
+ *  a modifier on its own, or `AltGr` typing a character. */
+export function systemKeyOf(event: KeyboardEvent): string | null {
   if (MODIFIERS.has(event.key)) return null
   // AltGr arrives as Ctrl+Alt on Windows, and on a Polish or German keyboard
   // AltGr with a letter types a character. That is typing, not a shortcut.
@@ -66,9 +59,8 @@ export function chordOf(event: KeyboardEvent, withWin = false): string | null {
   if (key === null) return null
 
   const parts: string[] = []
-  if (withWin && event.metaKey) parts.push('Win')
-  // Cmd on a Mac is the same finger and the same meaning as Ctrl elsewhere.
-  if (event.ctrlKey || (event.metaKey && !withWin)) parts.push('Ctrl')
+  if (event.metaKey) parts.push('Win')
+  if (event.ctrlKey) parts.push('Ctrl')
   if (event.altKey) parts.push('Alt')
   if (event.shiftKey) parts.push('Shift')
   parts.push(key)
@@ -93,32 +85,33 @@ function mainKey(event: KeyboardEvent): string | null {
 
 const KEYS = new Set(Object.values(NAMED))
 
-/** Whether text is a chord in this notation: the modifiers it holds in their
- *  one order, then one key by the name `chordOf` gives it. `Shift+Win+N` is
- *  not one — it is `Win+Shift+N` spelt a second way. */
-export function isChord(text: string): boolean {
+/** Whether text is a key in this spelling: the modifiers it holds in their
+ *  one order, then one key by the name `systemKeyOf` gives it. `Shift+Win+N`
+ *  is not one - it is `Win+Shift+N` spelt a second way. */
+export function isSystemKey(text: string): boolean {
   const parts = /^(Win\+)?(Ctrl\+)?(Alt\+)?(Shift\+)?(.+)$/.exec(text)
   if (!parts) return false
   const key = parts[5]
   return /^[A-Z0-9]$/.test(key) || /^F([1-9]|1[0-9]|2[0-4])$/.test(key) || KEYS.has(key)
 }
 
-/** Whether a chord could be a shortcut at all. A bare letter is typing, and so
- *  is a letter with only Shift; a function key or `Escape` on its own is fine. */
-export function isShortcut(chord: string): boolean {
-  const parts = chord.split('+')
-  const key = parts[parts.length - 1]
+/** Whether a key could be a system-wide shortcut at all. A bare letter is
+ *  typing, and so is a letter with only Shift - taken from every program at
+ *  once; a function key on its own is fine. */
+export function isShortcut(key: string): boolean {
+  const parts = key.split('+')
+  const main = parts[parts.length - 1]
   const modifiers = parts.slice(0, -1)
-  const typing = key.length === 1 || key === 'Space' || key === 'Enter' || key === 'Tab' || key === 'Backspace'
+  const typing = main.length === 1 || main === 'Space' || main === 'Enter' || main === 'Tab' || main === 'Backspace'
   if (!typing) return true
   return modifiers.some((modifier) => modifier !== 'Shift')
 }
 
 const SHOWN: Record<string, string> = { Up: '↑', Down: '↓', Left: '←', Right: '→' }
 
-/** A chord as a person reads it: arrows as arrows, the rest as written. */
-export function showChord(chord: string): string {
-  return chord
+/** The key as a person reads it: arrows as arrows, the rest as written. */
+export function showSystemKey(key: string): string {
+  return key
     .split('+')
     .map((part) => SHOWN[part] ?? part)
     .join('+')

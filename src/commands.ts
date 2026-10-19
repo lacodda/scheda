@@ -1,74 +1,81 @@
-// Every command the window has, in one list, and the one handler that turns a
-// key into one of them.
+// Every command the window has, in one catalogue, and how each is declared to
+// the line's list of commands.
 //
-// Before this, each panel listened to the keyboard for its own key. That was
-// fine while nobody could change a key and nothing needed to list them; with a
-// command palette that shows every command beside its key, and a settings
-// screen that rebinds them, eleven listeners each holding a hard-coded letter
-// would be eleven places for the palette to be wrong. So the list is data, the
-// keys are data, and whoever owns a command attaches what it does.
+// The list itself is dowel's (`src/ui/commands.tsx`, copied from its registry
+// and held equal to it by `src/ui/registry.test.ts`): it answers the keyboard,
+// lists what the palette offers, resolves two commands on one key, and reads a
+// letter by its place on a layout that does not type Latin. What stays here is
+// what only scheda knows (ADR 0018):
 //
-// Keys are matched before the editor sees them (capture phase), so a key taken
-// back from the editor — `Ctrl+E` is "end of line" in CodeMirror's defaults —
-// is ours without fighting its keymap. Only chords that are bound here are
-// touched; everything else goes on to the editor unchanged.
-import { chordOf } from './keys'
+//  - **the catalogue** - every id, its title and its default keys, whether or
+//    not its owner is mounted, because the ids are part of the settings format
+//    (ADR 0016) and the settings screen rebinds a command that is not on
+//    screen right now;
+//  - **how scheda declares them** - every command fires inside the note as
+//    well as outside it, and takes its key before CodeMirror's keymap does, so
+//    a key the person gave a command wins over the editor (ADR 0013);
+//  - **the old ids**, so a rebound key follows a renamed command.
+import type { RefObject } from 'react'
+import { setKeymap, useCommand as declare } from './ui/commands'
+import { isApplePlatform, keyLabel, normalizeKeys, parseKeys, sameStroke, strokeParts } from './ui/shortcut'
 
-/** Where a command applies. An editor command runs only while the keyboard is
- *  in a note: reading mode means nothing to the search box. */
+/** Where a command's key is answered. An editor command answers only while
+ *  the keyboard is in a note - reading mode means nothing to the search box -
+ *  and still runs from the palette, on the note in front. */
 export type Scope = 'window' | 'editor'
 
 export interface CommandSpec {
   id: string
   /** What the palette shows, starting with what it is about. */
   title: string
-  /** The keys it has before anybody changes them. */
+  /** The keys it has before anybody changes them, in the line's notation. */
   keys: string[]
   scope?: Scope
+  /** False for the one command the palette would only reopen. */
+  offered?: boolean
 }
-
-/** A command's work. Returning false declines the key, and it goes on to
- *  whatever would have had it — the fold keys decline where there is nothing
- *  to fold. */
-export type Handler = () => boolean | void
 
 // The order is the palette's order before anything is typed, so the things
 // reached for most come first.
+//
+// `Mod` is Ctrl here and Cmd on a Mac. Tab switching is the one exception and
+// says `Ctrl`: on a Mac Cmd+Tab belongs to the system, and Ctrl+Tab is what
+// switches tabs there - off a Mac the two are the same key.
 export const COMMANDS: readonly CommandSpec[] = [
-  { id: 'palette.commands', title: 'Show all commands', keys: ['Ctrl+Shift+P'] },
-  { id: 'file.goTo', title: 'Go to file', keys: ['Ctrl+P'] },
-  { id: 'insert.block', title: 'Insert block', keys: ['Ctrl+Shift+Space'], scope: 'editor' },
-  { id: 'file.new', title: 'File: New draft', keys: ['Ctrl+N'] },
-  { id: 'file.open', title: 'File: Open', keys: ['Ctrl+O'] },
-  { id: 'file.save', title: 'File: Save', keys: ['Ctrl+S'] },
-  { id: 'file.saveAs', title: 'File: Save as', keys: ['Ctrl+Shift+S'] },
-  { id: 'file.print', title: 'File: Print', keys: ['Ctrl+Alt+P'] },
-  { id: 'file.export', title: 'File: Save as a web page', keys: ['Ctrl+Alt+S'] },
+  { id: 'palette.commands', title: 'Show all commands', keys: ['Mod+Shift+P'], offered: false },
+  { id: 'file.goTo', title: 'Go to file', keys: ['Mod+P'] },
+  { id: 'insert.block', title: 'Insert block', keys: ['Mod+Shift+Space'], scope: 'editor' },
+  { id: 'file.new', title: 'File: New draft', keys: ['Mod+N'] },
+  { id: 'file.open', title: 'File: Open', keys: ['Mod+O'] },
+  { id: 'file.save', title: 'File: Save', keys: ['Mod+S'] },
+  { id: 'file.saveAs', title: 'File: Save as', keys: ['Mod+Shift+S'] },
+  { id: 'file.print', title: 'File: Print', keys: ['Mod+Alt+P'] },
+  { id: 'file.export', title: 'File: Save as a web page', keys: ['Mod+Alt+S'] },
   { id: 'file.obsidian', title: 'File: Open in Obsidian', keys: [] },
-  { id: 'tab.close', title: 'Tab: Close', keys: ['Ctrl+W'] },
+  { id: 'tab.close', title: 'Tab: Close', keys: ['Mod+W'] },
   { id: 'tab.closeOthers', title: 'Tab: Close others', keys: [] },
   { id: 'tab.closeAll', title: 'Tab: Close all', keys: [] },
   { id: 'tab.reopen', title: 'Tab: Reopen closed', keys: [] },
   { id: 'tab.pin', title: 'Tab: Pin or unpin', keys: [] },
   { id: 'tab.next', title: 'Tab: Next', keys: ['Ctrl+Tab'] },
   { id: 'tab.previous', title: 'Tab: Previous', keys: ['Ctrl+Shift+Tab'] },
-  { id: 'pane.split', title: 'Split: Open beside, or close the split', keys: ['Ctrl+\\'] },
-  { id: 'pane.first', title: 'Split: Go to the first pane', keys: ['Ctrl+1'] },
-  { id: 'pane.second', title: 'Split: Go to the second pane', keys: ['Ctrl+2'] },
-  { id: 'view.reading', title: 'View: Reading mode', keys: ['Ctrl+E'], scope: 'editor' },
-  { id: 'view.focus', title: 'View: Focus mode', keys: ['Ctrl+Shift+D'], scope: 'editor' },
-  { id: 'panel.tree', title: 'Panel: Files', keys: ['Ctrl+Shift+E'] },
-  { id: 'panel.outline', title: 'Panel: Outline', keys: ['Ctrl+Shift+O'] },
-  { id: 'panel.network', title: 'Panel: What links here', keys: ['Ctrl+Shift+B'] },
-  { id: 'panel.tags', title: 'Panel: Tags', keys: ['Ctrl+Shift+T'] },
-  { id: 'search.vault', title: 'Search: In the vault', keys: ['Ctrl+Shift+F'] },
-  { id: 'search.replace', title: 'Search: Replace in the vault', keys: ['Ctrl+Shift+H'] },
-  { id: 'fold.section', title: 'Fold: This section', keys: ['Ctrl+Shift+['], scope: 'editor' },
-  { id: 'unfold.section', title: 'Fold: Unfold this section', keys: ['Ctrl+Shift+]'], scope: 'editor' },
-  { id: 'fold.all', title: 'Fold: Every section', keys: ['Ctrl+Alt+['], scope: 'editor' },
-  { id: 'unfold.all', title: 'Fold: Unfold everything', keys: ['Ctrl+Alt+]'], scope: 'editor' },
+  { id: 'pane.split', title: 'Split: Open beside, or close the split', keys: ['Mod+\\'] },
+  { id: 'pane.first', title: 'Split: Go to the first pane', keys: ['Mod+1'] },
+  { id: 'pane.second', title: 'Split: Go to the second pane', keys: ['Mod+2'] },
+  { id: 'view.reading', title: 'View: Reading mode', keys: ['Mod+E'], scope: 'editor' },
+  { id: 'view.focus', title: 'View: Focus mode', keys: ['Mod+Shift+D'], scope: 'editor' },
+  { id: 'panel.tree', title: 'Panel: Files', keys: ['Mod+Shift+E'] },
+  { id: 'panel.outline', title: 'Panel: Outline', keys: ['Mod+Shift+O'] },
+  { id: 'panel.network', title: 'Panel: What links here', keys: ['Mod+Shift+B'] },
+  { id: 'panel.tags', title: 'Panel: Tags', keys: ['Mod+Shift+T'] },
+  { id: 'search.vault', title: 'Search: In the vault', keys: ['Mod+Shift+F'] },
+  { id: 'search.replace', title: 'Search: Replace in the vault', keys: ['Mod+Shift+H'] },
+  { id: 'fold.section', title: 'Fold: This section', keys: ['Mod+{'], scope: 'editor' },
+  { id: 'unfold.section', title: 'Fold: Unfold this section', keys: ['Mod+}'], scope: 'editor' },
+  { id: 'fold.all', title: 'Fold: Every section', keys: ['Mod+Alt+['], scope: 'editor' },
+  { id: 'unfold.all', title: 'Fold: Unfold everything', keys: ['Mod+Alt+]'], scope: 'editor' },
   { id: 'quick.note', title: 'Quick note', keys: [] },
-  { id: 'settings.open', title: 'Settings', keys: ['Ctrl+,'] },
+  { id: 'settings.open', title: 'Settings', keys: ['Mod+,'] },
   { id: 'theme.system', title: 'Theme: Follow the system', keys: [] },
   { id: 'theme.light', title: 'Theme: Light', keys: [] },
   { id: 'theme.dark', title: 'Theme: Dark', keys: [] },
@@ -85,113 +92,111 @@ export const RENAMED: Readonly<Record<string, string>> = {}
 
 const BY_ID = new Map(COMMANDS.map((command) => [command.id, command]))
 
-const handlers = new Map<string, Handler>()
-let overrides: Record<string, string[]> = {}
-let revision = 0
-const listeners = new Set<() => void>()
+/** Where the order of the catalogue puts a command: the palette's order. */
+export const ORDER = new Map(COMMANDS.map((command, index) => [command.id, index]))
 
-function changed() {
-  revision += 1
-  for (const listener of listeners) listener()
-}
-
-/** Attaches what a command does. Returns the detach, for an effect cleanup. */
-export function handle(id: string, handler: Handler): () => void {
-  if (!BY_ID.has(id)) throw new Error(`no command called ${id}`)
-  handlers.set(id, handler)
-  changed()
-  return () => {
-    if (handlers.get(id) === handler) {
-      handlers.delete(id)
-      changed()
-    }
+/** Declares a command for as long as the calling component is mounted. An
+ *  editor command says where the notes are, so its key is answered only
+ *  there. */
+export function useCommand(
+  id: string,
+  run: () => void,
+  options: { notes?: RefObject<Element | null>; enabled?: boolean } = {},
+): void {
+  const spec = BY_ID.get(id)
+  if (!spec) throw new Error(`no command called ${id}`)
+  if ((spec.scope === 'editor') !== (options.notes !== undefined)) {
+    throw new Error(`${id} is ${spec.scope === 'editor' ? '' : 'not '}a command of the note`)
   }
+  declare({
+    id,
+    label: spec.title,
+    keys: spec.keys,
+    run,
+    enabled: options.enabled,
+    // Inside the note as well: the note is a field someone is typing in, and
+    // every key of scheda's holds Ctrl or Alt or is a function key.
+    whileTyping: true,
+    // Before CodeMirror's keymap, which would otherwise keep any key it binds
+    // - `Ctrl+D`, `Ctrl+/` - from a command the person moved onto it.
+    capture: true,
+    within: options.notes,
+    offered: spec.offered ?? true,
+  })
 }
 
-/** Runs a command. False when nothing is attached to it, or it declined. */
-export function run(id: string): boolean {
-  const handler = handlers.get(id)
-  if (!handler) return false
-  return handler() !== false
-}
-
-/** The commands something is attached to — the ones the palette can offer. */
-export function available(): CommandSpec[] {
-  return COMMANDS.filter((command) => handlers.has(command.id))
-}
-
-/** Takes the person's changes to the keys, as the settings hold them. A key
- *  kept under an old id goes to the command that id became, unless the
- *  command's own id has keys too — that one is the later change. */
-export function setOverrides(
+/** The person's changes to the keys, as the settings hold them, by the ids
+ *  the commands have now. A key kept under an old id goes to the command that
+ *  id became, unless the command's own id has keys too - that one is the
+ *  later change. */
+export function keymapOf(
   keys: Record<string, string[]>,
   renamed: Readonly<Record<string, string>> = RENAMED,
-): void {
-  overrides = {}
+): Record<string, string[]> {
+  const keymap: Record<string, string[]> = {}
   for (const [id, chords] of Object.entries(keys)) {
     const now = renamed[id] ?? id
     if (now !== id && now in keys) continue
-    overrides[now] = chords
+    keymap[now] = chords
   }
-  changed()
+  return keymap
 }
 
-/** The keys a command answers to now. */
-export function keysFor(id: string): string[] {
-  return overrides[id] ?? BY_ID.get(id)?.keys ?? []
+/** Hands the person's keys to the list, under the ids the commands have now. */
+export function applyKeys(
+  keys: Record<string, string[]>,
+  renamed: Readonly<Record<string, string>> = RENAMED,
+): void {
+  setKeymap(keymapOf(keys, renamed))
 }
 
-/** The command a chord runs, if any. The first in the list wins a chord bound
- *  twice, and the settings screen says so before it can happen by accident. */
-export function commandFor(chord: string): CommandSpec | undefined {
-  return COMMANDS.find((command) => keysFor(command.id).includes(chord))
+/** The keys a command answers to with these changes. */
+export function keysFor(id: string, keymap: Record<string, string[]>): string[] {
+  return keymap[id] ?? BY_ID.get(id)?.keys ?? []
 }
 
-/** The other commands already on a chord, for the settings screen to warn
- *  about before a second binding silently loses. */
-export function boundElsewhere(chord: string, except: string): CommandSpec[] {
-  return COMMANDS.filter((command) => command.id !== except && keysFor(command.id).includes(chord))
-}
-
-/** Something to re-render on: attaching, detaching and rebinding all move it. */
-export const registry = {
-  subscribe(listener: () => void) {
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-    }
-  },
-  revision: () => revision,
-}
-
-/** Whether the keyboard is in a note rather than in a panel or a field. */
-function inEditor(): boolean {
-  const focused = document.activeElement
-  return focused instanceof Element && focused.closest('.cm-editor') !== null
-}
-
-/** Listens for bound keys on the window. Returns the stop. */
-export function installKeys(target: Window = window): () => void {
-  const onKeyDown = (event: KeyboardEvent) => {
-    // A key the window is recording for a rebind is not a command.
-    if (event.defaultPrevented || recording) return
-    const chord = chordOf(event)
-    if (chord === null) return
-    const command = commandFor(chord)
-    if (!command || !handlers.has(command.id)) return
-    if (command.scope === 'editor' && !inEditor()) return
-    if (!run(command.id)) return
-    event.preventDefault()
-    event.stopPropagation()
+/** Whether two shortcuts cannot both work: the same keys, or one the start of
+ *  the other's sequence. Compared as keystrokes, so `Ctrl+Tab` and `Mod+Tab`
+ *  are one key where they are. A shortcut that does not parse clashes with
+ *  nothing - the list skips it too. */
+export function clash(a: string, b: string): boolean {
+  try {
+    if (normalizeKeys(a) === normalizeKeys(b)) return true
+    const [shorter, longer] = [parseKeys(a), parseKeys(b)].sort((x, y) => x.length - y.length)
+    return shorter.every((stroke, index) => sameStroke(stroke, longer[index]!))
+  } catch {
+    return false
   }
-  target.addEventListener('keydown', onKeyDown, true)
-  return () => target.removeEventListener('keydown', onKeyDown, true)
 }
 
-let recording = false
+/** The other commands already on keys, for the settings screen to take them
+ *  from before a second binding silently loses. */
+export function boundElsewhere(keys: string, except: string, keymap: Record<string, string[]>): CommandSpec[] {
+  return COMMANDS.filter(
+    (command) => command.id !== except && keysFor(command.id, keymap).some((other) => clash(keys, other)),
+  )
+}
 
-/** Holds the command keys off while the settings screen listens for a new
- *  chord: the chord being recorded is often one that is already bound. */
-export function setRecording(on: boolean): void {
-  recording = on
+/** Keys a keyboard off a Mac labels with a word, which a line of text says
+ *  better than the symbol drawn on a cap: `␣` in a sentence reads as `_`. */
+const SAID: Record<string, string> = { Space: 'Space', Tab: 'Tab', Enter: 'Enter', Backspace: 'Backspace' }
+
+/** Keys as a person reads them, as text: each key under the name dowel's caps
+ *  give it - `Ctrl+Shift+P` here, `⌘⇧P` on a Mac, run together the way a Mac
+ *  prints its own - except the few a keyboard labels with a word, and the
+ *  steps of a sequence parted by `›`, the mark the caps put between them.
+ *  Keys that do not parse are shown as written: a settings file edited by
+ *  hand is still shown, rather than taking the settings screen down with it. */
+export function showKeys(keys: string, apple: boolean = isApplePlatform()): string {
+  try {
+    return parseKeys(keys, apple)
+      .map((stroke) =>
+        strokeParts(stroke)
+          .map((key) => (apple ? undefined : SAID[key]) ?? keyLabel(key, apple))
+          .join(apple ? '' : '+'),
+      )
+      .join(' › ')
+  } catch {
+    return keys
+  }
 }

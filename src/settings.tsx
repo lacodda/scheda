@@ -9,7 +9,7 @@
 // now and then, and a sidebar for it would be one more thing on screen the
 // rest of the time.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { boundElsewhere, COMMANDS, keysFor, registry, setRecording, type CommandSpec } from './commands'
+import { boundElsewhere, clash, COMMANDS, keymapOf, keysFor, showKeys, type CommandSpec } from './commands'
 import {
   chooseQuickNoteFile,
   quickNoteStatus,
@@ -21,7 +21,8 @@ import {
   type Theme,
 } from './core'
 import { match } from './fuzzy'
-import { chordOf, isShortcut, showChord } from './keys'
+import { isShortcut, showSystemKey, systemKeyOf } from './system-key'
+import { formatStroke, normalizeKeys, strokeOf, typesInField } from './ui/shortcut'
 import { settings as store } from './settings-store'
 
 function useSettings(): Settings | null {
@@ -270,11 +271,7 @@ function QuickNote({ current }: { current: Settings }) {
               : undefined
         }
       >
-        <ChordRecorder
-          chord={current.quickNoteKey}
-          withWin
-          onRecord={(chord) => change({ quickNoteKey: chord })}
-        />
+        <SystemKeyRecorder keys={current.quickNoteKey} onRecord={(keys) => change({ quickNoteKey: keys })} />
         {current.quickNoteKey !== '' && (
           <button type="button" className="settings-button" onClick={() => change({ quickNoteKey: '' })}>
             Turn off
@@ -288,15 +285,33 @@ function QuickNote({ current }: { current: Settings }) {
   )
 }
 
-/** Listens for the next chord while `listening` is set: the keys a person
+/** What a key pressed on the settings screen records as: the keys, or null
+ *  for a press that is not a shortcut yet - a modifier on its own, a letter. */
+type Reading = (event: KeyboardEvent) => string | null
+
+/** A system-wide key: the Windows key allowed, a letter alone not. */
+const readSystemKey: Reading = (event) => {
+  const keys = systemKeyOf(event)
+  return keys !== null && isShortcut(keys) ? keys : null
+}
+
+/** A key of the window, in the line's notation. A key a field types with is
+ *  refused: the commands answer inside the note, and there it would type. */
+const readWindowKey: Reading = (event) => {
+  const stroke = strokeOf(event)
+  return stroke === null || typesInField(stroke) ? null : formatStroke(stroke)
+}
+
+/** Listens for the next key while `listening` is set: the keys a person
  *  presses to rebind something must reach this and nothing else, including
- *  the command the chord is currently bound to. `Escape` gives up. */
-function useChordListener(withWin: boolean, onRecord: (chord: string) => void) {
+ *  the command they are bound to now. So it listens on the window in the
+ *  capture phase - before the list of commands, which takes its keys on the
+ *  way down as well - and stops the key there. `Escape` gives up. */
+function useKeyListener(read: Reading, onRecord: (keys: string) => void) {
   const [listening, setListening] = useState(false)
 
   useEffect(() => {
     if (!listening) return
-    setRecording(true)
     const onKey = (event: KeyboardEvent) => {
       event.preventDefault()
       event.stopPropagation()
@@ -304,33 +319,22 @@ function useChordListener(withWin: boolean, onRecord: (chord: string) => void) {
         setListening(false)
         return
       }
-      const pressed = chordOf(event, withWin)
-      // A modifier on its own is the start of a chord, not one.
-      if (pressed === null || !isShortcut(pressed)) return
+      const pressed = read(event)
+      if (pressed === null) return
       setListening(false)
       onRecord(pressed)
     }
     window.addEventListener('keydown', onKey, true)
-    return () => {
-      window.removeEventListener('keydown', onKey, true)
-      setRecording(false)
-    }
-  }, [listening, withWin, onRecord])
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [listening, read, onRecord])
 
   return [listening, setListening] as const
 }
 
-/** A button that shows a chord and, once pressed, listens for a new one. */
-function ChordRecorder({
-  chord,
-  withWin = false,
-  onRecord,
-}: {
-  chord: string
-  withWin?: boolean
-  onRecord: (chord: string) => void
-}) {
-  const [listening, setListening] = useChordListener(withWin, onRecord)
+/** A button that shows the system-wide key and, once pressed, listens for a
+ *  new one. */
+function SystemKeyRecorder({ keys, onRecord }: { keys: string; onRecord: (keys: string) => void }) {
+  const [listening, setListening] = useKeyListener(readSystemKey, onRecord)
 
   return (
     <button
@@ -339,17 +343,17 @@ function ChordRecorder({
       onClick={() => setListening(true)}
       onBlur={() => setListening(false)}
     >
-      {listening ? 'Press a key…' : chord === '' ? 'None' : showChord(chord)}
+      {listening ? 'Press a key…' : keys === '' ? 'None' : showSystemKey(keys)}
     </button>
   )
 }
 
 function Keyboard() {
-  useSyncExternalStore(registry.subscribe, registry.revision)
   const current = useSettings()
   const [filter, setFilter] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const overrides = useMemo(() => current?.keys ?? {}, [current])
+  const keymap = useMemo(() => keymapOf(overrides), [overrides])
 
   const shown = COMMANDS.filter((command) => filter === '' || match(filter, command.title) !== null)
 
@@ -357,21 +361,26 @@ function Keyboard() {
     change({ keys: next })
   }
 
-  function add(command: CommandSpec, chord: string) {
+  function add(command: CommandSpec, keys: string) {
     const next = { ...overrides }
-    // A chord belongs to one command. Taking it for this one takes it from the
-    // other, and says so — a second binding that silently loses is a key that
-    // does something different from what the screen shows.
-    const others = boundElsewhere(chord, command.id)
-    for (const other of others) next[other.id] = keysFor(other.id).filter((key) => key !== chord)
-    const mine = keysFor(command.id)
-    next[command.id] = mine.includes(chord) ? mine : [...mine, chord]
-    setNotice(others.length > 0 ? `${showChord(chord)} was taken from “${others.map((other) => other.title).join('”, “')}”.` : null)
+    // Keys belong to one command. Taking them for this one takes them from
+    // the other, and says so — a second binding that silently loses is a key
+    // that does something different from what the screen shows.
+    const others = boundElsewhere(keys, command.id, keymap)
+    for (const other of others) next[other.id] = keysFor(other.id, keymap).filter((key) => !clash(key, keys))
+    const mine = keysFor(command.id, keymap)
+    const has = mine.some((key) => normalizeKeys(key) === normalizeKeys(keys))
+    next[command.id] = has ? mine : [...mine.filter((key) => !clash(key, keys)), keys]
+    setNotice(
+      others.length > 0
+        ? `${showKeys(keys)} was taken from “${others.map((other) => other.title).join('”, “')}”.`
+        : null,
+    )
     write(next)
   }
 
-  function remove(command: CommandSpec, chord: string) {
-    write({ ...overrides, [command.id]: keysFor(command.id).filter((key) => key !== chord) })
+  function remove(command: CommandSpec, keys: string) {
+    write({ ...overrides, [command.id]: keysFor(command.id, keymap).filter((key) => key !== keys) })
   }
 
   function reset(command: CommandSpec) {
@@ -394,21 +403,25 @@ function Keyboard() {
       {notice && <p className="settings-note settings-note--notice">{notice}</p>}
       <ul className="settings-keys">
         {shown.map((command) => {
-          const keys = keysFor(command.id)
-          const changed = command.id in overrides
+          const keys = keysFor(command.id, keymap)
+          const changed = command.id in keymap
           return (
             <li key={command.id} className="settings-key-row">
               <span className="settings-key-title">{command.title}</span>
               <span className="settings-key-chords">
-                {keys.map((chord) => (
-                  <span key={chord} className="settings-chip">
-                    {showChord(chord)}
-                    <button type="button" aria-label={`Remove ${showChord(chord)} from ${command.title}`} onClick={() => remove(command, chord)}>
+                {keys.map((written) => (
+                  <span key={written} className="settings-chip">
+                    {showKeys(written)}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${showKeys(written)} from ${command.title}`}
+                      onClick={() => remove(command, written)}
+                    >
                       ×
                     </button>
                   </span>
                 ))}
-                <AddChord onRecord={(chord) => add(command, chord)} />
+                <AddKeys onRecord={(recorded) => add(command, recorded)} />
                 {changed && (
                   <button type="button" className="settings-link" onClick={() => reset(command)}>
                     Default
@@ -423,8 +436,8 @@ function Keyboard() {
   )
 }
 
-function AddChord({ onRecord }: { onRecord: (chord: string) => void }) {
-  const [listening, setListening] = useChordListener(false, onRecord)
+function AddKeys({ onRecord }: { onRecord: (keys: string) => void }) {
+  const [listening, setListening] = useKeyListener(readWindowKey, onRecord)
 
   return (
     <button

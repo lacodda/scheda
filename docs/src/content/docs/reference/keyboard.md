@@ -7,7 +7,10 @@ Every key below that runs a command can be changed in the settings (`Ctrl+,`,
 *Keyboard*), and every command is in the palette with its key beside it — see
 [Commands and keys](/scheda/reference/commands/). Keys are read by their place on
 the keyboard when the layout does not type Latin letters, so they work on a
-Russian layout too.
+Russian layout too. A key written with a character - `Ctrl+{` - is that
+character, Shift and all, wherever a keyboard puts it. On a Mac, `Ctrl` in these
+tables is `⌘` - all but `Ctrl+Tab`, which is the control key there as well,
+since `⌘+Tab` is the system's.
 
 | Keys | What it does |
 | --- | --- |
@@ -77,8 +80,8 @@ diagram while reading and is code again when you go back — see
 | `Ctrl+Shift+O` | Show or hide the outline |
 | `Ctrl+Shift+B` | Show or hide what links here |
 | `Ctrl+Shift+T` | Show or hide the tags of the vault |
-| `Ctrl+Shift+[` | Fold the section the caret is in |
-| `Ctrl+Shift+]` | Unfold it |
+| `Ctrl+{` | Fold the section the caret is in — `Ctrl+Shift+[` on a US keyboard |
+| `Ctrl+}` | Unfold it |
 | `Ctrl+Alt+[` / `Ctrl+Alt+]` | Fold or unfold every section |
 
 Right-clicking a row of the tree makes, renames or removes files — see

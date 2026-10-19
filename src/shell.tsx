@@ -4,7 +4,7 @@
 //
 // Mounted after the first paint. If this file were slow it would cost the
 // window nothing, which is exactly why it is a separate module.
-import { StrictMode, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { StrictMode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ask, open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
@@ -62,8 +62,8 @@ import { TagsPanel } from './tags'
 import { SearchPanel } from './search'
 import { SettingsScreen } from './settings'
 import { settings as settingsStore } from './settings-store'
-import { available, handle, installKeys, keysFor, registry, run, setOverrides, type CommandSpec } from './commands'
-import { showChord } from './keys'
+import { applyKeys, ORDER, showKeys, useCommand } from './commands'
+import { useCommandList, type ListedCommand } from './ui/commands'
 import { TabStrip, tabLabel } from './tabstrip'
 import type { EditorHandle, RestoredTab } from './editor/mount'
 
@@ -86,11 +86,6 @@ const SESSION_DELAY_MS = 1500
  *  forever on a snapshot that is not stable. */
 function useEditor(editor: EditorHandle) {
   useSyncExternalStore(editor.subscribe, editor.revision)
-}
-
-/** Attaches a command's work for as long as the component is mounted. */
-function useCommand(id: string, work: () => boolean | void) {
-  useEffect(() => handle(id, work), [id, work])
 }
 
 /** Closing tabs, asking first when they hold unsaved work. Shared so the strip,
@@ -441,7 +436,7 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
         spellcheck: current.spellcheck,
         autosave: current.autosave,
       })
-      setOverrides(current.keys)
+      applyKeys(current.keys)
     }
     const stop = settingsStore.subscribe(applyAll)
     // Read here rather than before the first frame: the window appearing in
@@ -455,9 +450,11 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
     return stop
   }, [editor])
 
-  useEffect(() => installKeys(), [])
-
   // ------------------------------------------------------------- commands
+
+  // Where the note's own commands answer their keys: in the panes, and not in
+  // a search box or a panel beside them.
+  const notes = useMemo(() => ({ current: editor.host }), [editor])
 
   useCommand(
     'file.save',
@@ -503,10 +500,8 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   )
   useCommand(
     'insert.block',
-    useCallback(() => {
-      if (editor.view.state.readOnly) return false
-      setOverlay('blocks')
-    }, [editor]),
+    useCallback(() => setOverlay('blocks'), []),
+    { notes, enabled: !editor.view.state.readOnly },
   )
   useCommand(
     'settings.open',
@@ -571,16 +566,15 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   )
   useCommand(
     'pane.second',
-    useCallback(() => {
-      if (editor.panes().length < 2) return false
-      editor.focusPane(1)
-    }, [editor]),
+    useCallback(() => editor.focusPane(1), [editor]),
+    { enabled: editor.panes().length > 1 },
   )
   useCommand(
     'view.reading',
     useCallback(() => {
       editor.view.dispatch({ effects: toggleReading.of() })
     }, [editor]),
+    { notes },
   )
   useCommand(
     'view.focus',
@@ -589,22 +583,29 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
       const on = !isFocusing()
       for (const view of editor.views()) setFocusing(view, on)
     }, [editor]),
+    { notes },
   )
+  // Nothing to fold at the caret is still the fold key pressed: it is taken
+  // and does nothing, rather than reaching an editor binding behind it.
   useCommand(
     'fold.section',
-    useCallback(() => foldCode(editor.view), [editor]),
+    useCallback(() => void foldCode(editor.view), [editor]),
+    { notes },
   )
   useCommand(
     'unfold.section',
-    useCallback(() => unfoldCode(editor.view), [editor]),
+    useCallback(() => void unfoldCode(editor.view), [editor]),
+    { notes },
   )
   useCommand(
     'fold.all',
-    useCallback(() => foldAll(editor.view), [editor]),
+    useCallback(() => void foldAll(editor.view), [editor]),
+    { notes },
   )
   useCommand(
     'unfold.all',
-    useCallback(() => unfoldAll(editor.view), [editor]),
+    useCallback(() => void unfoldAll(editor.view), [editor]),
+    { notes },
   )
   useCommand(
     'quick.note',
@@ -846,18 +847,26 @@ const BLOCKS = blocks()
 const blockTitle = (block: Block) => block.title
 const blockId = (block: Block) => block.id
 
-const commandTitle = (command: CommandSpec) => command.title
-const commandId = (command: CommandSpec) => command.id
-const commandKeys = (command: CommandSpec) => keysFor(command.id).map(showChord).join('  ')
+const commandTitle = (command: ListedCommand) => command.label
+const commandId = (command: ListedCommand) => command.id
+const commandKeys = (command: ListedCommand) => command.keys.map((keys) => showKeys(keys)).join('  ')
 
 /** Every command, with its key beside it. Choosing one runs it; the key is
  *  shown so that next time it need not be chosen. */
 function CommandPalette({ onClose }: { onClose: () => void }) {
-  useSyncExternalStore(registry.subscribe, registry.revision)
-  // The palette itself is not in its own list: choosing it would do nothing.
-  const commands = available().filter((command) => command.id !== 'palette.commands')
+  const listed = useCommandList()
+  // What can be run, in the catalogue's order rather than the order the
+  // owners happened to mount in: the things reached for most come first. The
+  // palette itself is not offered - choosing it would do nothing.
+  const commands = useMemo(
+    () =>
+      listed
+        .filter((command) => command.run !== undefined)
+        .sort((a, b) => (ORDER.get(a.id) ?? Infinity) - (ORDER.get(b.id) ?? Infinity)),
+    [listed],
+  )
   return (
-    <Picker<CommandSpec>
+    <Picker<ListedCommand>
       items={commands}
       text={commandTitle}
       id={commandId}
@@ -869,7 +878,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
       onPick={(command) => {
         // After the palette has gone, so a command that opens a panel of its
         // own — the settings, the block list — opens it into an empty window.
-        queueMicrotask(() => run(command.id))
+        queueMicrotask(() => command.run?.())
       }}
     />
   )
@@ -1343,7 +1352,9 @@ function OpenInObsidian({ editor }: { editor: EditorHandle }) {
     })
   }, [url])
 
-  useEffect(() => (url === null ? undefined : handle('file.obsidian', send)), [url, send])
+  // Declared either way and offered only in a vault, so the keys somebody
+  // gave it stay in the list rather than coming and going with the note.
+  useCommand('file.obsidian', send, { enabled: url !== null })
 
   if (url === null) return null
 

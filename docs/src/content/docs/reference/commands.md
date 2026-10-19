@@ -41,13 +41,28 @@ A key belongs to one command. Giving it to a second one takes it from the first,
 and the screen says which: two commands on one key would mean a key that does
 something other than what the screen shows.
 
+A key you give a command wins inside a note too, over the editor's own use of
+it: give *Tab: Pin or unpin* `Ctrl+D` and it pins, rather than selecting the
+next occurrence of a word. The keys a note uses for typing - letters, `Enter`,
+`Tab`, the arrows - cannot be given to a command at all; the screen waits for
+a key with `Ctrl` or `Alt`, or a function key.
+
+The commands of the note - reading mode, focus mode, folding, inserting a
+block - answer their keys only while the keyboard is in a note, so `Ctrl+E` in
+the vault search box is not reading mode. From the palette they still work, on
+the note in front.
+
 Keys are recognised by where they are on the keyboard when the layout does not
 type Latin letters, so `Ctrl+P` is `Ctrl+P` on a Russian layout too. `AltGr`
 with a key is typing — on a Polish or German keyboard it makes a letter — and
 is never taken for a shortcut.
 
 The changes are kept in `settings.json` under `keys`, by command id. Only the
-changes: a command you have not touched follows its default. The ids are part
+changes: a command you have not touched follows its default. They are written
+in the notation every program of the line uses: `Mod+Shift+P`, where `Mod` is
+`Ctrl` on Windows and Linux and `⌘` on a Mac, `Ctrl` is the control key itself,
+and a character carries its own Shift - `Mod+{` rather than `Ctrl+Shift+[`. A
+file from scheda 0.16 or earlier is rewritten into it, key for key. The ids are part
 of the settings format and do not change between versions; a command that is
 ever renamed takes the keys you gave it along (see [What scheda
 keeps](/scheda/reference/what-scheda-keeps/)).

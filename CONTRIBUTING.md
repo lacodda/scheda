@@ -43,6 +43,14 @@ to `src-tauri/tests/formats` with its line in `FROZEN`, and leave the earlier
 samples as they are. The tests say which of these is missing. Command ids are
 frozen with the settings: a renamed command keeps its old id in `RENAMED`.
 
+The keyboard is the line's list of commands (ADR 0018). `src/ui/shortcut.tsx`
+and `src/ui/commands.tsx` are dowel's, copied from its registry, and
+`src/ui/registry.test.ts` holds them equal to the registry of the `dowel-ui`
+this repository installs - a change to them is made in dowel and arrives by
+moving `dowel-ui` forward and copying them again. A new command is a line in
+the catalogue in `src/commands.ts`, its id in `SHIPPED` in
+`src/commands.test.ts`, and a `useCommand` where its work lives.
+
 Every colour a glyph is drawn in is measured (ADR 0017): text clears 4.5:1 on
 every ground in both themes, and `--faint` is for marks that are not read. A
 new colour goes into the palette in `src/styles.css`, in the light block and in
