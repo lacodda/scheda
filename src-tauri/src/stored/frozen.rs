@@ -44,7 +44,7 @@ fn settings() -> Settings {
         spellcheck: true,
         autosave: true,
         keys: BTreeMap::from([
-            ("file.save".into(), vec!["Ctrl+Alt+S".into()]),
+            ("file.save".into(), vec!["Mod+Alt+S".into()]),
             ("tab.pin".into(), vec![]),
         ]),
         quick_note_file: Some("/notes/inbox.md".into()),

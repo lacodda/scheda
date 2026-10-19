@@ -24,12 +24,13 @@ use std::sync::Mutex;
 /// 0 is everything before formats were numbered (up to 0.14), with its fields
 /// in snake case and a system-wide key recorded as `Shift+Win+N`; 1 spells the
 /// fields the way the session and the index do, and every chord with `Win`
-/// first, as the window writes it.
+/// first, as the window writes it; 2 writes the window's keys in the line's
+/// notation, dowel's (`Mod+Shift+P`, `Mod+{`), from 0.17.
 pub const FORMAT: Kind = Kind {
     name: "settings",
     first: 0,
-    current: 1,
-    steps: &[to_format_1],
+    current: 2,
+    steps: &[to_format_1, to_format_2],
     pretty: true,
 };
 
@@ -80,6 +81,113 @@ fn in_order(chord: &str) -> String {
     modifiers.sort_by_key(|modifier| rank(modifier));
     modifiers.push(key);
     modifiers.join("+")
+}
+
+/// Format 1 to 2: the window's keys in dowel's notation.
+///
+/// Format 1 wrote `Ctrl` for the command key - Cmd on a Mac arrived as `Ctrl`
+/// too - and punctuation by the key it is on, Shift and all. dowel writes
+/// `Mod` for that key, and a character as the character typed, so Shift goes
+/// into it: `Ctrl+Shift+[` is `Mod+{`. The system-wide quick-note key is not a
+/// key of the window and keeps its own notation, `Win` included.
+fn to_format_2(fields: &mut Map<String, Value>) {
+    if let Some(Value::Object(keys)) = fields.get_mut("keys") {
+        for list in keys.values_mut() {
+            if let Value::Array(list) = list {
+                // A chord holding `Win` never answered in the window - the
+                // window read Win as Ctrl - and has no spelling in dowel's
+                // notation, where the Windows key belongs to the system.
+                list.retain_mut(|chord| match chord {
+                    Value::String(text) => match in_line_notation(text) {
+                        Some(written) => {
+                            *text = written;
+                            true
+                        }
+                        None => false,
+                    },
+                    _ => false,
+                });
+            }
+        }
+    }
+}
+
+/// What a US keyboard types on a punctuation key with Shift held, and on the
+/// number row without a command modifier: the character dowel writes in place
+/// of `Shift+` and the key.
+const SHIFTED: [(&str, &str); 21] = [
+    ("[", "{"),
+    ("]", "}"),
+    (";", ":"),
+    ("'", "\""),
+    (",", "<"),
+    (".", ">"),
+    ("/", "?"),
+    ("\\", "|"),
+    ("`", "~"),
+    ("-", "_"),
+    ("=", "+"),
+    ("1", "!"),
+    ("2", "@"),
+    ("3", "#"),
+    ("4", "$"),
+    ("5", "%"),
+    ("6", "^"),
+    ("7", "&"),
+    ("8", "*"),
+    ("9", "("),
+    ("0", ")"),
+];
+
+/// A format-1 chord of the window in dowel's notation, or `None` for one that
+/// has no spelling there.
+fn in_line_notation(chord: &str) -> Option<String> {
+    let (modifiers, key) = match chord.rsplit_once('+') {
+        // `Ctrl++` was never written - `=` is the key - but a key that is
+        // itself `+` would split here the wrong way round.
+        Some((modifiers, "")) => (modifiers.strip_suffix('+')?, "+"),
+        Some((modifiers, key)) => (modifiers, key),
+        None => ("", chord),
+    };
+    let held: Vec<&str> = modifiers
+        .split('+')
+        .filter(|part| !part.is_empty())
+        .collect();
+    if held.contains(&"Win") {
+        return None;
+    }
+    let command = held.contains(&"Ctrl") || held.contains(&"Alt");
+    let mut shift = held.contains(&"Shift");
+    let mut key = match key {
+        "Up" => "ArrowUp".to_string(),
+        "Down" => "ArrowDown".to_string(),
+        "Left" => "ArrowLeft".to_string(),
+        "Right" => "ArrowRight".to_string(),
+        other => other.to_string(),
+    };
+    // The number row under a command modifier is read by its place, Shift and
+    // all; anywhere else a digit or a punctuation mark is the character typed.
+    let digit = key.len() == 1 && key.as_bytes()[0].is_ascii_digit();
+    if shift
+        && !(digit && command)
+        && let Some((_, typed)) = SHIFTED.iter().find(|(plain, _)| *plain == key)
+    {
+        key = (*typed).to_string();
+        shift = false;
+    }
+
+    let mut parts: Vec<&str> = Vec::new();
+    if held.contains(&"Ctrl") {
+        parts.push("Mod");
+    }
+    if held.contains(&"Alt") {
+        parts.push("Alt");
+    }
+    if shift {
+        parts.push("Shift");
+    }
+    parts.push(&key);
+    Some(parts.join("+"))
 }
 
 /// How many paths the recent list keeps.
@@ -526,6 +634,48 @@ mod tests {
         assert_eq!(fields["quickNoteKey"], "Win+Shift+N");
         assert_eq!(fields["keys"]["file.save"][0], "Ctrl+Shift+S");
         assert_eq!(fields["keys"]["file.save"][1], "F2");
+    }
+
+    #[test]
+    fn a_window_key_is_written_in_the_line_notation() {
+        // The table is shared with the window's tests (`src/commands.test.ts`),
+        // which press each key and require dowel to read it as the same
+        // string: a key moved by this step is the key the person pressed.
+        let table: Vec<Value> =
+            serde_json::from_str(include_str!("../tests/keys-1-to-2.json")).unwrap();
+        assert!(table.len() > 20);
+        for row in table {
+            let (format_1, format_2) = (
+                row["format1"].as_str().unwrap(),
+                row["format2"].as_str().unwrap(),
+            );
+            assert_eq!(
+                in_line_notation(format_1).as_deref(),
+                Some(format_2),
+                "{format_1}"
+            );
+        }
+        // Keys the window never wrote, and a key it could not have answered.
+        assert_eq!(in_line_notation("Shift+1").as_deref(), Some("!"));
+        assert_eq!(in_line_notation("Escape").as_deref(), Some("Escape"));
+        assert_eq!(in_line_notation("Win+Ctrl+N"), None);
+    }
+
+    #[test]
+    fn the_step_to_format_2_moves_the_window_keys_and_leaves_the_system_key() {
+        let mut fields = serde_json::from_str::<Map<String, Value>>(
+            r#"{"format":1,"quickNoteKey":"Win+Shift+N","keys":{
+                "file.save":["Ctrl+Alt+S","Win+Ctrl+S","F2"],"fold.section":["Ctrl+Shift+["],"tab.pin":[]}}"#,
+        )
+        .unwrap();
+        to_format_2(&mut fields);
+        assert_eq!(fields["quickNoteKey"], "Win+Shift+N");
+        assert_eq!(
+            fields["keys"]["file.save"],
+            serde_json::json!(["Mod+Alt+S", "F2"])
+        );
+        assert_eq!(fields["keys"]["fold.section"], serde_json::json!(["Mod+{"]));
+        assert_eq!(fields["keys"]["tab.pin"], serde_json::json!([]));
     }
 
     #[test]

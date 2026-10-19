@@ -46,7 +46,7 @@ of the settings screen shows where it is.
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "theme": "system",
   "fontSize": 15,
   "columnWidth": 46.0,
@@ -70,9 +70,9 @@ of the settings screen shows where it is.
 | `closeBrackets` | Whether an opening bracket types its partner. See below. |
 | `spellcheck` | Whether misspelt words are underlined. See below. |
 | `autosave` | Whether a file is written a moment after typing stops. See below. |
-| `keys` | The shortcuts you changed, by command id. Only the changes. |
+| `keys` | The shortcuts you changed, by command id. Only the changes, written the way every program of the line writes keys: `Mod+Shift+P`, where `Mod` is `Ctrl` on Windows and `⌘` on a Mac, and a character with its Shift in it - `Mod+{`, not `Ctrl+Shift+[`. See [Commands and keys](/scheda/reference/commands/#changing-a-key). |
 | `quickNoteFile` | Where quick notes go; `null` until you choose. |
-| `quickNoteKey` | The system-wide quick-note key; empty turns it off. Keys are written with their modifiers in one order: `Win`, `Ctrl`, `Alt`, `Shift`. |
+| `quickNoteKey` | The system-wide quick-note key; empty turns it off. Not a key of the window but one the system is asked for, so it keeps the system's spelling, `Win` included, with the modifiers in one order: `Win`, `Ctrl`, `Alt`, `Shift`. |
 
 Every field has a default and unknown fields are ignored. A file written by an
 older scheda is brought up to date, and one written by a newer scheda is used

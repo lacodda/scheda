@@ -19,7 +19,7 @@ one does not, because what is in it describes one machine's disk.
 
 | File | Directory | Format | What it is |
 | --- | --- | --- | --- |
-| `settings.json` | configuration | 1 | The [settings](/scheda/reference/settings/). Indented, and meant to be edited by hand. |
+| `settings.json` | configuration | 2 | The [settings](/scheda/reference/settings/). Indented, and meant to be edited by hand. |
 | `session.json` | configuration | 1 | The tabs and panes the window had open - see [the session](/scheda/reference/tabs-and-panes/). |
 | `index/<name>.json` | local data | 1 | One per vault: its notes, links, tags, front matter, a hash of every note and the notes that went away. `<name>` is the first sixteen hex digits of the SHA-256 of the vault's path. |
 | `drafts/<key>.md` | configuration | - | The text of a [draft with no file](/scheda/reference/files/), as it was typed, in UTF-8. |
@@ -34,7 +34,7 @@ Each JSON file starts with the number of its format:
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "theme": "system",
   ...
 }
@@ -52,7 +52,11 @@ It is read and brought up to date, one format at a time, with everything it
 said. A file with no number was written by scheda 0.14 or earlier and is format
 0; format 1 of the settings spells the fields differently (`fontSize` rather
 than `font_size`) and writes every key with `Win` first (`Win+Shift+N`), and
-the step between them takes care of both.
+the step between them takes care of both. Format 2 (scheda 0.17) writes the
+window's keys the way every program of the line writes them - `Mod` for the
+command key, `Ctrl` on Windows and `⌘` on a Mac, and a character with the
+Shift already in it: `Ctrl+Shift+[` becomes `Mod+{`. The quick note's
+system-wide key keeps its own spelling.
 
 The first time the file is written in the new format, a copy of it as it was
 stays beside it, named with its old number: `settings.0.json`. If a step turned

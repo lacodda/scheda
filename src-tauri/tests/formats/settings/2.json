@@ -1,0 +1,21 @@
+{
+  "format": 2,
+  "theme": "dark",
+  "fontSize": 17,
+  "columnWidth": 52.5,
+  "recent": [
+    "/notes/plan.md",
+    "/notes/diary.md"
+  ],
+  "closeBrackets": true,
+  "spellcheck": true,
+  "autosave": true,
+  "keys": {
+    "file.save": [
+      "Mod+Alt+S"
+    ],
+    "tab.pin": []
+  },
+  "quickNoteFile": "/notes/inbox.md",
+  "quickNoteKey": "Win+Alt+Q"
+}
