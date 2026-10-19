@@ -92,10 +92,11 @@ appears under *Open with*, and making it the default stays your choice.
 
 ## Status
 
-v0.16.0, in daily use: everything above works, both themes hold every text
-colour to WCAG AA, and what scheda keeps is in frozen, numbered formats. Each
-build is checked against a corpus of awkward files, each release against a
-5000-note vault, byte for byte.
+v0.17.0, in daily use: everything above works, both themes hold every text
+colour to WCAG AA, what scheda keeps is in frozen, numbered formats, and its
+keys are the line's own - the notation and the list of commands every program
+on dowel shares. Each build is checked against a corpus of awkward files, each
+release against a 5000-note vault, byte for byte.
 [CHANGELOG](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md).
 
 ## Documentation

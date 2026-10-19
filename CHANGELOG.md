@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.17.0] - 2026-10-19
+
+### Features
+- Write the window's keys in the line's notation
+- Answer the keyboard with dowel's list of commands
+
 ## [0.16.0] - 2026-10-15
 
 ### Features
