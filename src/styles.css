@@ -38,7 +38,7 @@
      hints under a setting. Most of it is 11 or 12px, so it is held to the
      4.5:1 small text needs on every ground it can stand on, the darkest of
      which is a code block — `src/contrast.test.ts` measures it. */
-  --muted: #706860;
+  --muted: #6d655d;
   /* The one colour below that floor, and it is not for text: marks nobody
      reads — a tab's cross at rest, a table's pipes, a disabled control — held
      to the 3:1 a control needs instead. Which rules may use it is a list in
@@ -56,6 +56,13 @@
   --selection: #f6d6c9;
   --border: #e5ded6;
   --status-bg: #f5f1ec;
+  /* A row or a button under the pointer. Its own step, because the light
+     theme's panels are the colour of the caret's line: a hover laid in that
+     colour on a panel changed nothing, and only the text turning accent said
+     where the pointer was. It stands 1.1:1 off the page, the panels and the
+     caret's line — dowel's own step — and every ink the window writes is
+     readable on it; `src/contrast.test.ts` measures both. */
+  --hover: #eae6e1;
   --match: #f6e0b8;
   --match-active: #f3c98d;
 
@@ -64,12 +71,12 @@
      "this one is a warning" at a glance. */
   /* A link to a note that has not been written yet: dimmer than the accent,
      because it is an invitation rather than a destination. */
-  --link-missing: #85614e;
+  --link-missing: #825e4c;
   /* The two halves of a previewed change. Not red and green: the line that goes
      away is not an error and the one that arrives is not a success, and a
      product whose only strong colour is one accent should not grow a traffic
      light for a preview. Muted for what was, the accent for what will be. */
-  --was: #706860;
+  --was: #6d655d;
   --was-bg: #f0ebe5;
   --will-be: #a8452a;
   --will-be-bg: #f7e8e2;
@@ -84,7 +91,7 @@
   --callout-success: #3f9e57;
   --callout-question: #c08a2e;
   --callout-warning: #d08320;
-  --callout-danger: #c0382c;
+  --callout-danger: #bc3429;
   --callout-example: #8a63c4;
   --callout-quote: #706860;
 
@@ -166,6 +173,7 @@
   --selection: #3d2f2c;
   --border: #2a2830;
   --status-bg: #1c1b21;
+  --hover: #26252b;
   --match: #3d3524;
   --match-active: #5c4a24;
   /* A link to a note that has not been written yet: dimmer than the accent,
@@ -203,8 +211,15 @@
 }
 
 /* An explicit choice wins in both directions, including a dark window on a
-   light system. */
+   light system. It reaches the controls the webview draws itself as well — a
+   checkbox, a slider's track, a scrollbar of its own: `light dark` above lets
+   the system pick them, and a light window on a dark system drew them dark. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #17161a;
   --text: #ddd8d2;
   --heading: #f2eee9;
@@ -218,6 +233,7 @@
   --selection: #3d2f2c;
   --border: #2a2830;
   --status-bg: #1c1b21;
+  --hover: #26252b;
   --match: #3d3524;
   --match-active: #5c4a24;
   /* A link to a note that has not been written yet: dimmer than the accent,
@@ -420,7 +436,7 @@ body {
 }
 
 .failure-close:hover {
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 /* The title bar. The system draws no frame (decorations: false), so this is the
@@ -502,7 +518,7 @@ body {
 }
 
 .window-button:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--text);
 }
 
@@ -612,7 +628,7 @@ body {
 }
 
 .tab-close:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: inherit;
 }
 
@@ -671,7 +687,7 @@ body {
 }
 
 .recent-item:hover {
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 .recent-path {
@@ -772,7 +788,7 @@ body {
 }
 
 .outline-item:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--accent);
 }
 
@@ -871,7 +887,7 @@ body {
 }
 
 .tree-item:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--accent);
 }
 
@@ -952,7 +968,7 @@ body {
 }
 
 .tree-menu button:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--accent);
 }
 
@@ -994,7 +1010,7 @@ body {
 }
 
 .titlebar-action:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--text);
 }
 
@@ -1186,7 +1202,7 @@ body {
 
 .network-item:hover {
   border-left-color: var(--accent);
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 /* Which note it is: one line, cut rather than wrapped, so the rows stay the
@@ -1313,7 +1329,7 @@ body {
 
 .tags-item:hover {
   border-left-color: var(--accent);
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 /* A tag the open note carries. Marked by the rule the rest of the window marks
@@ -1363,7 +1379,7 @@ body {
 }
 
 .tags-place:hover {
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 /* The file is what a place is identified by, so it is the line that carries the
@@ -1480,7 +1496,7 @@ body {
 
 .search-toggle:hover,
 .search-action:hover:not(:disabled) {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--text);
 }
 
@@ -1565,7 +1581,7 @@ body {
 
 .search-file:hover {
   border-left-color: var(--accent);
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 .search-file--plan input,
@@ -1611,7 +1627,7 @@ body {
 }
 
 .search-hit:hover {
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 .search-line {
@@ -1819,7 +1835,7 @@ body {
 }
 
 .rename-cancel:hover {
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 .rename-confirm:hover {
@@ -1867,7 +1883,7 @@ body {
 }
 
 .undo-action:hover {
-  background: var(--active-line);
+  background: var(--hover);
 }
 
 .undo-close {
@@ -2095,7 +2111,7 @@ body {
 }
 
 .settings-close:hover {
-  background: var(--active-line);
+  background: var(--hover);
   color: var(--text);
 }
 

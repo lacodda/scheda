@@ -14,6 +14,8 @@
 //     ground text is laid on — the page, the panels, the line the caret is on,
 //     a code block, a table, a callout's tint;
 //   - a colour and a fill set by one rule clear it against each other;
+//   - what lies under the pointer, `--hover`, stands off every ground it is
+//     laid on by dowel's own step, and every ink the window writes reads on it;
 //   - `--faint` is the one exception, and it is not text: it draws marks that
 //     are not read — a tab's cross, a table's delimiter row, a disabled
 //     control — and clears the 3:1 that WCAG 1.4.11 asks of those. Which rules
@@ -242,6 +244,35 @@ const OPACITY: Record<string, string> = {
   '.cm-line.cm-focus-faded': "focus mode: fading what is not being written is the mode's purpose",
 }
 
+/** What a pointer can rest over: the page, the panels and the caret's line.
+ *  The light theme's panels and caret line are one colour, which is how a
+ *  hover laid in the caret line's colour came to change nothing on a panel. */
+const HOVER_GROUNDS = ['bg', 'status-bg', 'active-line']
+
+/** How far `--hover` stands off each of them: dowel's `--soft` on its own
+ *  ground measures 1.10:1 in its light theme and 1.11:1 in its dark one. */
+const STEP = 1.1
+
+/** Hover rules that lay something other than `--hover`, and why. */
+const HOVER: Record<string, string> = {
+  '.window-button--close:hover': "the system's own red for closing a window",
+  '.tree-menu button:disabled:hover': 'a disabled control answers no pointer',
+  '*::-webkit-scrollbar-thumb:hover, *::-webkit-scrollbar-thumb:active': "a scrollbar thumb's darker step, not a row",
+}
+
+/** Every token the window's own sheet writes text in: what can stand in a row
+ *  or on a button under the pointer. The editor's inks are drawn in a note,
+ *  where nothing is hovered. */
+const windowInks = [
+  ...new Set(
+    RULES.flatMap((rule) =>
+      rule.where === 'styles.css' && rule.color && isToken(rule.color) && rule.color !== 'faint' && !partnerOf(rule.color)
+        ? [rule.color]
+        : [],
+    ),
+  ),
+]
+
 // --------------------------------------------------------------- tests --
 
 describe('the palette', () => {
@@ -257,7 +288,7 @@ describe('the palette', () => {
   })
 
   it('has the grounds and the marks this file measures', () => {
-    for (const name of [...GROUNDS, 'muted', 'faint', 'text', 'on-accent']) {
+    for (const name of [...GROUNDS, 'hover', 'muted', 'faint', 'text', 'on-accent']) {
       expect(light.has(name), `--${name}`).toBe(true)
     }
     expect(calloutShare, "the callout tint's share in the editor theme").not.toBeNull()
@@ -278,6 +309,8 @@ describe('the rules', () => {
       fill: 'highlight-bg',
     })
     expect(seen('editor theme.ts', '.cm-line.cm-focus-faded')).toMatchObject({ opacity: '0.3' })
+    expect(seen('styles.css', '.tree-item:hover')).toMatchObject({ color: 'accent', fill: 'hover' })
+    expect(windowInks).toEqual(expect.arrayContaining(['muted', 'text', 'accent', 'link-missing']))
     expect(RULES.filter((r) => r.where === 'editor highlight.ts').map((r) => r.color)).toContain('tok-comment')
     expect(textTokens.length).toBeGreaterThan(15)
   })
@@ -309,6 +342,15 @@ describe('the rules', () => {
     expect(misplaced.map((rule) => `${rule.where} ${rule.selector}: ${rule.color} on ${rule.fill}`)).toEqual([])
   })
 
+  it('lay --hover under the pointer, or say why not', () => {
+    const hovers = RULES.filter((rule) => rule.selector.includes(':hover') && rule.fill !== undefined)
+    const other = hovers.filter((rule) => rule.fill !== 'hover').map((rule) => rule.selector)
+    expect(other.filter((selector) => !(selector in HOVER))).toEqual([])
+    expect(Object.keys(HOVER).filter((selector) => !other.includes(selector))).toEqual([])
+    // The scanner saw the rules this is about, not an empty list.
+    expect(hovers.length).toBeGreaterThan(10)
+  })
+
   it('fade nothing without a reason', () => {
     const faded = RULES.filter((rule) => rule.opacity !== undefined && Number(rule.opacity) < 1)
     expect(faded.map((rule) => rule.selector).filter((selector) => !(selector in OPACITY))).toEqual([])
@@ -336,6 +378,16 @@ describe.each(THEMES)('the %s theme', (_theme, palette) => {
       // A second level of quiet that is as loud as the first is not one.
       expect(faint, `--faint against --muted on ${ground}`).toBeLessThan(contrast(colour('muted'), rgb) - 1)
     }
+  })
+
+  it('--hover stands off everything a pointer rests over', () => {
+    for (const ground of HOVER_GROUNDS) {
+      expect(contrast(colour('hover'), colour(ground)), `--hover against --${ground}`).toBeGreaterThanOrEqual(STEP)
+    }
+  })
+
+  it.each(windowInks)('--%s is readable under the pointer', (name) => {
+    expect(contrast(colour(name), colour('hover'))).toBeGreaterThanOrEqual(TEXT)
   })
 
   it.each([...palette.keys()].filter((name) => partnerOf(name)))('--%s is readable on its fill', (name) => {

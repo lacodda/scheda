@@ -605,13 +605,18 @@ check(treeAgain === 0, 'Ctrl+Shift+E did not close the file tree again')
 // themes, against what it is drawn on — see `glyph-contrast.mjs` for what this
 // sees that the palette test cannot. The dark theme is reached both ways it
 // can be: by the user's choice and by the system's, since the stylesheet
-// states the dark palette once for each.
+// states the dark palette once for each. And light is chosen on a dark system
+// too, which is where a choice that stopped at the palette showed: the
+// checkboxes and the slider of the settings, drawn by the webview itself,
+// followed the system and came out dark in a light window.
 const THEMES = [
   ['light', 'light', 'light'],
+  ['light on a dark system', 'dark', 'light'],
   ['dark', 'light', 'dark'],
   ['dark by the system', 'dark', null],
 ]
 const glyphs = []
+const schemes = []
 async function auditScene(scene) {
   for (const [theme, scheme, attribute] of THEMES) {
     await page.emulateMedia({ colorScheme: scheme })
@@ -621,7 +626,20 @@ async function auditScene(scene) {
     }, attribute)
     await page.waitForTimeout(60)
     glyphs.push({ scene, theme, ...(await page.evaluate(auditGlyphs)) })
+    // The scheme a control the webview draws is painted in: `light dark`
+    // leaves it to the system, anything else names it.
+    const control = await page.evaluate(() => {
+      const control = document.querySelector('input[type="checkbox"], input[type="range"], select')
+      return control === null ? null : getComputedStyle(control).colorScheme
+    })
+    if (control !== null) schemes.push({ scene, theme, system: scheme, control })
   }
+}
+
+function usedScheme(declared, system) {
+  if (declared === 'light dark') return system
+  if (declared === 'normal') return 'light'
+  return declared
 }
 
 // The measure first measures itself. A probe it must fail and one it must
@@ -688,6 +706,22 @@ check((await page.locator('.palette').count()) === 1, 'Ctrl+Shift+P did not open
 await auditScene('the palette')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
+
+// The settings carry the controls the webview draws, so they are where a
+// theme that did not reach them shows; no control measured means the probe
+// saw nothing.
+check(
+  schemes.some(({ scene }) => scene === 'the settings'),
+  'no control drawn by the webview was found on the settings screen',
+)
+for (const { scene, theme, system, control } of schemes) {
+  const expected = theme.startsWith('dark') ? 'dark' : 'light'
+  const used = usedScheme(control, system)
+  check(
+    used === expected,
+    `${scene}, ${theme}: the controls the webview draws are ${used} (color-scheme: ${control}), expected ${expected}`,
+  )
+}
 
 for (const { scene, theme, measured, below } of glyphs) {
   // A screen with almost nothing measured is a screen that did not open.
