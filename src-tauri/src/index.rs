@@ -506,11 +506,11 @@ pub fn save(dir: &Path, snapshot: &Snapshot) -> Result<(), stored::WriteError> {
 }
 
 /// Where indexes live: `%LOCALAPPDATA%\scheda\index` on Windows, the XDG data
-/// directory elsewhere. Local rather than roaming: an index is a reading of
-/// one machine's disk, and carrying it to another would carry stamps that mean
-/// nothing there.
+/// directory elsewhere, or `index` under `SCHEDA_HOME` (see `home`). Local
+/// rather than roaming: an index is a reading of one machine's disk, and
+/// carrying it to another would carry stamps that mean nothing there.
 pub fn directory() -> Option<PathBuf> {
-    dirs::data_local_dir().map(|base| base.join("scheda").join("index"))
+    crate::home::local().map(|home| home.join("index"))
 }
 
 /// The index the window is holding: one vault at a time, built behind the text

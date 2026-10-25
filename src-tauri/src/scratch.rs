@@ -39,8 +39,8 @@ pub enum ScratchError {
 
 /// Where drafts live: a folder beside the settings file.
 fn directory() -> Result<PathBuf, ScratchError> {
-    dirs::config_dir()
-        .map(|base| base.join("scheda").join("drafts"))
+    crate::home::config()
+        .map(|home| home.join("drafts"))
         .ok_or(ScratchError::NoDataDirectory)
 }
 

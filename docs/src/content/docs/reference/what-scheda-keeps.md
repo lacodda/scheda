@@ -28,6 +28,30 @@ one does not, because what is in it describes one machine's disk.
 The webview keeps a cache of its own in `%LOCALAPPDATA%\com.lacodda.scheda` on
 Windows. That one is the platform's, not scheda's, and holds nothing you wrote.
 
+## A scheda kept apart
+
+`SCHEDA_HOME` names one directory for everything in the tables on this page -
+configuration and local data together:
+
+```powershell
+$env:SCHEDA_HOME = "$env:TEMP\scheda-trial"; & "$env:LOCALAPPDATA\scheda\scheda.exe" notes.md
+```
+
+```sh
+SCHEDA_HOME=/tmp/scheda-trial scheda notes.md
+```
+
+It is for a run that must not touch the scheda you live in: trying a release on
+a copy of a vault, taking pictures of the window, a check before a release. The
+settings, the session, the drafts and the indexes of that run are written there
+and nowhere else; set but empty, the variable counts as unset. The webview's
+cache is the platform's and stays where it is, unless `WEBVIEW2_USER_DATA_FOLDER`
+moves it too.
+
+One scheda runs at a time on a machine. Started while another is open, it hands
+its file to that window, whatever `SCHEDA_HOME` says - close the first one
+before starting one apart.
+
 ## Formats
 
 Each JSON file starts with the number of its format:

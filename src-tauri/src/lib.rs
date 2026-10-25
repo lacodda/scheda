@@ -9,6 +9,7 @@ pub mod export;
 pub mod files;
 pub mod frontmatter;
 pub mod handover;
+pub mod home;
 pub mod inbox;
 pub mod index;
 pub mod links;

@@ -383,11 +383,9 @@ pub enum SettingsError {
 }
 
 /// Where the settings file lives: `%APPDATA%\scheda` on Windows, the
-/// XDG config directory elsewhere.
+/// XDG config directory elsewhere, or `SCHEDA_HOME` (see `home`).
 pub fn directory() -> Result<PathBuf, SettingsError> {
-    dirs::config_dir()
-        .map(|base| base.join("scheda"))
-        .ok_or(SettingsError::NoDataDirectory)
+    crate::home::config().ok_or(SettingsError::NoDataDirectory)
 }
 
 fn file_path() -> Result<PathBuf, SettingsError> {
