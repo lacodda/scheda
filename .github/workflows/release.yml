@@ -27,8 +27,8 @@ jobs:
           # git-cliff reads the whole history to write the changelog section.
           fetch-depth: 0
 
-      # The manifests agreeing with each other is `release_consistency`, which
-      # already ran in CI. What only a tag can check is that they agree with
+      # The manifests agreeing with each other is `lyrn check`, which already
+      # ran in CI. What only a tag can check is that they agree with
       # the tag.
       - name: Verify the tag matches the manifest
         shell: bash

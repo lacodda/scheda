@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.18.0] - 2026-10-25
+
+### Bug Fixes
+- Let the window's IPC use Tauri's own protocol
+- Open every file a second launch hands over
+- Reach native controls and mark what is under the pointer
+
+### Documentation
+- Add guides, and say only what the build does
+- Show the window from the release build
+
+### Features
+- Keep scheda's files under SCHEDA_HOME when it is set
+
 ## [0.17.0] - 2026-10-19
 
 ### Features
