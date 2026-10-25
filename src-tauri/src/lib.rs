@@ -8,6 +8,7 @@ pub mod document;
 pub mod export;
 pub mod files;
 pub mod frontmatter;
+pub mod handover;
 pub mod inbox;
 pub mod index;
 pub mod links;
@@ -99,6 +100,38 @@ impl From<document::DocumentError> for CommandError {
 #[tauri::command]
 fn take_preloaded(state: tauri::State<'_, Preloaded>) -> Option<OpenFile> {
     state.0.lock().expect("preload lock").take()
+}
+
+/// What a second launch hands the running window: a file the core read, or why
+/// it could not read it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum Handed {
+    File { file: OpenFile },
+    Failed { message: String },
+}
+
+/// The window listens for handovers from now on, and takes those that came
+/// before it did - see `handover` for why they wait.
+#[tauri::command]
+fn take_handovers(mailbox: tauri::State<'_, handover::Mailbox<Handed>>) -> Vec<Handed> {
+    mailbox.listening()
+}
+
+/// Sends a handover to the window, or keeps it until the window listens.
+fn deliver(app: &tauri::AppHandle, handed: Handed) {
+    // The mailbox is managed before the app runs, and a second launch can only
+    // reach a running app; were it missing, sending at once is what was done
+    // before there was one.
+    let handed = match app.try_state::<handover::Mailbox<Handed>>() {
+        Some(mailbox) => mailbox.offer(handed),
+        None => Some(handed),
+    };
+    let _ = match handed {
+        Some(Handed::File { file }) => app.emit(OPEN_FILE_EVENT, file),
+        Some(Handed::Failed { message }) => app.emit(OPEN_FAILED_EVENT, message),
+        None => Ok(()),
+    };
 }
 
 /// Reads a file the user chose while the app was already running.
@@ -1358,21 +1391,24 @@ pub fn run() {
 
             // The core reads it, the way it reads the first one — the webview
             // is handed text, never a path to open for itself (ADR 0001).
-            match document::read(&path) {
+            let handed = match document::read(&path) {
                 Ok(doc) => {
                     let mut file = OpenFile::new(path.clone(), doc);
                     // The sentinel, not the command line: whoever is waiting
                     // started this launch without the flag.
                     file.awaited = wait::is_awaited(&path);
-                    let _ = app.emit(OPEN_FILE_EVENT, file);
+                    Handed::File { file }
                 }
                 Err(error) => {
                     // Unreadable. Anybody blocked on it is let go now rather
                     // than left waiting for a tab that will never exist.
                     let _ = wait::release(&path);
-                    let _ = app.emit(OPEN_FAILED_EVENT, error.to_string());
+                    Handed::Failed {
+                        message: error.to_string(),
+                    }
                 }
-            }
+            };
+            deliver(app, handed);
             focus_main_window(app);
         }))
         .plugin(
@@ -1391,6 +1427,7 @@ pub fn run() {
         // the core, so the webview still never touches the disk.
         .plugin(tauri_plugin_dialog::init())
         .manage(Preloaded(Mutex::new(preloaded)))
+        .manage(handover::Mailbox::<Handed>::default())
         .manage(watch::Watch::default())
         .manage(VaultIndex::default())
         .manage(index::NoteIndex::new(index::directory()))
@@ -1416,6 +1453,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             take_preloaded,
+            take_handovers,
             open_file,
             save_file,
             reread_file,

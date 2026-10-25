@@ -375,6 +375,19 @@ export function onFileHandedOver(handler: (file: OpenFile) => void): Promise<Unl
   return listen<OpenFile>('scheda://open-file', (event) => handler(event.payload))
 }
 
+/** What a second launch handed the window: a file the core read, or why it
+ *  could not read it. */
+export type Handed = { kind: 'file'; file: OpenFile } | { kind: 'failed'; message: string }
+
+/** Tells the core the window listens for handovers from now on, and takes the
+ *  ones that came before it did. The shell loads after the first paint, and a
+ *  launch in that moment - two files opened from Explorer at once - would
+ *  otherwise reach nobody. Ask only once both listeners are in place: then each
+ *  handover is either among these or sent as an event, never both. */
+export function takeHandovers(): Promise<Handed[]> {
+  return invoke<Handed[]>('take_handovers')
+}
+
 /** A second launch could not read the file it was given. */
 export function onHandoverFailed(handler: (message: string) => void): Promise<UnlistenFn> {
   return listen<string>('scheda://open-failed', (event) => handler(event.payload))

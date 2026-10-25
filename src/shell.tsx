@@ -26,6 +26,7 @@ import {
   restoreDrafts,
   saveSession,
   showQuickNote,
+  takeHandovers,
   watchVault,
   type Draft,
   type OpenFile,
@@ -648,13 +649,25 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   useEffect(() => {
     // A second launch hands its file to this window rather than opening one of
     // its own; the core has already read it.
-    const opened = onFileHandedOver((file) => {
+    const adopt = (file: OpenFile) => {
       editor.adopt(file)
       void rememberRecent(file.path)
-    })
-    const failed = onHandoverFailed((message) => {
+    }
+    const refuse = (message: string) => {
       void ask(message, { title: 'Cannot open that file', kind: 'error', okLabel: 'OK' })
-    })
+    }
+    const opened = onFileHandedOver(adopt)
+    const failed = onHandoverFailed(refuse)
+    // Listening first, then taking what came before this shell existed: the
+    // core held those rather than send them to nobody.
+    void Promise.all([opened, failed])
+      .then(() => takeHandovers())
+      .then((waited) => {
+        for (const handed of waited) {
+          if (handed.kind === 'file') adopt(handed.file)
+          else refuse(handed.message)
+        }
+      })
     // A quick note went into a file this window may be showing. The watcher
     // hears about it only inside the vault it is watching, so the core says so
     // itself, and the tab takes the line the same way it takes any outside

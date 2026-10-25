@@ -120,6 +120,7 @@ await page.addInitScript((text) => {
       // console full of rejected promises and the failure list full of noise
       // about the stub rather than the page.
       if (command === 'restore_drafts') return []
+      if (command === 'take_handovers') return []
       if (command === 'keep_draft') return 'draft-1'
       if (command === 'discard_draft') return null
       // The network panel asks for these the moment it is opened. `null` would
