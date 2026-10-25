@@ -82,6 +82,17 @@ Publishing it runs `.github/workflows/install.yml`, which installs the new
 release with the scripts on Windows, macOS and Linux and checks the version
 they installed.
 
+A run of the release build that is not your own scheda - a check before a
+release, the pictures - goes under `SCHEDA_HOME` (ADR 0020), so the settings,
+the session, the drafts and the index of the scheda you live in are neither
+read nor written. The README's pictures are taken that way, from the release
+build, on the sample vault in `tools/demo-vault`:
+
+```sh
+pnpm tauri build --no-bundle
+node tools/shoot.mjs        # writes assets/screenshot.png and screenshot-dark.png
+```
+
 ## Architecture decisions
 
 Anything that would be asked about again later is written down in
