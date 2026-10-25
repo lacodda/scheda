@@ -1,14 +1,16 @@
 //! Guards the facts that must agree before a version is tagged.
 //!
-//! scheda states its version in four files — the crate manifest, the Tauri
-//! config, `package.json` and the editor package's manifest — and describes
-//! itself in two of them. Nothing
-//! fails when one of the three is left behind: the build is green, the bundle
-//! is produced, and the installer simply advertises a version that was never
-//! released. The mismatch only becomes visible after the tag, which is the one
-//! point where it cannot be taken back.
+//! What every product of the line has to agree on - one version in every
+//! manifest, one description, one README with absolute links, a documentation
+//! site that knows where it lives - is held by `lyrn check`, in the gate and in
+//! the shopfronts workflow. A copy of those rules here would be a second
+//! opinion that drifts from the first.
 //!
-//! So the agreement is a test, and the test runs in CI.
+//! What is left is scheda's own: the commands its installers are run with, the
+//! bundles the release carries for them, and the editor package that goes out
+//! with each release and reaches no registry. Nothing fails when one of these
+//! is left behind either: the build is green, and the installer answers 404
+//! after the tag, which is the one point where it cannot be taken back.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,121 +28,18 @@ fn read(path: impl AsRef<Path>) -> String {
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
 }
 
-/// Extracts a top-level `key = "value"` from the `[package]` block.
-///
-/// Deliberately naive: reading only the first block is all these checks need,
-/// and it avoids a TOML parser as a dev-dependency.
-fn cargo_field(key: &str) -> String {
-    let manifest = read("src-tauri/Cargo.toml");
-    for line in manifest.lines() {
-        let line = line.trim();
-        // Stop at the next section: `version` also appears under [lib] and in
-        // every dependency.
-        if line.starts_with('[') && line != "[package]" {
-            break;
-        }
-        let Some((name, value)) = line.split_once('=') else {
-            continue;
-        };
-        // Exact match, so `rust-version` cannot answer a lookup for `version`.
-        if name.trim() != key {
-            continue;
-        }
-        return value.trim().trim_matches('"').to_string();
-    }
-    panic!("`{key}` not found in the [package] block of src-tauri/Cargo.toml");
-}
-
-/// Extracts a `"key": "value"` from a JSON file, without a JSON dependency.
-fn json_field(file: &str, key: &str) -> String {
-    let text = read(file);
-    let needle = format!("\"{key}\"");
-    let start = text
-        .find(&needle)
-        .unwrap_or_else(|| panic!("`{key}` not found in {file}"));
-    let after = &text[start + needle.len()..];
-    let after = after.trim_start().trim_start_matches(':').trim_start();
-    let after = after
-        .strip_prefix('"')
-        .unwrap_or_else(|| panic!("`{key}` in {file} is not a string"));
-    after[..after.find('"').expect("unterminated string")].to_string()
-}
-
 #[test]
-fn every_manifest_states_the_same_version() {
-    let crate_version = cargo_field("version");
-    let tauri_version = json_field("src-tauri/tauri.conf.json", "version");
-    let npm_version = json_field("package.json", "version");
-
-    assert_eq!(
-        tauri_version, crate_version,
-        "tauri.conf.json says {tauri_version} while Cargo.toml says {crate_version}; \
-         the installer and the About box would disagree with the release"
-    );
-    assert_eq!(
-        npm_version, crate_version,
-        "package.json says {npm_version} while Cargo.toml says {crate_version}"
-    );
-}
-
-#[test]
-fn the_editor_package_is_released_with_the_window() {
-    // The package is built from this repository and published by the same tag,
-    // so a program that pins `@lacodda/scheda-editor@X` gets the editor scheda X
-    // shipped. A package left a version behind would be published under a
-    // number that names a different editor.
-    let crate_version = cargo_field("version");
-    let package_version = json_field("packages/editor/package.json", "version");
-
-    assert_eq!(
-        package_version, crate_version,
-        "packages/editor/package.json says {package_version} while Cargo.toml says {crate_version}"
-    );
-}
-
-#[test]
-fn the_product_is_described_the_same_way_everywhere() {
-    let crate_description = cargo_field("description");
-    let npm_description = json_field("package.json", "description");
-
-    assert_eq!(
-        npm_description, crate_description,
-        "the crate and package.json describe scheda differently; one of them is \
-         a stale copy, and readers cannot tell which"
-    );
-}
-
-#[test]
-fn there_is_exactly_one_readme() {
-    let readmes: Vec<_> = fs::read_dir(repo_root())
-        .expect("cannot read the repository root")
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .filter(|name| name.to_ascii_lowercase().starts_with("readme"))
-        .collect();
-
-    assert_eq!(
-        readmes.len(),
-        1,
-        "the root holds {readmes:?}; one README is the single source, and a \
-         second copy is the one that goes stale"
-    );
-}
-
-#[test]
-fn readme_links_are_absolute() {
-    // Relative links work on GitHub and break everywhere the README is
-    // re-rendered — crates.io, npm, the docs site. Images too: a relative
-    // `src` shows a broken frame on every page but one. The editor package's
-    // README is the page npm shows for it, so it is held to the same rule.
-    let mut offenders = Vec::new();
-    for file in ["README.md", "packages/editor/README.md"] {
-        offenders.extend(relative_links(file));
-    }
+fn the_editor_packages_readme_links_are_absolute() {
+    // The README of the repository is `lyrn check`'s. The editor package's is
+    // the page shown wherever the tarball is unpacked and read, away from the
+    // repository - where a relative link, or a picture's relative `src`, points
+    // at nothing. So it is held to the same rule here.
+    let offenders = relative_links("packages/editor/README.md");
 
     assert!(
         offenders.is_empty(),
-        "a README has relative links, which break wherever it is re-rendered: {offenders:?}"
+        "the editor package's README has relative links, which break wherever \
+         it is read outside the repository: {offenders:?}"
     );
 }
 

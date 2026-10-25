@@ -30,10 +30,10 @@ jobs:
           check-latest: true
           cache: pnpm
           cache-dependency-path: docs/pnpm-lock.yaml
-      # The site keeps its own lockfile outside the repository's workspace, and
-      # pnpm would otherwise install the workspace above it instead.
+      # The site is a workspace of its own (docs/pnpm-workspace.yaml), with its
+      # own lockfile, so the window's workspace above it is not installed here.
       - name: Install
-        run: pnpm install --frozen-lockfile --ignore-workspace
+        run: pnpm install --frozen-lockfile
         working-directory: docs
       - name: Build
         run: pnpm build

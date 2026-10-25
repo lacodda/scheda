@@ -22,13 +22,24 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 pnpm lint
 pnpm check:layout
 pnpm check:package
+lyrn check
 ```
 
 That is what CI runs, so a green terminal means a green pull request.
 `pnpm lint` runs the editor package's tests alongside the window's;
 `check:package` packs the package, unpacks it and imports it by name in a
 separate Node process, which is the only way to know a program installing it
-can load it.
+can load it. [`lyrn check`](https://lyrn.lacodda.com/reference/check/) holds
+the shopfronts to each other - one version in every manifest, one description,
+the README's links, where the documentation site lives - and
+`src-tauri/tests/release_consistency.rs` holds what is scheda's own: the
+installers' commands and the bundles they download.
+
+The audit (`audit.yml`, `docs-audit.yml`) checks the crates with `cargo deny`
+and the packages with `pnpm audit` on every push and every Monday; Dependabot is
+off on purpose (ADR 0019). `node tools/check-licenses.mjs` holds the shipped
+packages to the licenses `deny.toml` holds the crates to; a package outside the
+list is accepted by name and version, with its reason, or replaced.
 
 The corpus of deliberately awkward files - mixed line endings, a byte-order
 mark, a missing trailing newline, text that is not UTF-8 - runs as part of
