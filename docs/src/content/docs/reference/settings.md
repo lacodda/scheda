@@ -30,8 +30,8 @@ rather than judged by eye.
 ## The file
 
 scheda stores its settings in the application's own data directory — never in
-the folder you opened. A vault stays exactly as its owner left it: no stray file
-to commit, sync or explain.
+the vault your notes are in. A vault stays exactly as its owner left it: no
+stray file to commit, sync or explain.
 
 | Platform | Location |
 | --- | --- |

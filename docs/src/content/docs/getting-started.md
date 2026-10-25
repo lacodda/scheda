@@ -7,10 +7,10 @@ scheda is a markdown notepad. You double-click a `.md` file, the text is on
 screen, and the markup is drawn over it without hiding what you typed. When you
 save, the file goes back to disk with the bytes it arrived with.
 
-Open a single file and scheda is a notepad. Open a folder - or a file inside an
-Obsidian vault - and the same window grows a file tree, `[[links]]` between
-notes, tags and search across the vault. Underneath both is the part everything
-else depends on: a file that opens fast and comes back unharmed.
+Open a single file and scheda is a notepad. Open a note inside an Obsidian
+vault and the same window grows a file tree, `[[links]]` between notes, tags and
+search across the vault. Underneath both is the part everything else depends
+on: a file that opens fast and comes back unharmed.
 
 ## Install
 
@@ -88,5 +88,14 @@ checked on every build against a corpus of deliberately awkward files — see
 ## Where scheda keeps its own things
 
 Nowhere near your files. Settings, unsaved drafts and the index of a vault live
-in the application's data directory. scheda never writes into a folder you opened,
-and it never writes `.obsidian/`.
+in the application's data directory - see
+[What scheda keeps](/scheda/reference/what-scheda-keeps/). scheda never writes
+its own files into a vault, and it never writes `.obsidian/`.
+
+## Where next
+
+- [Make scheda your markdown editor](/scheda/guides/make-it-the-default/), so a
+  double-click opens it.
+- [Work in an Obsidian vault](/scheda/guides/work-in-an-obsidian-vault/), beside
+  Obsidian.
+- [Keyboard](/scheda/reference/keyboard/), for everything one key does.

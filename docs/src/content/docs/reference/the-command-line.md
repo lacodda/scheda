@@ -20,15 +20,10 @@ Also spelled `-w`. The process stays alive until the tab is closed, and then
 returns — which is what a program needs when it hands you a file and waits for
 you to finish with it.
 
-That makes scheda usable as an editor for other programs:
-
-```sh
-export EDITOR="scheda --wait"
-export VISUAL="scheda --wait"
-```
-
-With that set, `git commit` opens the commit message in scheda and waits; so
-does anything else that goes through `$EDITOR`.
+That makes scheda usable as an editor for other programs: with
+`EDITOR="scheda --wait"`, `git commit` opens the commit message in scheda and
+waits, and so does anything else that goes through `$EDITOR`. Setting it up on
+each platform is on [Write commit messages in scheda](/scheda/guides/use-it-as-your-editor/).
 
 Closing the tab is what returns. Not saving, and not closing the window — the
 tab. You can keep working in scheda afterwards; the program that was waiting has
@@ -45,8 +40,10 @@ return**.
 
 ### On Windows
 
-`scheda.exe --wait` works from any shell. In Git Bash, give the file a path in
-the form `C:/…` rather than `/c/…`, the way every Windows program expects.
+The installer puts scheda in `%LOCALAPPDATA%\scheda` and leaves `PATH` alone,
+so a shell reaches it by that path - `& "$env:LOCALAPPDATA\scheda\scheda.exe" --wait notes.md`
+in PowerShell. In Git Bash, give the file a path in the form `C:/…` rather than
+`/c/…`, the way every Windows program expects.
 
 ## Flags you will not need
 

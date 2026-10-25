@@ -25,23 +25,23 @@ import { CardGrid, Card } from '@astrojs/starlight/components';
   </div>
   <div class="sc-sheet__body">
     <div class="sc-sheet__row">
-      <span class="sc-sheet__source"># Tuesday</span>
+      <span class="sc-sheet__source">{'# Tuesday'}</span>
       <span class="sc-sheet__drawn sc-sheet__drawn--h1">Tuesday</span>
     </div>
     <div class="sc-sheet__row">
-      <span class="sc-sheet__source">**the point**</span>
+      <span class="sc-sheet__source">{'**the point**'}</span>
       <span class="sc-sheet__drawn sc-sheet__drawn--strong">the point</span>
     </div>
     <div class="sc-sheet__row">
-      <span class="sc-sheet__source">*an aside*</span>
+      <span class="sc-sheet__source">{'*an aside*'}</span>
       <span class="sc-sheet__drawn sc-sheet__drawn--em">an aside</span>
     </div>
     <div class="sc-sheet__row">
-      <span class="sc-sheet__source">`cargo test`</span>
+      <span class="sc-sheet__source">{'`cargo test`'}</span>
       <span class="sc-sheet__drawn sc-sheet__drawn--code">cargo test</span>
     </div>
     <div class="sc-sheet__row">
-      <span class="sc-sheet__source">[a link](/somewhere)</span>
+      <span class="sc-sheet__source">{'[a link](/somewhere)'}</span>
       <span class="sc-sheet__drawn sc-sheet__drawn--link">a link</span>
     </div>
   </div>
@@ -59,8 +59,8 @@ import { CardGrid, Card } from '@astrojs/starlight/components';
 <CardGrid>
   <Card title="Opens before you notice" icon="rocket">
     The core reads the file before the window exists, and the shell around the
-    editor loads after the first character is painted. The budget is measured on
-    every run, not assumed.
+    editor loads after the first character is painted. Every build is checked to
+    keep it that way: the code that paints the text carries nothing else.
   </Card>
   <Card title="Gives the file back unharmed" icon="approve-check">
     Line endings, byte-order marks and trailing newlines survive a round trip —

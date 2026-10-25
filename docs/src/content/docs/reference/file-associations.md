@@ -19,14 +19,8 @@ that writes it from outside is either rejected or reset on the next update.
 So the install offers the type rather than taking it. Whatever editor you had
 pointed at `.md` keeps it until you say otherwise.
 
-## Making it the default
-
-Either way works, and both stick:
-
-- **From a file.** Right-click any `.md` → *Open with* → *Choose another app* →
-  **scheda** → *Always use this app*.
-- **From Settings.** *Settings → Apps → Default apps → scheda*, then set the
-  file types you want.
+Making it the default is a choice you make once, from a file or from Settings -
+see [Make scheda your markdown editor](/scheda/guides/make-it-the-default/).
 
 ## What gets written
 
@@ -65,12 +59,9 @@ Both are meant for the installer and print nothing on success.
 The [install script](/scheda/getting-started/#install) writes a launcher entry,
 `~/.local/share/applications/scheda.desktop`, that declares `text/markdown`.
 That puts scheda in the applications menu and in **Open with** for markdown
-files, and leaves whichever editor was the default where it was. To make
-scheda the default:
-
-```sh
-xdg-mime default scheda.desktop text/markdown
-```
+files, and leaves whichever editor was the default where it was; `xdg-mime`
+makes it the default, as the [guide](/scheda/guides/make-it-the-default/#on-linux)
+shows.
 
 macOS has no registration yet: open a file with scheda from the terminal, or
 through Finder's *Open With → Other…*.

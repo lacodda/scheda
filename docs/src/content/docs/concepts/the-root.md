@@ -9,8 +9,6 @@ itself decides.
 
 ## The rule
 
-**A folder opened explicitly is the root.** Nothing to work out.
-
 **A file's root is the nearest folder above it holding `.obsidian/`.** That is
 the marker Obsidian leaves in a vault, and scheda reads it without ever writing
 one of its own.
