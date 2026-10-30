@@ -1320,20 +1320,20 @@ pub fn run() {
     }
 
     let invocation = wait::parse(std::env::args().skip(1));
+    // Resolved before anything is derived from it: the caller may have typed a
+    // relative path, and the window compares paths with the tree's.
+    let asked = invocation.file.as_deref().map(|path| {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        root::from_outside(path, &cwd)
+    });
 
     // `--wait` puts this process in a different job entirely: it starts a
     // scheda that is not waiting, and then does nothing but watch for the tab
     // to close. It never builds a window of its own — see `wait` for why that
     // separation is the only arrangement that survives being the second launch.
     if invocation.wait {
-        let code = match invocation.file.as_deref() {
-            // Resolved before anything is derived from it: the caller may have
-            // typed a relative path, and the window will be comparing against
-            // what the filesystem returned.
-            Some(path) => {
-                let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-                wait::run_as_waiter(&path)
-            }
+        let code = match asked.as_deref() {
+            Some(path) => wait::run_as_waiter(path),
             // Nothing to wait for. Opening a window would be reasonable, but
             // the caller is blocked on this process and would stay blocked
             // until somebody closed it — for a file they never named.
@@ -1353,8 +1353,8 @@ pub fn run() {
     // last closed, read here for the same reason: the restored window should
     // show its text in the first frame, not a blank one that fills a moment
     // later. The rest of the session waits until after that frame.
-    let front = match invocation.file.as_deref() {
-        Some(path) => Some(path.to_path_buf()),
+    let front = match asked {
+        Some(path) => Some(path),
         None => session::load().front_file(),
     };
     let preloaded = front
@@ -1380,15 +1380,20 @@ pub fn run() {
         // First, before anything else registers: a second launch has to hand
         // its file to the running window and get out of the way, not build a
         // second one. Everything below this line belongs to the first instance.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             let handover = wait::parse(argv.iter().skip(1).cloned());
 
-            let Some(path) = handover.file.filter(|p| p.is_file()) else {
+            // Relative to where the second launch was typed, not to where
+            // this one was.
+            let path = handover
+                .file
+                .map(|path| root::from_outside(&path, Path::new(&cwd)))
+                .filter(|path| path.is_file());
+            let Some(path) = path else {
                 // A bare second launch means "show me the window I have".
                 focus_main_window(app);
                 return;
             };
-            let path = std::fs::canonicalize(&path).unwrap_or(path);
 
             // The core reads it, the way it reads the first one — the webview
             // is handed text, never a path to open for itself (ADR 0001).

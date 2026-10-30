@@ -52,6 +52,55 @@ pub fn for_vault(path: &Path) -> Option<PathBuf> {
     None
 }
 
+/// A path that came from outside the window — a command line, a second
+/// launch, a file dropped on it — as the window holds it.
+///
+/// Relative to the directory it was given in, which for a second launch is
+/// that launch's and not this process's: `scheda notes.md` typed in another
+/// terminal means the `notes.md` there. Made absolute by text rather than by
+/// `canonicalize`, which on Windows answers with a `\\?\` prefix: a tab holding
+/// `\\?\C:\vault\plan.md` is a tab the tree, the recent list and the vault's
+/// index all take for another file than `C:\vault\plan.md` — which is what a
+/// file double-clicked in Explorer while the window was open used to be.
+pub fn from_outside(path: &Path, cwd: &Path) -> PathBuf {
+    let path = without_verbatim(path);
+    let joined = if path.is_absolute() {
+        path
+    } else {
+        cwd.join(path)
+    };
+    normalise(&joined)
+}
+
+/// `\\?\C:\notes` as `C:\notes`, and `\\?\UNC\server\share` as
+/// `\\server\share`; anything else as it was.
+fn without_verbatim(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::path::Prefix;
+        let mut parts = path.components();
+        if let Some(Component::Prefix(prefix)) = parts.next() {
+            let plain = match prefix.kind() {
+                Prefix::VerbatimDisk(letter) => Some(format!("{}:", letter as char)),
+                Prefix::VerbatimUNC(server, share) => Some(format!(
+                    r"\\{}\{}",
+                    server.to_string_lossy(),
+                    share.to_string_lossy()
+                )),
+                _ => None,
+            };
+            if let Some(plain) = plain {
+                let mut out = PathBuf::from(plain);
+                for part in parts {
+                    out.push(part.as_os_str());
+                }
+                return out;
+            }
+        }
+    }
+    path.to_path_buf()
+}
+
 /// Why a link could not become something the webview may load.
 #[derive(Debug, PartialEq, Eq)]
 pub enum LinkError {
@@ -257,6 +306,42 @@ mod tests {
         temp.dir("outer/inner/.obsidian");
         let note = temp.file("outer/inner/one.md");
         assert_eq!(for_vault(&note), Some(temp.0.join("outer/inner")));
+    }
+
+    #[test]
+    fn a_path_from_outside_is_made_absolute_where_it_was_given() {
+        let cwd = std::env::temp_dir().join("scheda-cwd");
+        assert_eq!(
+            from_outside(Path::new("notes/one.md"), &cwd),
+            cwd.join("notes").join("one.md")
+        );
+        assert_eq!(
+            from_outside(Path::new("notes/../plan.md"), &cwd),
+            cwd.join("plan.md")
+        );
+        let elsewhere = std::env::temp_dir().join("elsewhere").join("two.md");
+        assert_eq!(from_outside(&elsewhere, &cwd), elsewhere);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_path_from_outside_loses_the_verbatim_prefix() {
+        // What `canonicalize` answers with on Windows, and what a second launch
+        // used to hand the window.
+        let cwd = Path::new(r"C:\anywhere");
+        assert_eq!(
+            from_outside(Path::new(r"\\?\C:\vault\plan.md"), cwd),
+            PathBuf::from(r"C:\vault\plan.md")
+        );
+        assert_eq!(
+            from_outside(Path::new(r"\\?\UNC\server\share\plan.md"), cwd),
+            PathBuf::from(r"\\server\share\plan.md")
+        );
+        // And what it names is still there to be read.
+        let canonical = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+        let plain = from_outside(&canonical, cwd);
+        assert!(!plain.to_string_lossy().starts_with(r"\\?\"), "{plain:?}");
+        assert!(plain.is_dir());
     }
 
     #[test]
