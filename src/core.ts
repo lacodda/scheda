@@ -74,8 +74,9 @@ export function fileDiffers(path: string, text: string): Promise<boolean> {
   return invoke<boolean>('file_differs', { path, text })
 }
 
-/** Points the folder watcher at the vault of a document, or stops it when the
- *  document is not in one. */
+/** Points the folder watcher at the vault the window is looking at - the
+ *  vault of the note in front, or the window's folder - or stops it when there
+ *  is none. */
 export function watchVault(document: string | null): Promise<void> {
   return invoke<void>('watch_vault', { document })
 }
@@ -103,13 +104,15 @@ export interface FileHit {
   matched: number[]
 }
 
-/** The files in this document's vault that match `query`, best first.
+/** The files in the vault the window is looking at that match `query`, best
+ *  first: the vault of `document`, or the window's folder when it is in none
+ *  or there is no document.
  *
  *  Matched in the core, not here: the list of files is the core's, and shipping
  *  a few thousand paths across on every keystroke so this side can filter them
  *  is a round trip per character to answer a question the other side could
  *  answer once. */
-export function findFiles(document: string, query: string): Promise<FileHit[]> {
+export function findFiles(document: string | null, query: string): Promise<FileHit[]> {
   return invoke<FileHit[]>('find_files', { document, query })
 }
 
@@ -165,13 +168,14 @@ export interface Vault {
   entries: TreeEntry[]
 }
 
-/** The vault a document belongs to, with its files — or null when the document
- *  is not in one.
+/** The vault the window is looking at, with its files: the vault `document`
+ *  belongs to, or the window's folder when it belongs to none or there is no
+ *  document - or null when there is neither.
  *
  *  Null is the ordinary answer for a note opened on its own, and it is what
  *  keeps a notepad a notepad: no tree of the Desktop beside a Desktop file
  *  (decision 2026-09-05). */
-export function readTree(document: string): Promise<Vault | null> {
+export function readTree(document: string | null): Promise<Vault | null> {
   return invoke<Vault | null>('read_tree', { document })
 }
 
@@ -313,21 +317,58 @@ export interface SessionTab {
   top: number
 }
 
-/** What the window had open: the tabs in strip order, which one was in front,
- *  and what stood in the second pane when the window was split. */
-export interface Session {
+/** What the window has open: the tabs in strip order, which one was in front,
+ *  and what stood in the second pane when the window was split. The window's
+ *  half of the session - the half it writes. */
+export interface WindowSession {
   tabs: SessionTab[]
+  /** Null when what was in front was no file: a blank tab, or the folder. */
   active: number | null
   beside: number | null
   focused: 0 | 1
+}
+
+/** The session as it comes back: the window's half, and the core's - the
+ *  folder the window had open and the other folders its tabs came from. The
+ *  core keeps those itself, because every question about a root asks them. */
+export interface Session extends WindowSession {
+  folder: string | null
+  roots: string[]
 }
 
 export function loadSession(): Promise<Session> {
   return invoke<Session>('load_session')
 }
 
-export function saveSession(session: Session): Promise<void> {
+/** Writes the window's half of the session. The folders are the core's and are
+ *  not the window's to send. */
+export function saveSession(session: WindowSession): Promise<void> {
   return invoke<void>('save_session', { session })
+}
+
+/** A folder the window has open. */
+export interface Folder {
+  root: string
+  /** The folder's own name - what the window calls it. */
+  name: string
+}
+
+/** Opens a folder as the window's: the tree shows it whenever the note in
+ *  front is in no vault of its own, and its notes resolve their links in it. */
+export function openFolder(path: string): Promise<Folder> {
+  return invoke<Folder>('open_folder', { path })
+}
+
+/** Closes the window's folder. Tabs from it stay, and keep it as their root
+ *  until they close. */
+export function closeFolder(): Promise<void> {
+  return invoke<void>('close_folder')
+}
+
+/** Takes something dropped on the window: a folder opens as the window's, a
+ *  file is read for a tab. */
+export function openDropped(path: string): Promise<Handed> {
+  return invoke<Handed>('open_dropped', { path })
 }
 
 /** Whether the system gave scheda the quick-note key, and why not. */
@@ -369,28 +410,28 @@ export function forgetRecent(path: string): Promise<string[]> {
   return invoke<string[]>('forget_recent', { path })
 }
 
-/** A second launch handed the running window a file. The core has already read
- *  it, so what arrives is text, not a path to go and open. */
-export function onFileHandedOver(handler: (file: OpenFile) => void): Promise<UnlistenFn> {
-  return listen<OpenFile>('scheda://open-file', (event) => handler(event.payload))
-}
+/** What a path from outside the window became - a launch with a folder, a
+ *  second launch, something dropped: a file the core read, a folder it opened,
+ *  or why it could be neither. What arrives is text or a folder already open,
+ *  never a path to go and open. */
+export type Handed =
+  | { kind: 'file'; file: OpenFile }
+  | { kind: 'folder'; folder: Folder }
+  | { kind: 'failed'; message: string }
 
-/** What a second launch handed the window: a file the core read, or why it
- *  could not read it. */
-export type Handed = { kind: 'file'; file: OpenFile } | { kind: 'failed'; message: string }
+/** A second launch handed the running window a file or a folder. */
+export function onHanded(handler: (handed: Handed) => void): Promise<UnlistenFn> {
+  return listen<Handed>('scheda://handed', (event) => handler(event.payload))
+}
 
 /** Tells the core the window listens for handovers from now on, and takes the
  *  ones that came before it did. The shell loads after the first paint, and a
- *  launch in that moment - two files opened from Explorer at once - would
- *  otherwise reach nobody. Ask only once both listeners are in place: then each
- *  handover is either among these or sent as an event, never both. */
+ *  launch in that moment - two files opened from Explorer at once, or the
+ *  folder the window was launched with - would otherwise reach nobody. Ask only
+ *  once the listener is in place: then each handover is either among these or
+ *  sent as an event, never both. */
 export function takeHandovers(): Promise<Handed[]> {
   return invoke<Handed[]>('take_handovers')
-}
-
-/** A second launch could not read the file it was given. */
-export function onHandoverFailed(handler: (message: string) => void): Promise<UnlistenFn> {
-  return listen<string>('scheda://open-failed', (event) => handler(event.payload))
 }
 
 /** Where a wikilink leads. */
@@ -525,12 +566,12 @@ export interface Tag {
   places: Tagged[]
 }
 
-/** Every tag in the vault, most-used first.
+/** Every tag in the vault the window is looking at, most-used first.
  *
- *  Read on the same terms as the network, and empty for a note that is not in a
- *  vault: a lone file on the Desktop has no vault whose tags could be collected.
- */
-export function readTags(document: string): Promise<Tag[]> {
+ *  Read on the same terms as the network, and empty for a lone note with no
+ *  folder open: a file on the Desktop has no vault whose tags could be
+ *  collected. */
+export function readTags(document: string | null): Promise<Tag[]> {
   return invoke<Tag[]>('read_tags', { document })
 }
 
@@ -643,11 +684,11 @@ export interface SearchFound {
   truncated: boolean
 }
 
-/** Searches the text of every note in the document's vault.
+/** Searches the text of every note in the vault the window is looking at.
  *
  *  Null when a newer search overtook this one: the core stops the old one, and
  *  an answer to what was typed a keystroke ago is not worth showing. */
-export function searchVault(document: string, query: SearchQuery): Promise<SearchFound | null> {
+export function searchVault(document: string | null, query: SearchQuery): Promise<SearchFound | null> {
   return invoke<SearchFound | null>('search_vault', { document, query })
 }
 
@@ -685,7 +726,7 @@ export interface ReplaceApplied {
 
 /** The dry run: every match and what it would become. Nothing is written. */
 export function planReplace(
-  document: string,
+  document: string | null,
   query: SearchQuery,
   replacement: string,
 ): Promise<ReplacePlan> {

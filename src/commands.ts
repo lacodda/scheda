@@ -47,6 +47,8 @@ export const COMMANDS: readonly CommandSpec[] = [
   { id: 'insert.block', title: 'Insert block', keys: ['Mod+Shift+Space'], scope: 'editor' },
   { id: 'file.new', title: 'File: New draft', keys: ['Mod+N'] },
   { id: 'file.open', title: 'File: Open', keys: ['Mod+O'] },
+  { id: 'file.openFolder', title: 'File: Open folder', keys: ['Mod+K Mod+O'] },
+  { id: 'file.closeFolder', title: 'File: Close folder', keys: [] },
   { id: 'file.save', title: 'File: Save', keys: ['Mod+S'] },
   { id: 'file.saveAs', title: 'File: Save as', keys: ['Mod+Shift+S'] },
   { id: 'file.print', title: 'File: Print', keys: ['Mod+Alt+P'] },

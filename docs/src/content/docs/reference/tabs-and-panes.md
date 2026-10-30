@@ -49,14 +49,18 @@ and through moves between panes.
 ## The session
 
 Closing the window remembers what it had open: the tabs in their order, which
-are pinned, where the caret was in each, how far each was scrolled, and whether
-the window was split. The next launch puts it back.
+are pinned, where the caret was in each, how far each was scrolled, whether the
+window was split, and the folder it had open. The next launch puts it back -
+with no file in front, if there was none: a folder's own empty window comes back
+as itself, tree and all.
 
 - **Launched with nothing**, scheda reads the note that was in front before the
   window appears — the first frame already shows it — and the other tabs come
   back a moment later.
 - **Launched with a file** — a double-click on a `.md` — that file is in front,
   and the session comes back behind it.
+- **Launched with a folder** — `scheda ~/notes` — that folder is the window's
+  and in front, and the session comes back behind it.
 - A file that has gone since is left out without a word. Drafts with no file
   come back in their places.
 

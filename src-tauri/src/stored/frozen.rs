@@ -75,6 +75,10 @@ fn session() -> Session {
         active: Some(1),
         beside: Some(0),
         focused: 1,
+        // Empty, as every older sample has to read the same: no build before
+        // format 2 could open a folder.
+        folder: None,
+        roots: vec![],
     }
 }
 

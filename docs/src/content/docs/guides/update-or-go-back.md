@@ -2,7 +2,7 @@
 title: Update, or go back a version
 description: Move to the newest scheda, install a particular release, and return to an older one without losing your settings.
 sidebar:
-  order: 8
+  order: 9
 ---
 
 The command that installed scheda is the one that updates it, and the same

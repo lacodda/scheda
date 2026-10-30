@@ -88,6 +88,26 @@ describe('tabs', () => {
     expect(editor.active().path).toBe('/a.md')
   })
 
+  it('reuses an untouched blank in front among other tabs', () => {
+    // The blank a folder is shown over stands among the tabs already open;
+    // the note picked from the folder's tree takes its place.
+    const editor = mount(file('/a.md', 'a\n'))
+    editor.openBlank()
+    editor.adopt(file('/notes/b.md', 'b\n'))
+
+    expect(editor.tabs().map((tab) => tab.path)).toEqual(['/a.md', '/notes/b.md'])
+    expect(editor.active().path).toBe('/notes/b.md')
+  })
+
+  it('keeps a blank that was pinned', () => {
+    const editor = mount(null)
+    editor.pin(editor.active().id, true)
+    editor.adopt(file('/a.md', 'a\n'))
+
+    expect(editor.tabs()).toHaveLength(2)
+    expect(editor.tabs()[0].path).toBeNull()
+  })
+
   it('keeps a blank tab that has been typed into', () => {
     const editor = mount(null)
     type(editor, 'unsaved thoughts')

@@ -1,11 +1,16 @@
 //! Where a document's world begins, and what may be read from it.
 //!
-//! One rule, stated once (ADR 0003): a folder opened explicitly is the root; a
-//! file's root is the nearest ancestor holding `.obsidian/`, and its own folder
-//! if there is none. Everything the vault side of scheda will need — the tree,
-//! wikilinks, backlinks, search — derives from this, and so does the one thing
-//! that needs it today: which directory the webview may read pictures from
-//! (ADR 0004).
+//! One rule, stated once (ADR 0003): a document's root is its nearest ancestor
+//! that is either a folder opened explicitly or a folder holding `.obsidian/`,
+//! and its own folder if there is neither. Everything the vault side of scheda
+//! needs — the tree, wikilinks, backlinks, search — derives from this, and so
+//! does which directory the webview may read pictures from (ADR 0004).
+//!
+//! The folders opened explicitly are the window's, kept with its session
+//! (`session.rs`), and every question here takes them as an argument rather
+//! than reading them from somewhere: a caller that forgot them would answer
+//! with the rule as it was before folders could be opened, and nothing would
+//! say so.
 //!
 //! Resolving a link lives here too, rather than in the frontend, so that
 //! "outside the root" is decided by the same code that decided where the root
@@ -17,39 +22,55 @@ use std::path::{Component, Path, PathBuf};
 /// The marker Obsidian leaves in a vault. Read, never written.
 pub const VAULT_MARKER: &str = ".obsidian";
 
-/// The root for a document at `path`.
+/// The root for a document at `path`: its vault, or its own folder.
 ///
-/// Walks up looking for `.obsidian/`; failing that, the file's own directory.
 /// A path with no parent at all (which should not happen for a real file)
 /// answers with itself, so callers never have to handle `None`.
-pub fn for_file(path: &Path) -> PathBuf {
-    let start = path.parent().unwrap_or(path);
-    let mut current = Some(start);
-    while let Some(dir) = current {
-        if dir.join(VAULT_MARKER).is_dir() {
-            return dir.to_path_buf();
-        }
-        current = dir.parent();
-    }
-    start.to_path_buf()
+pub fn for_file(path: &Path, opened: &[PathBuf]) -> PathBuf {
+    for_vault(path, opened).unwrap_or_else(|| path.parent().unwrap_or(path).to_path_buf())
 }
 
-/// The vault a document belongs to, if it belongs to one.
+/// The vault a document belongs to, if it belongs to one: the nearest folder
+/// above it that was opened explicitly or holds `.obsidian/`.
 ///
-/// Distinct from [`for_file`], which always answers: this one says `None` when
-/// there is no `.obsidian/` above the file. That is what decides whether a
-/// window shows a tree at all — a note on the Desktop is a note, not a folder
-/// to browse (decision 2026-09-05).
-pub fn for_vault(path: &Path) -> Option<PathBuf> {
+/// Distinct from [`for_file`], which always answers: this one says `None` for
+/// a note with neither above it. That is what keeps a note on the Desktop a
+/// note rather than a folder to browse (decision 2026-09-05) — unless the
+/// Desktop was opened as a folder, which is somebody saying it is one.
+///
+/// Nearest wins whichever kind it is. A vault inside an opened folder is still
+/// a vault: its notes were written for it, and their links mean what they mean
+/// in it. A folder opened inside a vault is the part of it somebody asked for.
+pub fn for_vault(path: &Path, opened: &[PathBuf]) -> Option<PathBuf> {
     let start = path.parent().unwrap_or(path);
     let mut current = Some(start);
     while let Some(dir) = current {
-        if dir.join(VAULT_MARKER).is_dir() {
+        if opened.iter().any(|root| same_file(root, dir)) || dir.join(VAULT_MARKER).is_dir() {
             return Some(dir.to_path_buf());
         }
         current = dir.parent();
     }
     None
+}
+
+/// The Obsidian vault a document is in, whatever was opened around it.
+///
+/// For the one question only Obsidian can answer: whether it has a vault to
+/// open the note in. A folder opened here is not one of Obsidian's.
+pub fn for_obsidian(path: &Path) -> Option<PathBuf> {
+    for_vault(path, &[])
+}
+
+/// Whether `path` lies inside `folder`, or is it.
+pub fn is_within(path: &Path, folder: &Path) -> bool {
+    let mut inner = path.components();
+    for part in folder.components() {
+        match inner.next() {
+            Some(other) if part_matches(&part, &other) => {}
+            _ => return false,
+        }
+    }
+    true
 }
 
 /// A path that came from outside the window — a command line, a second
@@ -99,6 +120,45 @@ fn without_verbatim(path: &Path) -> PathBuf {
         }
     }
     path.to_path_buf()
+}
+
+/// Whether two paths name the same file, compared component by component.
+///
+/// `parent.join(name)` and a `read_dir` result can name files in the same
+/// folder and share no prefix as text — `notes/roadmap.md` beside
+/// `notes\plan.md`. Comparing components asks the question about the path
+/// rather than about how it was spelled. (Found by a rename that planned
+/// nothing at all for a link written as a path, while every one of its unit
+/// tests was green: the two spellings met only where a `join` and a `read_dir`
+/// result were compared.)
+///
+/// Case-insensitively on Windows, where two spellings do name one file, and
+/// exactly elsewhere — the same reasoning as the resolver's: a vault is carried
+/// between a case-sensitive filesystem and a case-preserving one.
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    let mut left = a.components();
+    let mut right = b.components();
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return true,
+            (Some(one), Some(other)) if part_matches(&one, &other) => {}
+            _ => return false,
+        }
+    }
+}
+
+/// Whether two path components name the same thing.
+fn part_matches(one: &Component<'_>, other: &Component<'_>) -> bool {
+    #[cfg(windows)]
+    {
+        one.as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&other.as_os_str().to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        one == other
+    }
 }
 
 /// Why a link could not become something the webview may load.
@@ -250,7 +310,7 @@ mod tests {
     fn a_lone_file_roots_at_its_own_folder() {
         let temp = TempDir::new("lone");
         let note = temp.file("notes/one.md");
-        assert_eq!(for_file(&note), normalise(&temp.0.join("notes")));
+        assert_eq!(for_file(&note, &[]), normalise(&temp.0.join("notes")));
     }
 
     #[test]
@@ -258,7 +318,7 @@ mod tests {
         let temp = TempDir::new("vault");
         temp.dir("vault/.obsidian");
         let note = temp.file("vault/deep/deeper/one.md");
-        assert_eq!(for_file(&note), temp.0.join("vault"));
+        assert_eq!(for_file(&note, &[]), temp.0.join("vault"));
     }
 
     #[test]
@@ -269,7 +329,7 @@ mod tests {
         temp.dir("outer/.obsidian");
         temp.dir("outer/inner/.obsidian");
         let note = temp.file("outer/inner/one.md");
-        assert_eq!(for_file(&note), temp.0.join("outer/inner"));
+        assert_eq!(for_file(&note, &[]), temp.0.join("outer/inner"));
     }
 
     #[test]
@@ -279,7 +339,7 @@ mod tests {
         let temp = TempDir::new("notadir");
         temp.file("folder/.obsidian");
         let note = temp.file("folder/one.md");
-        assert_eq!(for_file(&note), temp.0.join("folder"));
+        assert_eq!(for_file(&note, &[]), temp.0.join("folder"));
     }
 
     #[test]
@@ -288,7 +348,7 @@ mod tests {
         // a note, not a folder to browse.
         let temp = TempDir::new("novault");
         let note = temp.file("loose/one.md");
-        assert_eq!(for_vault(&note), None);
+        assert_eq!(for_vault(&note, &[]), None);
     }
 
     #[test]
@@ -296,7 +356,7 @@ mod tests {
         let temp = TempDir::new("hasvault");
         temp.dir("vault/.obsidian");
         let note = temp.file("vault/deep/one.md");
-        assert_eq!(for_vault(&note), Some(temp.0.join("vault")));
+        assert_eq!(for_vault(&note, &[]), Some(temp.0.join("vault")));
     }
 
     #[test]
@@ -305,7 +365,76 @@ mod tests {
         temp.dir("outer/.obsidian");
         temp.dir("outer/inner/.obsidian");
         let note = temp.file("outer/inner/one.md");
-        assert_eq!(for_vault(&note), Some(temp.0.join("outer/inner")));
+        assert_eq!(for_vault(&note, &[]), Some(temp.0.join("outer/inner")));
+    }
+
+    #[test]
+    fn a_folder_opened_explicitly_is_the_root_of_what_is_in_it() {
+        // ADR 0003's first half, which no build before 0.19 honoured: a folder
+        // with no `.obsidian/` is a vault because somebody opened it as one.
+        let temp = TempDir::new("opened");
+        let note = temp.file("notes/deep/one.md");
+        let opened = [temp.0.join("notes")];
+        assert_eq!(for_vault(&note, &opened), Some(temp.0.join("notes")));
+        assert_eq!(for_file(&note, &opened), temp.0.join("notes"));
+        // A note beside the folder rather than in it is not in it.
+        let beside = temp.file("other/two.md");
+        assert_eq!(for_vault(&beside, &opened), None);
+    }
+
+    #[test]
+    fn the_nearest_root_wins_whichever_kind_it_is() {
+        let temp = TempDir::new("nearest");
+        temp.dir("outer/vault/.obsidian");
+        let in_vault = temp.file("outer/vault/one.md");
+        let in_folder = temp.file("outer/two.md");
+        let opened = [temp.0.join("outer")];
+        // A vault inside an opened folder: its notes keep their vault.
+        assert_eq!(
+            for_vault(&in_vault, &opened),
+            Some(temp.0.join("outer/vault"))
+        );
+        assert_eq!(for_vault(&in_folder, &opened), Some(temp.0.join("outer")));
+
+        // A folder opened inside a vault: the part somebody asked for.
+        let inner = temp.file("outer/vault/projects/plan.md");
+        let opened = [temp.0.join("outer/vault/projects")];
+        assert_eq!(
+            for_vault(&inner, &opened),
+            Some(temp.0.join("outer/vault/projects"))
+        );
+    }
+
+    #[test]
+    fn obsidian_is_asked_about_its_own_vaults_only() {
+        let temp = TempDir::new("obsidianonly");
+        temp.dir("vault/.obsidian");
+        let in_vault = temp.file("vault/projects/plan.md");
+        let loose = temp.file("loose/one.md");
+        let opened = [temp.0.join("vault/projects"), temp.0.join("loose")];
+        assert_eq!(for_obsidian(&in_vault), Some(temp.0.join("vault")));
+        assert_eq!(for_obsidian(&loose), None);
+        // The opened folders are the window's business, not Obsidian's.
+        assert_eq!(for_vault(&loose, &opened), Some(temp.0.join("loose")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn an_opened_folder_is_found_whatever_case_it_was_typed_in() {
+        let temp = TempDir::new("case");
+        let note = temp.file("Notes/one.md");
+        let typed = PathBuf::from(temp.0.join("NOTES").to_string_lossy().to_uppercase());
+        assert_eq!(for_vault(&note, &[typed]), Some(temp.0.join("Notes")));
+    }
+
+    #[test]
+    fn within_is_by_component_not_by_text() {
+        let base = Path::new("/vault");
+        assert!(is_within(Path::new("/vault/notes/one.md"), base));
+        assert!(is_within(Path::new("/vault"), base));
+        // A sibling whose name starts with the folder's is not inside it.
+        assert!(!is_within(Path::new("/vault-old/one.md"), base));
+        assert!(!is_within(Path::new("/"), base));
     }
 
     #[test]

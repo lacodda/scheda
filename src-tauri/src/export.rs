@@ -12,7 +12,7 @@
 //! vault beside it.
 
 use crate::root;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The largest picture carried into a page. A photo straight off a camera is a
 /// few megabytes; something much larger is a file that should be linked, not
@@ -37,8 +37,9 @@ fn media_type(path: &Path) -> Option<&'static str> {
 
 /// A picture a note links to, as a data URL — or `None` when the link leaves
 /// the root, names something that is not a picture, or cannot be read.
-pub fn inline_picture(document: &Path, link: &str) -> Option<String> {
-    let root = root::for_file(document);
+/// `opened` are the folders the window opened, which are roots too.
+pub fn inline_picture(document: &Path, link: &str, opened: &[PathBuf]) -> Option<String> {
+    let root = root::for_file(document, opened);
     let target = root::resolve_link(&root, document, link).ok()?;
     let media = media_type(&target)?;
     let size = std::fs::metadata(&target).ok()?.len();
@@ -117,7 +118,7 @@ mod tests {
         std::fs::write(&note, "![](dot.png)").unwrap();
         std::fs::write(dir.path().join("dot.png"), [0x89, b'P', b'N', b'G']).unwrap();
         assert_eq!(
-            inline_picture(&note, "dot.png").as_deref(),
+            inline_picture(&note, "dot.png", &[]).as_deref(),
             Some("data:image/png;base64,iVBORw==")
         );
     }
@@ -131,9 +132,9 @@ mod tests {
         std::fs::write(&note, "").unwrap();
         std::fs::write(outer.path().join("secret.png"), b"x").unwrap();
         std::fs::write(inner.join("text.txt"), b"x").unwrap();
-        assert_eq!(inline_picture(&note, "../secret.png"), None);
-        assert_eq!(inline_picture(&note, "text.txt"), None);
-        assert_eq!(inline_picture(&note, "missing.png"), None);
+        assert_eq!(inline_picture(&note, "../secret.png", &[]), None);
+        assert_eq!(inline_picture(&note, "text.txt", &[]), None);
+        assert_eq!(inline_picture(&note, "missing.png", &[]), None);
     }
 
     #[test]

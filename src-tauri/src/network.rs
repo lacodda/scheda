@@ -157,45 +157,9 @@ pub fn relative_to(root: &Path, path: &Path) -> String {
         .join("/")
 }
 
-/// Whether two paths name the same file.
-///
-/// Compared component by component rather than as two strings. The strings are
-/// not comparable: a path built by joining — which is how a rename's destination
-/// is built — carries the separator the join used, so `notes\plan.md` and
-/// `notes/roadmap.md` can name files in the same folder and share no prefix as
-/// text. Comparing components asks the question about the path rather than about
-/// how it was spelled. (Found by a rename that planned nothing at all for a link
-/// written as a path, while every one of its unit tests was green: the two
-/// spellings met only where a `join` and a `read_dir` result were compared.)
-///
-/// Case-insensitively on Windows, where two spellings do name one file, and
-/// exactly elsewhere — the same reasoning as the resolver's: a vault is carried
-/// between a case-sensitive filesystem and a case-preserving one.
-pub fn same_file(a: &Path, b: &Path) -> bool {
-    let mut left = a.components();
-    let mut right = b.components();
-    loop {
-        match (left.next(), right.next()) {
-            (None, None) => return true,
-            (Some(one), Some(other)) if part_matches(&one, &other) => {}
-            _ => return false,
-        }
-    }
-}
-
-/// Whether two path components name the same thing.
-fn part_matches(one: &std::path::Component<'_>, other: &std::path::Component<'_>) -> bool {
-    #[cfg(windows)]
-    {
-        one.as_os_str()
-            .to_string_lossy()
-            .eq_ignore_ascii_case(&other.as_os_str().to_string_lossy())
-    }
-    #[cfg(not(windows))]
-    {
-        one == other
-    }
-}
+/// Whether two paths name the same file. Lives with the root, where paths are
+/// told apart; named here too because the network asked it first.
+pub use crate::root::same_file;
 
 /// Every markdown note in the vault, as absolute paths.
 pub fn notes_of(candidates: &[Candidate]) -> Vec<PathBuf> {

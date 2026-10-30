@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/lacodda/scheda/main/assets/banner.svg" alt="scheda - a markdown notepad that grows into a vault" width="720"></p>
 
-> Double-click a `.md` file and the text is on screen before you notice the window. Inside an Obsidian vault, the same window grows a file tree and links between notes.
+> Double-click a `.md` file and the text is on screen before you notice the window. Open a folder, or a note inside an Obsidian vault, and the same window grows a file tree and links between notes.
 
 <p align="center">
   <a href="https://github.com/lacodda/scheda/releases/latest"><img src="https://img.shields.io/github/v/release/lacodda/scheda?style=flat-square" alt="Release"></a>
@@ -33,8 +33,9 @@ text is loaded ahead of it - 440 ms from start to the first character, measured.
   on lines you are not editing; the source stays the document.
 - **Saved exactly as opened.** Line endings, a byte-order mark, a missing final
   newline - byte for byte, including a file that mixes CRLF and LF.
-- **Your Obsidian vault, read the way Obsidian writes it.** A file tree,
-  `[[links]]`, backlinks, tags and search - and nothing of scheda's in the vault.
+- **A folder of notes is a vault the moment you open it.** A file tree,
+  `[[links]]`, backlinks, tags and search - for a plain folder or an Obsidian
+  vault, read the way Obsidian writes it, and nothing of scheda's left in it.
 - **Renames and replaces you check first.** Every line they would change is
   listed before a byte is written, and one click puts it all back.
 - **A notepad's habits.** Tabs in the title bar, a split, drafts that outlive

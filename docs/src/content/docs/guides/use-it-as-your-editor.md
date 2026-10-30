@@ -2,7 +2,7 @@
 title: Write commit messages in scheda
 description: Set scheda as the editor git and other programs open a file in, and wait for, on every platform.
 sidebar:
-  order: 3
+  order: 4
 ---
 
 Programs that hand you a file to edit - `git commit`, `git rebase`, `crontab -e`

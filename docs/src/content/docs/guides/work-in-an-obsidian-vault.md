@@ -2,7 +2,7 @@
 title: Work in an Obsidian vault
 description: Open a vault's notes in scheda beside Obsidian, find your way around it, and confirm nothing in the vault was touched.
 sidebar:
-  order: 2
+  order: 3
 ---
 
 scheda reads an Obsidian vault the way Obsidian writes it, and writes nothing of
@@ -15,7 +15,12 @@ scheda walks up from the note to the folder holding `.obsidian/`, and that folde
 is the vault. There is nothing to set up and no folder to choose first; a note
 with no `.obsidian/` above it opens as a plain note.
 
-Once one note of the vault is open:
+Or open the vault's folder itself - `scheda path/to/vault`, `Ctrl+K` then
+`Ctrl+O`, or drop it on the window - and the window shows the vault before any
+note is open. The same is true of a folder Obsidian has never seen: see
+[Work in a folder of notes](/scheda/guides/work-in-a-folder/).
+
+Once the vault is open:
 
 | To | Press |
 | --- | --- |

@@ -22,6 +22,7 @@ import {
   type SearchQuery,
 } from './core'
 import type { EditorHandle } from './editor/mount'
+import { useFolder } from './folder'
 
 /** How long typing has to pause before the vault is searched. Short enough to
  *  feel like search-as-you-type, long enough that a word typed at speed is one
@@ -89,6 +90,11 @@ export function SearchPanel({
   onReplaced: () => void
 }) {
   const path = editor.active().path
+  // The vault searched is the note's, or the window's folder when the note is
+  // in none or there is no note: the core decides which. The folder is in the
+  // keys below so an answer about the one is not shown for the other.
+  const folder = useFolder()?.root ?? null
+  const somewhere = path !== null || folder !== null
   const [text, setText] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
@@ -105,14 +111,14 @@ export function SearchPanel({
   // Nothing typed and no filter is not a question: the answer would be every
   // note in the vault, which is what the tree already is.
   const asking = text !== '' || query.tag !== null || query.field !== null
-  const key = JSON.stringify({ path, query, revision })
+  const key = JSON.stringify({ path, folder, query, revision })
 
   const [answer, setAnswer] = useState<Answer | null>(null)
   const fresh = answer !== null && answer.for === key
-  const loading = visible && asking && path !== null && !fresh
+  const loading = visible && asking && somewhere && !fresh
 
   useEffect(() => {
-    if (!visible || !asking || path === null) return
+    if (!visible || !asking || !somewhere) return
     let current = true
     const timer = window.setTimeout(() => {
       void searchVault(path, query)
@@ -129,7 +135,7 @@ export function SearchPanel({
       current = false
       window.clearTimeout(timer)
     }
-  }, [visible, asking, path, query, key])
+  }, [visible, asking, somewhere, path, query, key])
 
   useEffect(() => {
     if (!visible) return
@@ -148,7 +154,7 @@ export function SearchPanel({
   // The preview, and what it was made for. A preview for other words than the
   // ones in the boxes is not shown: approving it would do something the person
   // is no longer looking at.
-  const planKey = JSON.stringify({ path, query, replacement })
+  const planKey = JSON.stringify({ path, folder, query, replacement })
   const [plan, setPlan] = useState<{ for: string; plan: ReplacePlan } | null>(null)
   const [unticked, setUnticked] = useState<Set<string>>(new Set())
   const [planning, setPlanning] = useState(false)
@@ -157,7 +163,7 @@ export function SearchPanel({
   const shownPlan = plan !== null && plan.for === planKey ? plan.plan : null
 
   const preview = () => {
-    if (path === null || text === '') return
+    if (!somewhere || text === '') return
     setPlanning(true)
     setProblem(null)
     void planReplace(path, query, replacement)
@@ -282,7 +288,7 @@ export function SearchPanel({
           <button
             type="button"
             className="search-action"
-            disabled={text === '' || planning || path === null}
+            disabled={text === '' || planning || !somewhere}
             onClick={preview}
           >
             {planning ? 'Reading…' : 'Preview'}
@@ -333,7 +339,7 @@ export function SearchPanel({
           error={error}
           loading={loading}
           asking={asking}
-          inVault={path !== null}
+          inVault={somewhere}
           onOpen={onOpen}
         />
       )}

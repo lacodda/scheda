@@ -10,6 +10,7 @@
 // — and the product this belongs to is a notepad.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { findFiles, loadSettings, type FileHit } from './core'
+import { useFolder } from './folder'
 import { match } from './fuzzy'
 import { basename, samePath } from './paths'
 
@@ -33,8 +34,9 @@ export function Palette({
   onPick,
   onClose,
 }: {
-  /** The document whose vault is searched. The picker is about the vault you
-   *  are in, not about every vault you have ever opened. */
+  /** The document whose vault is searched - or the window's folder, when it
+   *  is in none or there is none. The picker is about the vault you are in,
+   *  not about every vault you have ever opened. */
   documentPath: string | null
   visible: boolean
   onPick: (path: string) => void
@@ -82,8 +84,11 @@ function Panel({
     }
   }, [])
 
+  // Not read below: the core answers from the folder it holds. Here so a
+  // folder opened while the panel is up is searched again.
+  const folder = useFolder()?.root ?? null
+
   useEffect(() => {
-    if (documentPath === null) return
     let current = true
     const timer = setTimeout(() => {
       void findFiles(documentPath, query)
@@ -103,7 +108,7 @@ function Panel({
       current = false
       clearTimeout(timer)
     }
-  }, [documentPath, query])
+  }, [documentPath, folder, query])
 
   const hits = withRecent(found, recent, query, documentPath)
 
@@ -161,7 +166,13 @@ function Panel({
         />
         {hits.length === 0 ? (
           <p className="palette-empty">
-            {query !== '' ? 'Nothing matches' : documentPath === null ? 'No file open' : 'This file is not in a vault'}
+            {query !== ''
+              ? 'Nothing matches'
+              : folder !== null
+                ? 'Nothing in this folder yet'
+                : documentPath === null
+                  ? 'No file or folder open'
+                  : 'This file is not in a vault'}
           </p>
         ) : (
           <ul className="palette-list" ref={list} role="listbox">

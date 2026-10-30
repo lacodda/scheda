@@ -2,7 +2,7 @@
 title: Remove scheda
 description: Uninstall scheda on each platform, and delete what it kept of its own if you want no trace of it.
 sidebar:
-  order: 9
+  order: 10
 ---
 
 Removing scheda never touches your notes: it wrote nothing of its own into them.

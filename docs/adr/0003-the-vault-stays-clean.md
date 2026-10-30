@@ -11,7 +11,7 @@ The folder scheda works on is not its own. Obsidian keeps its state in `.obsidia
 
 ## Decision
 
-**One root rule instead of two modes.** When a folder is opened explicitly, it is the root. When a file is opened, the root is found by walking up from its folder until a directory containing `.obsidian/` is met; if none is, the file's own folder is the root. The tree, `[[links]]`, backlinks and search all derive from the root and appear whenever there is one — the vault is a property of the surroundings, not a screen to switch to.
+**One root rule instead of two modes.** When a folder is opened explicitly, it is the root. When a file is opened, the root is found by walking up from its folder until a directory containing `.obsidian/` is met; if none is, the file's own folder is the root. (The first half was built in 0.19 - where the opened folders are kept, and which root wins when both kinds are above a note, is ADR 0021.) The tree, `[[links]]`, backlinks and search all derive from the root and appear whenever there is one — the vault is a property of the surroundings, not a screen to switch to.
 
 **Nothing of scheda's is written inside the root.** The index, the session, the settings and every cache live in the platform's application data directory, keyed by the root's path. `.obsidian/` is read for what it says about the vault and never written. Obsidian's conventions — wikilink resolution by shortest unique path, callouts, front matter, embeds, ignored directories — are honoured on read and not extended: scheda reads the format, it does not fork it.
 

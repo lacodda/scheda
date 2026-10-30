@@ -115,6 +115,9 @@ await page.addInitScript((text) => {
         }
       }
       if (command === 'settings_status') return { path: '/config/scheda/settings.json', newer: null }
+      if (command === 'load_session') {
+        return { tabs: [], active: null, beside: null, focused: 0, folder: null, roots: [] }
+      }
       // Drafts and file operations: the shell asks for these on mount and the
       // tree asks on every menu item. Answering with null would leave the
       // console full of rejected promises and the failure list full of noise
@@ -617,18 +620,18 @@ const THEMES = [
 ]
 const glyphs = []
 const schemes = []
-async function auditScene(scene) {
+async function auditScene(scene, on = page) {
   for (const [theme, scheme, attribute] of THEMES) {
-    await page.emulateMedia({ colorScheme: scheme })
-    await page.evaluate((value) => {
+    await on.emulateMedia({ colorScheme: scheme })
+    await on.evaluate((value) => {
       if (value === null) delete document.documentElement.dataset.theme
       else document.documentElement.dataset.theme = value
     }, attribute)
-    await page.waitForTimeout(60)
-    glyphs.push({ scene, theme, ...(await page.evaluate(auditGlyphs)) })
+    await on.waitForTimeout(60)
+    glyphs.push({ scene, theme, ...(await on.evaluate(auditGlyphs)) })
     // The scheme a control the webview draws is painted in: `light dark`
     // leaves it to the system, anything else names it.
-    const control = await page.evaluate(() => {
+    const control = await on.evaluate(() => {
       const control = document.querySelector('input[type="checkbox"], input[type="range"], select')
       return control === null ? null : getComputedStyle(control).colorScheme
     })
@@ -706,6 +709,104 @@ check((await page.locator('.palette').count()) === 1, 'Ctrl+Shift+P did not open
 await auditScene('the palette')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
+
+// ---------------------------------------------------- a folder's window --
+
+// A window that comes back with a folder open and no file in front: the
+// folder's own empty window, with the tree beside it. A page of its own, since
+// the stub above is a launch with a file. What is measured is what the stage
+// promised and a unit test cannot see: the tree comes out by itself, and the
+// list of the folder's notes is drawn over the editor rather than over the
+// tree - centred on the window, the column would cover the tree's right edge.
+const folderPage = await browser.newPage({ viewport: { width: 1000, height: 700 } })
+folderPage.on('pageerror', (error) => failures.push(`uncaught in the folder's window: ${error.message}`))
+await folderPage.addInitScript(() => {
+  window.__TAURI_INTERNALS__ = {
+    invoke: async (command) => {
+      if (command === 'plugin:event|listen') return 0
+      if (command === 'take_preloaded') return null
+      if (command === 'load_settings') {
+        return {
+          theme: 'system',
+          fontSize: 15,
+          columnWidth: 46.0,
+          recent: ['/notes/plan.md', '/elsewhere/todo.md', '/notes/garden/beds.md'],
+          closeBrackets: false,
+          spellcheck: false,
+          autosave: false,
+          keys: {},
+          quickNoteFile: null,
+          quickNoteKey: 'Win+Shift+N',
+        }
+      }
+      if (command === 'settings_status') return { path: '/config/scheda/settings.json', newer: null }
+      if (command === 'load_session') {
+        return { tabs: [], active: null, beside: null, focused: 0, folder: '/notes', roots: ['/notes'] }
+      }
+      if (command === 'restore_drafts') return []
+      if (command === 'take_handovers') return []
+      if (command === 'read_tree') {
+        return {
+          root: '/notes',
+          name: 'notes',
+          entries: [
+            { name: 'garden', path: '/notes/garden', children: [{ name: 'beds.md', path: '/notes/garden/beds.md' }] },
+            { name: 'plan.md', path: '/notes/plan.md' },
+          ],
+        }
+      }
+      return null
+    },
+    metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+    transformCallback: (callback) => {
+      const id = Math.floor(Math.random() * 1e9)
+      window[`_${id}`] = callback
+      return id
+    },
+  }
+})
+await folderPage.goto(`http://localhost:${port}/`)
+await folderPage.waitForSelector('.recent-folder', { timeout: 10_000 }).catch(() => {
+  failures.push("the folder's empty window never appeared")
+})
+await folderPage.waitForSelector('.tree-root', { timeout: 10_000 }).catch(() => {
+  failures.push('the tree did not come out for the folder the window came back with')
+})
+const folderWindow = await folderPage.evaluate(() => {
+  const box = (element) => {
+    if (!element) return null
+    const rect = element.getBoundingClientRect()
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }
+  }
+  const recent = document.querySelector('.recent')
+  // What can be clicked in the list: the column itself lets clicks through.
+  const items = [...document.querySelectorAll('.recent-folder, .recent-item, .recent-hint')].map(box)
+  return {
+    name: document.querySelector('.recent-folder')?.textContent ?? null,
+    listed: [...document.querySelectorAll('.recent-name')].map((name) => name.textContent),
+    inEditor: recent !== null && recent.parentElement?.classList.contains('editor-host'),
+    tree: box(document.querySelector('.tree')),
+    editor: box(document.querySelector('.editor-host')),
+    items,
+  }
+})
+check(folderWindow.name === 'notes', `the folder's empty window names ${JSON.stringify(folderWindow.name)}`)
+check(
+  JSON.stringify(folderWindow.listed) === JSON.stringify(['plan.md', 'beds.md']),
+  `the folder's empty window lists ${JSON.stringify(folderWindow.listed)}, expected only what is in the folder`,
+)
+check(folderWindow.inEditor, "the folder's empty window is not drawn over the editor")
+if (folderWindow.tree && folderWindow.editor) {
+  for (const item of folderWindow.items) {
+    check(
+      item.left >= folderWindow.tree.right - 0.5 && item.right <= folderWindow.editor.right + 0.5,
+      `a row of the folder's empty window (${Math.round(item.left)}–${Math.round(item.right)}px) ` +
+        `is under the tree, which ends at ${Math.round(folderWindow.tree.right)}px`,
+    )
+  }
+}
+await auditScene("a folder's window", folderPage)
+await folderPage.close()
 
 // The settings carry the controls the webview draws, so they are where a
 // theme that did not reach them shows; no control measured means the probe

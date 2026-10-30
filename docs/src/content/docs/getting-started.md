@@ -7,10 +7,10 @@ scheda is a markdown notepad. You double-click a `.md` file, the text is on
 screen, and the markup is drawn over it without hiding what you typed. When you
 save, the file goes back to disk with the bytes it arrived with.
 
-Open a single file and scheda is a notepad. Open a note inside an Obsidian
-vault and the same window grows a file tree, `[[links]]` between notes, tags and
-search across the vault. Underneath both is the part everything else depends
-on: a file that opens fast and comes back unharmed.
+Open a single file and scheda is a notepad. Open a folder, or a note inside an
+Obsidian vault, and the same window grows a file tree, `[[links]]` between
+notes, tags and search across them. Underneath both is the part everything else
+depends on: a file that opens fast and comes back unharmed.
 
 ## Install
 
@@ -57,6 +57,20 @@ Passing the path on the command line is the fastest of the three, and not by a
 little: the core reads the file before the window exists, so the text is in
 hand by the time there is somewhere to put it.
 
+## Open a folder
+
+A folder of markdown is a vault as soon as you open it - Obsidian need never
+have seen it:
+
+- pass it when starting scheda: `scheda ~/notes`
+- press `Ctrl+K` then `Ctrl+O`, or run *File: Open folder* from `Ctrl+Shift+P`
+- drop the folder onto the window
+
+The window shows the folder: the tree of its files, and the notes you opened in
+it lately. `Ctrl+P` finds a note in it by name, `Ctrl+Shift+F` searches its
+text, and `[[links]]` between its notes resolve. scheda writes nothing into the
+folder to remember it - see [the root](/scheda/concepts/the-root/).
+
 ## Edit and save
 
 Type. `Ctrl+S` saves; on a file that has never been saved it asks where to put
@@ -96,6 +110,8 @@ its own files into a vault, and it never writes `.obsidian/`.
 
 - [Make scheda your markdown editor](/scheda/guides/make-it-the-default/), so a
   double-click opens it.
+- [Work in a folder of notes](/scheda/guides/work-in-a-folder/), with or
+  without Obsidian.
 - [Work in an Obsidian vault](/scheda/guides/work-in-an-obsidian-vault/), beside
   Obsidian.
 - [Keyboard](/scheda/reference/keyboard/), for everything one key does.

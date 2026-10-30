@@ -1,9 +1,11 @@
 // The file tree of a vault, and the things you can do to the files in it.
 //
-// Appears only when the open document is inside one — a note on the Desktop
+// The vault is the one the open document is inside, or the folder the window
+// has open when it is inside none — a note on the Desktop with no folder open
 // gets no tree of the Desktop (decision 2026-09-05). Hidden behind a key like
 // the outline, for the same reason: a notepad that opens with two sidebars is
-// not a notepad.
+// not a notepad. Opening a folder brings it out, since the tree is what there
+// is to see of a folder.
 //
 // Making, renaming and deleting are all performed by the core; this file only
 // asks. What it does own is the one thing a filesystem has no opinion about:
@@ -40,9 +42,11 @@ interface MenuAt {
   entry: TreeEntry | null
 }
 
-/** Reads the tree for whichever document is open, and again when it changes. */
+/** Reads the tree for whichever document is open — or for the window's folder
+ *  — and again when either changes. */
 function useVault(
   documentPath: string | null,
+  folder: string | null,
   active: boolean,
   onReveal: (paths: string[]) => void,
   generation: number,
@@ -51,7 +55,7 @@ function useVault(
 
   useEffect(() => {
     let current = true
-    if (!active || documentPath === null) {
+    if (!active || (documentPath === null && folder === null)) {
       // Cleared asynchronously like every other answer here: setting state
       // straight from an effect body starts a second render before the first
       // has painted, which is what the linter objects to and it is right.
@@ -69,7 +73,7 @@ function useVault(
         // The branch holding the document opens with the tree, in the same
         // update. As a separate effect this was a second render for every tree
         // — and the linter says so, correctly.
-        if (found) {
+        if (found && documentPath !== null) {
           const ancestors = ancestorsOf(found.entries, documentPath)
           if (ancestors && ancestors.length > 0) onReveal(ancestors)
         }
@@ -85,8 +89,10 @@ function useVault(
     // `generation` is not read in the body: it is bumped after every file
     // operation so the tree is read again from disk. Patching the copy held
     // here instead would make it a second opinion about what the vault
-    // contains, and the second opinion is the one that goes wrong.
-  }, [documentPath, active, onReveal, generation])
+    // contains, and the second opinion is the one that goes wrong. Nor is
+    // `folder`: the core holds it and answers with it; it is here so that a
+    // folder opened or closed is asked about again.
+  }, [documentPath, folder, active, onReveal, generation])
 
   return vault
 }
@@ -133,6 +139,7 @@ export function editableName(name: string): { stem: string; suffix: string } {
 
 export function FileTree({
   documentPath,
+  folder,
   visible,
   onOpen,
   onRename,
@@ -140,6 +147,9 @@ export function FileTree({
   onFailure,
 }: {
   documentPath: string | null
+  /** The folder the window has open, which the tree shows when the document
+   *  is in no vault of its own. */
+  folder: string | null
   visible: boolean
   onOpen: (path: string) => void
   /** Asks for a file to be renamed.
@@ -169,7 +179,7 @@ export function FileTree({
     })
   }, [])
 
-  const vault = useVault(documentPath, visible, reveal, generation)
+  const vault = useVault(documentPath, folder, visible, reveal, generation)
 
   const toggle = useCallback((path: string) => {
     setOpen((was) => {
@@ -265,7 +275,7 @@ export function FileTree({
     >
       {vault === null ? (
         <p className="tree-empty">
-          {documentPath === null ? 'No file open' : 'This file is not in a vault'}
+          {documentPath === null ? 'No file or folder open' : 'This file is not in a vault or an open folder'}
         </p>
       ) : (
         <>

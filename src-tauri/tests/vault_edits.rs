@@ -31,7 +31,7 @@ fn vault(attachment_setting: Option<&str>) -> tempfile::TempDir {
 /// Where a picture pasted into `document` would go, and what it would be
 /// called. The same two calls the `paste_image` command makes.
 fn attachment_folder(document: &Path) -> PathBuf {
-    let root = root::for_file(document);
+    let root = root::for_file(document, &[]);
     vault_config::config_for(&root)
         .attachment_folder
         .resolve(&root, document)

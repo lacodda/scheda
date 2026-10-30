@@ -12,16 +12,18 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { EditorView } from '@codemirror/view'
 import { foldAll, foldCode, unfoldAll, unfoldCode } from '@codemirror/language'
 import {
+  closeFolder,
   createFromWikilink,
   fileDiffers,
   forgetRecent,
   loadSession,
   obsidianUrl,
-  onFileHandedOver,
   onFileWritten,
-  onHandoverFailed,
+  onHanded,
   onVaultChanged,
+  openDropped,
   openFile,
+  openFolder,
   rememberRecent,
   restoreDrafts,
   saveSession,
@@ -29,13 +31,16 @@ import {
   takeHandovers,
   watchVault,
   type Draft,
+  type Folder,
+  type Handed,
   type OpenFile,
   type Session,
 } from './core'
+import { folder as folderStore, useFolder, useFolderOpened } from './folder'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { Palette } from './palette'
 import { Picker } from './picker'
-import { samePath } from './paths'
+import { basename, isInside, samePath } from './paths'
 import { apply as applyAppearance } from './appearance'
 import { Outline } from './outline'
 import {
@@ -219,9 +224,16 @@ type Overlay = 'files' | 'commands' | 'blocks' | 'settings' | null
  *  a draft whose text is no longer in the draft folder. */
 async function restoreSession(editor: EditorHandle, launchedWith: string | null): Promise<void> {
   const [session, drafts] = await Promise.all([
-    loadSession().catch((): Session => ({ tabs: [], active: null, beside: null, focused: 0 })),
+    loadSession().catch(
+      (): Session => ({ tabs: [], active: null, beside: null, focused: 0, folder: null, roots: [] }),
+    ),
     restoreDrafts().catch((): Draft[] => []),
   ])
+  // The folder first, so the tree has something to show for a window that
+  // comes back with no file in front.
+  if (session.folder !== null) {
+    folderStore.set({ root: session.folder, name: basename(session.folder) || session.folder }, false)
+  }
   const front = session.active !== null ? session.tabs[session.active]?.path : null
   // Launched with the file that was in front anyway — the preload came from the
   // session — is the session coming back. Launched with another file is that
@@ -265,9 +277,28 @@ async function restoreSession(editor: EditorHandle, launchedWith: string | null)
   const remap = (index: number | null) => (index === null ? null : (moved.get(index) ?? null))
   editor.restore(
     [...kept, ...loose],
-    { active: remap(session.active), beside: remap(session.beside), focused: session.focused },
+    // A session whose front tab was no file had a blank in front - with a
+    // folder open, the folder's own empty window - and gets one back. An
+    // index that pointed at a file which did not come back is not that.
+    {
+      active: session.active === null ? null : (remap(session.active) ?? 0),
+      beside: remap(session.beside),
+      focused: session.focused,
+    },
     keepFront,
   )
+  // Back to the folder with nothing in front of it: that is the folder's empty
+  // window, and the tree is what it shows.
+  if (session.folder !== null && !keepFront && isUntouchedBlank(editor)) {
+    folderStore.set(folderStore.current(), true)
+  }
+}
+
+/** Whether the tab in front is an empty, unnamed, untouched document - the
+ *  placeholder a window shows when there is nothing in front of it. */
+function isUntouchedBlank(editor: EditorHandle): boolean {
+  const tab = editor.active()
+  return tab.path === null && !tab.pinned && editor.view.state.doc.length === 0
 }
 
 function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: string | null }) {
@@ -277,6 +308,18 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   const revision = editor.revision()
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [restored, setRestored] = useState(false)
+  // Settles once the session is back. What arrives from outside before then -
+  // the folder the window was launched with, a second launch in the first
+  // moments - waits for it, so the session coming back after does not put its
+  // own front tab over what was just asked for.
+  const [sessionBack] = useState(() => {
+    let settle = () => {}
+    const promise = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    return { promise, settle }
+  })
+  const openFolderRoot = useFolder()?.root ?? null
 
   /** Opens a path and records it as recent. A file that has gone is dropped
    *  from the list rather than reported: the list is a convenience, and an
@@ -314,6 +357,46 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   }, [editor, saveAs])
 
   const { close: closeTab, closeMany } = useClosing(editor)
+
+  const refuse = useCallback((message: string) => {
+    void ask(message, { title: 'Cannot open that', kind: 'error', okLabel: 'OK' })
+  }, [])
+
+  /** Puts an opened folder in front of the person. A note already in front
+   *  that is in it stays there; anything else gives way to an empty tab, and
+   *  the window shows the folder: its tree, and what was opened in it lately.
+   *  Opening a folder is asking to see it, and a note from another vault left
+   *  in front would keep the tree on that vault instead. */
+  const showFolder = useCallback(
+    (opened: Folder) => {
+      folderStore.set(opened, true)
+      const tab = editor.active()
+      if (tab.path !== null && isInside(opened.root, tab.path)) return
+      if (isUntouchedBlank(editor)) return
+      const blank = editor
+        .tabs()
+        .find((candidate) => candidate.path === null && !candidate.pinned && !editor.isDirty(candidate.id))
+      if (blank) editor.select(blank.id)
+      else editor.openBlank()
+    },
+    [editor],
+  )
+
+  /** Takes what a path from outside became: a tab, a folder, or a refusal in
+   *  the core's own words. */
+  const receive = useCallback(
+    (handed: Handed) => {
+      if (handed.kind === 'file') {
+        editor.adopt(handed.file)
+        void rememberRecent(handed.file.path)
+      } else if (handed.kind === 'folder') {
+        showFolder(handed.folder)
+      } else {
+        refuse(handed.message)
+      }
+    },
+    [editor, showFolder, refuse],
+  )
 
   /** A file under an open tab was written by somebody else. Works out what that
    *  actually means for this tab, and asks only when it has to.
@@ -405,7 +488,10 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
       .catch(() => {
         // An unreadable session is an empty window, not a dialog on startup.
       })
-      .finally(() => setRestored(true))
+      .finally(() => {
+        setRestored(true)
+        sessionBack.settle()
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -472,6 +558,24 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
         if (typeof path === 'string') void openPath(path)
       })
     }, [openPath]),
+  )
+  useCommand(
+    'file.openFolder',
+    useCallback(() => {
+      void openDialog({ directory: true, multiple: false }).then((path) => {
+        if (typeof path !== 'string') return
+        void openFolder(path)
+          .then(showFolder)
+          .catch((error: unknown) => refuse(messageOf(error)))
+      })
+    }, [showFolder, refuse]),
+  )
+  useCommand(
+    'file.closeFolder',
+    useCallback(() => {
+      void closeFolder().then(() => folderStore.set(null, false))
+    }, []),
+    { enabled: openFolderRoot !== null },
   )
   useCommand(
     'file.new',
@@ -635,38 +739,34 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   // ------------------------------------------------------------- the window
 
   useEffect(() => {
-    // Dropping files on the window opens them. The webview reports paths; the
-    // core is still the only thing that reads them.
+    // Dropping files on the window opens them, and a folder opens as the
+    // window's. The webview reports paths; the core is still the only thing
+    // that reads them, and the one that tells a folder from a file.
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type !== 'drop') return
-      for (const path of event.payload.paths) void openPath(path)
+      for (const path of event.payload.paths) {
+        void openDropped(path)
+          .then(receive)
+          .catch((error: unknown) => refuse(messageOf(error)))
+      }
     })
     return () => {
       void unlisten.then((stop) => stop())
     }
-  }, [editor, openPath])
+  }, [receive, refuse])
 
   useEffect(() => {
-    // A second launch hands its file to this window rather than opening one of
-    // its own; the core has already read it.
-    const adopt = (file: OpenFile) => {
-      editor.adopt(file)
-      void rememberRecent(file.path)
-    }
-    const refuse = (message: string) => {
-      void ask(message, { title: 'Cannot open that file', kind: 'error', okLabel: 'OK' })
-    }
-    const opened = onFileHandedOver(adopt)
-    const failed = onHandoverFailed(refuse)
+    // A second launch hands its file or folder to this window rather than
+    // opening one of its own; the core has already read the one or opened the
+    // other. After the session is back, like everything from outside.
+    const later = (handed: Handed) => void sessionBack.promise.then(() => receive(handed))
+    const handed = onHanded(later)
     // Listening first, then taking what came before this shell existed: the
     // core held those rather than send them to nobody.
-    void Promise.all([opened, failed])
+    void handed
       .then(() => takeHandovers())
       .then((waited) => {
-        for (const handed of waited) {
-          if (handed.kind === 'file') adopt(handed.file)
-          else refuse(handed.message)
-        }
+        for (const one of waited) later(one)
       })
     // A quick note went into a file this window may be showing. The watcher
     // hears about it only inside the vault it is watching, so the core says so
@@ -677,11 +777,10 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
       if (tab) void reconcile(tab.id)
     })
     return () => {
-      void opened.then((stop) => stop())
-      void failed.then((stop) => stop())
+      void handed.then((stop) => stop())
       void written.then((stop) => stop())
     }
-  }, [editor, reconcile])
+  }, [editor, reconcile, receive, sessionBack])
 
   useEffect(() => {
     // Autosave did not write a tab because its file changed on disk since the
@@ -731,16 +830,17 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
   }, [editor, openPath])
 
   useEffect(() => {
-    // The watch follows whatever tab is in front of you. Pointed again on every
-    // change because switching to a tab in another vault has to move it — and
-    // the core answers cheaply when the root is already the one being watched.
+    // The watch follows whatever tab is in front of you, or the window's folder
+    // when that tab is in no vault. Pointed again on every change because
+    // switching to a tab in another vault has to move it — and the core
+    // answers cheaply when the root is already the one being watched.
     void watchVault(editor.active().path).catch(() => {
       // A folder that cannot be watched is a folder whose changes we will not
       // hear about. The window still works; it is simply as stale as it was
       // before this version existed, and a dialog about it would be a dialog
       // nobody can act on.
     })
-  }, [editor, revision])
+  }, [editor, revision, openFolderRoot])
 
   useEffect(() => {
     // Somebody else wrote in the folder. Three questions, and they are asked of
@@ -1080,7 +1180,8 @@ function OutlinePanel({ editor }: { editor: EditorHandle }) {
 }
 
 /** The file tree. The path it reads from follows the tabs, because the tree is
- *  the vault of whatever is being edited. */
+ *  the vault of whatever is being edited - or the window's folder, when that is
+ *  in no vault. */
 function TreePanel({
   editor,
   onVaultWritten,
@@ -1088,7 +1189,19 @@ function TreePanel({
   editor: EditorHandle
   onVaultWritten: () => void
 }) {
-  const [visible] = usePanel('panel.tree')
+  const [visible, setVisible] = usePanel('panel.tree')
+  // A folder opened, or come back as what is in front, brings the tree out:
+  // the tree is what there is to see of it. Hidden again by its key as ever.
+  // Counted from none rather than from what the store holds at mount: this
+  // panel is a root of its own and may first render after the session has
+  // already brought a folder back - which is a folder opened all the same.
+  const folderOpened = useFolderOpened()
+  const [seenOpened, setSeenOpened] = useState(0)
+  if (folderOpened !== seenOpened) {
+    setSeenOpened(folderOpened)
+    setVisible(true)
+  }
+  const folder = useFolder()
   // The rename being asked about, and the one just done. Both live here because
   // the tree hands a rename up rather than performing it: a rename in a vault
   // may rewrite other people's notes, and the dry run, the approval and the
@@ -1107,6 +1220,7 @@ function TreePanel({
     <>
       <FileTree
         documentPath={editor.active().path}
+        folder={folder?.root ?? null}
         visible={visible}
         onOpen={(path) => {
           void editor.open(path).then(
@@ -1398,10 +1512,11 @@ function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: str
   const gestures = useTitleBarGestures()
 
   // The list belongs to an empty, unnamed, untouched document and nothing else:
-  // one character typed and it would be in the way.
-  const tab = editor.active()
-  const empty =
-    tab.path === null && editor.view.state.doc.length === 0 && editor.tabs().length === 1
+  // one character typed and it would be in the way. Without a folder, only the
+  // window's one tab - a blank among other tabs is a draft about to be typed
+  // into; with one, any blank in front, which is the folder's empty window.
+  const folder = useFolder()
+  const empty = isUntouchedBlank(editor) && (editor.tabs().length === 1 || folder !== null)
 
   return (
     <>
@@ -1425,7 +1540,7 @@ function TitleBar({ editor, onOpen }: { editor: EditorHandle; onOpen: (path: str
         />
       </header>
       <ResizeEdges />
-      <RecentFiles visible={empty} onOpen={onOpen} />
+      <RecentFiles visible={empty} folder={folder} container={editor.host} onOpen={onOpen} />
     </>
   )
 }

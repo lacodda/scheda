@@ -1,18 +1,24 @@
 ---
 title: The command line
-description: Opening a file from a terminal, and using scheda as your $EDITOR.
+description: Opening a file or a folder from a terminal, and using scheda as your $EDITOR.
 ---
 
-scheda takes one file to open, and one flag.
+scheda takes one file or folder to open, and one flag.
 
 ```sh
 scheda notes.md
+scheda ~/notes
 scheda --wait notes.md
 ```
 
-A second launch hands its file to the window you already have rather than
-opening another one, so `scheda` from a terminal behaves like double-clicking a
-file.
+A folder opens as the window's folder, the way **File: Open folder** opens one:
+the tree shows it, and its notes are a vault whether or not Obsidian has ever
+seen them - see [the root](/scheda/concepts/the-root/#the-folder-the-window-has-open).
+A relative path is taken from the directory you typed it in.
+
+A second launch hands its file or folder to the window you already have rather
+than opening another one, so `scheda` from a terminal behaves like
+double-clicking a file.
 
 ## `--wait`
 
@@ -28,6 +34,9 @@ each platform is on [Write commit messages in scheda](/scheda/guides/use-it-as-y
 Closing the tab is what returns. Not saving, and not closing the window — the
 tab. You can keep working in scheda afterwards; the program that was waiting has
 already got its answer.
+
+`--wait` takes a file. Given a folder it says so and exits with `1` at once:
+a folder has no tab to close, and the caller would wait for nothing.
 
 ### The exit code
 

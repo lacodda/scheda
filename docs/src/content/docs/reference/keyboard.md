@@ -24,6 +24,7 @@ since `⌘+Tab` is the system's.
 | Keys | What it does |
 | --- | --- |
 | `Ctrl+O` | Open a file — focuses the tab already showing it, if there is one |
+| `Ctrl+K` `Ctrl+O` | Open a folder as the window's — see [the root](/scheda/concepts/the-root/#the-folder-the-window-has-open) |
 | `Ctrl+N` | New draft — a tab with no file, kept until you close it |
 | `Ctrl+S` | Save; asks where on a file that has never been saved |
 | `Ctrl+Shift+S` | Save as |
@@ -35,8 +36,10 @@ since `⌘+Tab` is the system's.
 | `Ctrl+Alt+P` | Print the note — the note itself, not the window |
 | `Ctrl+Alt+S` | Save the note as one HTML file, pictures inside it |
 
-Dropping files on the window opens them, and launching scheda again with a file
-adds it to the window you already have rather than opening a second one.
+Dropping files on the window opens them, and a folder dropped on it opens as the
+window's. Launching scheda again with a file or a folder adds it to the window
+you already have rather than opening a second one. *File: Close folder* in the
+command palette closes the window's folder.
 
 A draft with text in it survives closing the window and comes back as a tab next
 time. Closing its tab discards it. See

@@ -2,7 +2,7 @@
 title: Give a command your own key
 description: Change the key of any command, take one away, or put the default back - and what happens when the key you want is already taken.
 sidebar:
-  order: 6
+  order: 7
 ---
 
 Every command scheda has can answer a key you choose, the ones with no key of

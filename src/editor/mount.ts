@@ -29,7 +29,7 @@ import {
   type DocumentShape,
   type Draft,
   type OpenFile,
-  type Session,
+  type WindowSession,
 } from '../core'
 import {
   documentPath,
@@ -123,9 +123,13 @@ export interface EditorHandle {
    *  and the split. Tabs already open are kept and take their place in the
    *  order. `keepFront` leaves the tab in front where it is — the window was
    *  launched with a file, and that file is what was asked for. */
-  restore: (tabs: RestoredTab[], layout: Pick<Session, 'active' | 'beside' | 'focused'>, keepFront: boolean) => void
+  restore: (
+    tabs: RestoredTab[],
+    layout: Pick<WindowSession, 'active' | 'beside' | 'focused'>,
+    keepFront: boolean,
+  ) => void
   /** What the window has open, as a session to remember. */
-  snapshot: () => Session
+  snapshot: () => WindowSession
   /** Points the tab showing `from` at `to` — a file was renamed under it. Does
    *  nothing when no tab is showing it. */
   follow: (from: string, to: string) => void
@@ -554,11 +558,13 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
         show(existing)
         return
       }
-      // An untouched blank tab is a placeholder, not work: reuse it rather than
-      // leaving an empty tab behind every time a file is opened.
+      // An untouched blank tab in front is a placeholder, not work: reuse it
+      // rather than leaving an empty tab behind every time a file is opened -
+      // the one a bare launch shows, and the one a folder is shown over, which
+      // stands among other tabs. A pinned one was kept on purpose.
       const current = active()
       const blankAndUnused =
-        current && current.path === null && !handle.isDirty(current.id) && tabs.length === 1
+        current && current.path === null && !current.pinned && !handle.isDirty(current.id)
       if (blankAndUnused) {
         // It was empty, so any draft filed for it is empty too — and an empty
         // draft is never filed. Nothing to discard.
@@ -626,15 +632,26 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
       }
       if (ordered.length === 0) return
 
+      // No file was in front when the session was written: a blank was - the
+      // window empty, or a folder's empty window - and a blank comes back to
+      // the front. The placeholder serves, and is kept for it.
+      const blankInFront = !keepFront && layout.active === null
       // Tabs open before the session came back — the file the window was
       // launched with — stay, after the session's own.
-      const rest = tabs.filter((tab) => !ordered.includes(tab) && tab !== placeholder)
+      const rest = tabs.filter(
+        (tab) => !ordered.includes(tab) && (tab !== placeholder || blankInFront),
+      )
       tabs.splice(0, tabs.length, ...ordered, ...rest)
       regroup()
       for (const tab of ordered) remember(tab.id)
 
       const at = (index: number | null) => (index === null ? undefined : ordered[index])
-      const inFront = keepFront && front !== placeholder ? front : (at(layout.active) ?? ordered[0])
+      const inFront =
+        keepFront && front !== placeholder
+          ? front
+          : blankInFront
+            ? (placeholder ?? addTab(null))
+            : (at(layout.active) ?? ordered[0])
       const beside = at(layout.beside)
       remember(inFront.id)
 

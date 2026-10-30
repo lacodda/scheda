@@ -2,7 +2,7 @@
 title: Rename a note without breaking its links
 description: Rename a note from the file tree, check every link scheda would rewrite before it writes one, and undo it all if the result is not what you meant.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 A note other notes link to cannot simply change its name: every `[[old name]]`

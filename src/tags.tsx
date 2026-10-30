@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readTags, type Tag } from './core'
 import type { EditorHandle } from './editor/mount'
+import { useFolder } from './folder'
 
 /** One empty answer, shared. A fresh array each render would be a new value to
  *  every hook that watches it. */
@@ -39,35 +40,39 @@ interface Answer {
  *  same kind of question at different moments would be two ways to be stale. */
 function useTags(
   path: string | null,
+  folder: string | null,
   active: boolean,
   revision: number,
 ): { tags: Tag[]; loading: boolean } {
   // Keyed by what it is an answer *to*, so a stale answer is never shown. The
   // alternative — clearing the state when the question changes — is a setState
-  // in an effect body, which React rightly objects to.
+  // in an effect body, which React rightly objects to. The folder is part of
+  // the question: with no note in a vault, the core answers about it.
   const [answer, setAnswer] = useState<Answer | null>(null)
+  const question = JSON.stringify({ path, folder })
+  const somewhere = path !== null || folder !== null
 
-  const fresh = answer !== null && answer.for === path && answer.at === revision
+  const fresh = answer !== null && answer.for === question && answer.at === revision
   const tags = fresh ? answer.tags : EMPTY
-  const loading = active && path !== null && !fresh
+  const loading = active && somewhere && !fresh
 
   useEffect(() => {
-    if (!active || path === null) return
+    if (!active || !somewhere) return
     let current = true
     void readTags(path)
       .then((found) => {
-        if (current) setAnswer({ for: path, at: revision, tags: found })
+        if (current) setAnswer({ for: question, at: revision, tags: found })
       })
       .catch(() => {
         // A vault that cannot be read leaves the panel empty rather than
         // showing a dialog: nothing here is something the person can act on,
         // and the note itself is open either way.
-        if (current) setAnswer({ for: path, at: revision, tags: EMPTY })
+        if (current) setAnswer({ for: question, at: revision, tags: EMPTY })
       })
     return () => {
       current = false
     }
-  }, [path, active, revision])
+  }, [path, question, somewhere, active, revision])
 
   return { tags, loading }
 }
@@ -85,7 +90,8 @@ export function TagsPanel({
   onOpen: (path: string, line: number) => void
 }) {
   const path = editor.active().path
-  const { tags, loading } = useTags(path, visible, revision)
+  const folder = useFolder()?.root ?? null
+  const { tags, loading } = useTags(path, folder, visible, revision)
   const [filter, setFilter] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
 
@@ -133,7 +139,7 @@ export function TagsPanel({
         <p className="tags-empty">
           {loading
             ? 'Reading the vault…'
-            : path === null
+            : path === null && folder === null
               ? 'Not in a vault'
               : tags.length === 0
                 ? 'No tags in this vault'

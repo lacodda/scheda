@@ -327,7 +327,7 @@ fn a_note_outside_any_vault_has_no_vault_to_resolve_against() {
     let note = dir.path().join("note.md");
     std::fs::write(&note, "See [[plan]]\n").expect("writes the note");
 
-    assert_eq!(root::for_vault(&note), None);
+    assert_eq!(root::for_vault(&note, &[]), None);
 }
 
 #[test]

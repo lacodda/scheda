@@ -2,7 +2,7 @@
 title: Collect quick notes in one inbox
 description: Catch a line from any program into one file of your vault, and sort it later in scheda.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 A thought that arrives in the middle of something else is lost by the time a

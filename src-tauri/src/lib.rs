@@ -103,13 +103,104 @@ fn take_preloaded(state: tauri::State<'_, Preloaded>) -> Option<OpenFile> {
     state.0.lock().expect("preload lock").take()
 }
 
-/// What a second launch hands the running window: a file the core read, or why
-/// it could not read it.
+/// What a path from outside the window becomes — a launch with a folder, a
+/// second launch, something dropped on it: a folder opened, a file the core
+/// read, or why it could not be either.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum Handed {
     File { file: OpenFile },
+    Folder { folder: Folder },
     Failed { message: String },
+}
+
+/// A folder the window has open, as the window is told about it.
+#[derive(Debug, Clone, Serialize)]
+pub struct Folder {
+    root: String,
+    /// The folder's own name, which is what the window calls it — or the
+    /// whole path for a drive, which has no name of its own.
+    name: String,
+}
+
+impl Folder {
+    fn of(root: &Path) -> Self {
+        let root_text = root.to_string_lossy().into_owned();
+        Self {
+            name: root
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| root_text.clone()),
+            root: root_text,
+        }
+    }
+}
+
+/// Takes a path from outside the window: opens it as the window's folder when
+/// it is one, reads it when it is a file.
+///
+/// One door for every way a path arrives, so a folder dropped on the window,
+/// named on the command line and handed over by a second launch is the same
+/// folder opened the same way.
+fn receive(kept: &session::Kept, path: &Path) -> Handed {
+    if path.is_dir() {
+        // A session that cannot be written loses the folder at the next
+        // launch, not now: the core holds it either way.
+        let _ = kept.open_folder(path);
+        return Handed::Folder {
+            folder: Folder::of(path),
+        };
+    }
+    // The core reads it, the way it reads the first one — the webview is
+    // handed text, never a path to open for itself (ADR 0001).
+    match document::read(path) {
+        Ok(doc) => {
+            let mut file = OpenFile::new(path.to_path_buf(), doc);
+            // The sentinel, not the command line: whoever is waiting started
+            // this launch without the flag.
+            file.awaited = wait::is_awaited(path);
+            Handed::File { file }
+        }
+        Err(error) => {
+            // Unreadable. Anybody blocked on it is let go now rather than left
+            // waiting for a tab that will never exist.
+            let _ = wait::release(path);
+            Handed::Failed {
+                message: error.to_string(),
+            }
+        }
+    }
+}
+
+/// Opens a folder chosen in the window's own dialog.
+#[tauri::command]
+fn open_folder(
+    kept: tauri::State<'_, session::Kept>,
+    path: String,
+) -> Result<Folder, CommandError> {
+    let path = PathBuf::from(path);
+    if !path.is_dir() {
+        return Err(CommandError {
+            message: format!("“{}” is not a folder", path.display()),
+            read_only: false,
+        });
+    }
+    let _ = kept.open_folder(&path);
+    Ok(Folder::of(&path))
+}
+
+/// Closes the window's folder. The tabs from it stay open, and keep it as
+/// their root until they close (`session::Session::take_window`).
+#[tauri::command]
+fn close_folder(kept: tauri::State<'_, session::Kept>) {
+    let _ = kept.close_folder();
+}
+
+/// Takes something dropped on the window: a folder opens as the window's, a
+/// file opens in a tab.
+#[tauri::command]
+fn open_dropped(kept: tauri::State<'_, session::Kept>, path: String) -> Handed {
+    receive(&kept, Path::new(&path))
 }
 
 /// The window listens for handovers from now on, and takes those that came
@@ -128,11 +219,9 @@ fn deliver(app: &tauri::AppHandle, handed: Handed) {
         Some(mailbox) => mailbox.offer(handed),
         None => Some(handed),
     };
-    let _ = match handed {
-        Some(Handed::File { file }) => app.emit(OPEN_FILE_EVENT, file),
-        Some(Handed::Failed { message }) => app.emit(OPEN_FAILED_EVENT, message),
-        None => Ok(()),
-    };
+    if let Some(handed) = handed {
+        let _ = app.emit(HANDED_EVENT, handed);
+    }
 }
 
 /// Reads a file the user chose while the app was already running.
@@ -189,10 +278,15 @@ fn save_file(
 /// Opening the scope here rather than at startup means it is opened for a root
 /// the user actually opened a file in, and only then.
 #[tauri::command]
-fn resolve_asset(app: tauri::AppHandle, document: String, link: String) -> Option<String> {
+fn resolve_asset(
+    app: tauri::AppHandle,
+    kept: tauri::State<'_, session::Kept>,
+    document: String,
+    link: String,
+) -> Option<String> {
     use tauri::Manager as _;
     let document = PathBuf::from(document);
-    let root = root::for_file(&document);
+    let root = kept.root_for(&document);
     let target = root::resolve_link(&root, &document, &link).ok()?;
 
     // Allowing the root, not the file: a vault of notes referring to a shared
@@ -211,16 +305,17 @@ fn resolve_asset(app: tauri::AppHandle, document: String, link: String) -> Optio
     Some(target.to_string_lossy().into_owned())
 }
 
-/// The root a document belongs to, and the files in it — or nothing.
+/// The vault the window is looking at, and the files in it — or nothing.
 ///
-/// "Nothing" is the answer for a file that is not in a vault, and it is a
-/// deliberate one (decision 2026-09-05): a note on the Desktop opens as a
-/// notepad, without a tree of the Desktop beside it. A vault is recognised by
+/// The vault of the note in front, or the window's folder when that note is in
+/// none (`session::Kept::in_front`). "Nothing" is the answer for a note in no
+/// vault with no folder open, and it is a deliberate one (decision
+/// 2026-09-05): a note on the Desktop opens as a notepad, without a tree of the
+/// Desktop beside it. A vault is a folder opened explicitly or one holding
 /// `.obsidian/`, the same rule the whole product hangs on (ADR 0003).
 #[tauri::command]
-fn read_tree(document: String) -> Option<Vault> {
-    let document = PathBuf::from(document);
-    let root = root::for_vault(&document)?;
+fn read_tree(kept: tauri::State<'_, session::Kept>, document: Option<String>) -> Option<Vault> {
+    let root = kept.in_front(document.as_deref().map(Path::new))?;
     Some(Vault {
         root: root.to_string_lossy().into_owned(),
         name: root
@@ -306,6 +401,7 @@ fn delete_entry(path: String) -> Result<(), CommandError> {
 /// path (ADR 0001).
 #[tauri::command]
 fn paste_image(
+    kept: tauri::State<'_, session::Kept>,
     document: Option<String>,
     extension: String,
     bytes: Vec<u8>,
@@ -320,7 +416,7 @@ fn paste_image(
         });
     };
 
-    let root = root::for_file(&document);
+    let root = kept.root_for(&document);
     let folder = vault::config_for(&root)
         .attachment_folder
         .resolve(&root, &document);
@@ -405,8 +501,12 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 /// Through the same root check as `resolve_asset`: a link that leaves the
 /// note's root is not read, and the page shows the picture's text instead.
 #[tauri::command]
-fn inline_picture(document: String, link: String) -> Option<String> {
-    export::inline_picture(&PathBuf::from(document), &link)
+fn inline_picture(
+    kept: tauri::State<'_, session::Kept>,
+    document: String,
+    link: String,
+) -> Option<String> {
+    export::inline_picture(&PathBuf::from(document), &link, &kept.opened())
 }
 
 /// Writes a page rendered from a note to the path chosen in the save dialog.
@@ -485,16 +585,20 @@ fn update_settings(
     Ok(updated)
 }
 
-/// What the window had open when it was last seen.
+/// What the window had open when it was last seen, with the folders.
 #[tauri::command]
-fn load_session() -> session::Session {
-    session::load()
+fn load_session(kept: tauri::State<'_, session::Kept>) -> session::Session {
+    kept.session()
 }
 
-/// Keeps what the window has open, for the next launch.
+/// Keeps what the window has open, for the next launch: the window's half,
+/// its tabs. The folders are the core's and stay as they are.
 #[tauri::command]
-fn save_session(session: session::Session) -> Result<(), CommandError> {
-    session::save(&session).map_err(|error| CommandError {
+fn save_session(
+    kept: tauri::State<'_, session::Kept>,
+    session: session::Session,
+) -> Result<(), CommandError> {
+    kept.save_window(session).map_err(|error| CommandError {
         message: error.to_string(),
         read_only: false,
     })
@@ -620,28 +724,27 @@ fn forget_recent(path: String) -> Result<Vec<String>, CommandError> {
     Ok(settings::modify(|current| current.forget(&path))?.recent)
 }
 
-/// Points the folder watcher at the vault of a document, so edits made
-/// somewhere else reach the window.
+/// Points the folder watcher at the vault the window is looking at, so edits
+/// made somewhere else reach the window.
 ///
 /// Called by the window as tabs change rather than once at startup: the watch
-/// follows what is on screen, and a window showing a note that is not in a
-/// vault watches nothing at all. Starting it here rather than in `run` also
-/// keeps the promise about ordering — nothing that is not the text happens
-/// before the text is on screen (ADR 0001).
+/// follows what is on screen — the vault of the note in front, or the window's
+/// folder — and a window showing a lone note with no folder open watches
+/// nothing at all. Starting it here rather than in `run` also keeps the promise
+/// about ordering — nothing that is not the text happens before the text is on
+/// screen (ADR 0001).
 #[tauri::command]
 fn watch_vault(
     app: tauri::AppHandle,
     state: tauri::State<'_, watch::Watch>,
+    kept: tauri::State<'_, session::Kept>,
     document: Option<String>,
 ) -> Result<(), CommandError> {
-    let Some(root) = document
-        .map(PathBuf::from)
-        .as_deref()
-        .and_then(root::for_vault)
-    else {
+    let Some(root) = kept.in_front(document.as_deref().map(Path::new)) else {
         // No vault, nothing to watch. Stopping rather than leaving the previous
-        // watch running: a tab switched to a lone note should not go on
-        // reporting changes in a folder the window is no longer showing.
+        // watch running: a tab switched to a lone note, with no folder open,
+        // should not go on reporting changes in a folder the window is no
+        // longer showing.
         state.stop();
         return Ok(());
     };
@@ -702,22 +805,23 @@ fn file_differs(path: String, text: String) -> Result<bool, CommandError> {
     }
 }
 
-/// Everything the picker needs to find a file by name, for the vault a document
-/// belongs to.
+/// The files of the vault the window is looking at that match `query`, best
+/// first.
 ///
-/// The whole list, once, rather than a query per keystroke: the matching is the
-/// core's (`quick`), and the window asks it through [`find_files`] without the
-/// paths ever crossing the boundary.
+/// The whole list is read once rather than a query per keystroke: the matching
+/// is the core's (`quick`), and the paths never cross the boundary to be
+/// filtered on the other side.
 #[tauri::command]
 fn find_files(
     state: tauri::State<'_, VaultIndex>,
-    document: String,
+    kept: tauri::State<'_, session::Kept>,
+    document: Option<String>,
     query: String,
 ) -> Vec<quick::Hit> {
-    with_index(&state, &PathBuf::from(document), |index| {
-        quick::search(&index.picker, &query)
-    })
-    .unwrap_or_default()
+    let Some(root) = kept.in_front(document.as_deref().map(Path::new)) else {
+        return Vec::new();
+    };
+    with_index(&state, root, |index| quick::search(&index.picker, &query))
 }
 
 /// The vault's files, flattened the two ways they are asked about.
@@ -740,18 +844,18 @@ struct Index {
     links: Vec<links::Candidate>,
 }
 
-/// Runs `job` against the index for a document's vault, reading the vault if
+/// Runs `job` against the index of the vault at `root`, reading the vault if
 /// this is the first question about it.
 ///
-/// `None` when the document is not in a vault: wikilinks and the picker are both
-/// vault features, and a lone note on the Desktop has no vault for them to
-/// search (decision 2026-09-05).
+/// The caller finds the root: the vault of a note for what is about the note
+/// (its links), the vault in front for what is about the window (going to a
+/// file). A lone note on the Desktop has neither, and asks nothing here
+/// (decision 2026-09-05).
 fn with_index<T>(
     state: &tauri::State<'_, VaultIndex>,
-    document: &Path,
+    root: PathBuf,
     job: impl FnOnce(&Index) -> T,
-) -> Option<T> {
-    let root = root::for_vault(document)?;
+) -> T {
     let mut held = state.0.lock().expect("index lock");
 
     // Read once per root and kept: a vault of a few thousand notes is a
@@ -767,7 +871,7 @@ fn with_index<T>(
             root,
         });
     }
-    Some(job(held.as_ref().expect("just filled")))
+    job(held.as_ref().expect("just filled"))
 }
 
 /// What a wikilink points at.
@@ -790,11 +894,18 @@ pub struct LinkTarget {
 #[tauri::command]
 fn resolve_wikilink(
     state: tauri::State<'_, VaultIndex>,
+    kept: tauri::State<'_, session::Kept>,
     document: String,
     target: String,
 ) -> LinkTarget {
     let document = PathBuf::from(document);
-    with_index(&state, &document, |index| {
+    let Some(root) = kept.vault_for(&document) else {
+        return LinkTarget {
+            path: None,
+            target: None,
+        };
+    };
+    with_index(&state, root, |index| {
         let path = links::resolve(&index.links, &target);
         LinkTarget {
             target: path.as_ref().map(|found| {
@@ -802,10 +913,6 @@ fn resolve_wikilink(
             }),
             path: path.map(|found| found.to_string_lossy().into_owned()),
         }
-    })
-    .unwrap_or(LinkTarget {
-        path: None,
-        target: None,
     })
 }
 
@@ -818,11 +925,21 @@ fn resolve_wikilink(
 #[tauri::command]
 fn resolve_wikilinks(
     state: tauri::State<'_, VaultIndex>,
+    kept: tauri::State<'_, session::Kept>,
     document: String,
     targets: Vec<String>,
 ) -> Vec<LinkTarget> {
     let document = PathBuf::from(document);
-    with_index(&state, &document, |index| {
+    let Some(root) = kept.vault_for(&document) else {
+        return targets
+            .iter()
+            .map(|_| LinkTarget {
+                path: None,
+                target: None,
+            })
+            .collect();
+    };
+    with_index(&state, root, |index| {
         targets
             .iter()
             .map(|target| {
@@ -831,15 +948,6 @@ fn resolve_wikilinks(
                     target: None,
                     path: path.map(|found| found.to_string_lossy().into_owned()),
                 }
-            })
-            .collect()
-    })
-    .unwrap_or_else(|| {
-        targets
-            .iter()
-            .map(|_| LinkTarget {
-                path: None,
-                target: None,
             })
             .collect()
     })
@@ -855,6 +963,7 @@ fn resolve_wikilinks(
 fn create_from_wikilink(
     state: tauri::State<'_, VaultIndex>,
     notes: tauri::State<'_, index::NoteIndex>,
+    kept: tauri::State<'_, session::Kept>,
     document: String,
     target: String,
 ) -> Result<String, CommandError> {
@@ -864,13 +973,13 @@ fn create_from_wikilink(
         read_only: false,
     };
 
-    let path = with_index(&state, &document, |index| {
-        links::file_for_missing(&index.config, &index.root, &document, &target)
-    })
-    .ok_or_else(|| CommandError {
+    let root = kept.vault_for(&document).ok_or_else(|| CommandError {
         message: "this note is not in a vault, so there is nowhere to put a new one".into(),
         read_only: false,
-    })?
+    })?;
+    let path = with_index(&state, root, |index| {
+        links::file_for_missing(&index.config, &index.root, &document, &target)
+    })
     .ok_or_else(refusal)?;
 
     // The folders the target named, if any. `create_dir_all` rather than a
@@ -919,12 +1028,12 @@ fn create_from_wikilink(
 async fn read_network(app: tauri::AppHandle, document: String) -> network::Network {
     tauri::async_runtime::spawn_blocking(move || {
         let document = PathBuf::from(document);
-        let root = root::for_vault(&document)?;
+        let root = app.state::<session::Kept>().vault_for(&document)?;
         app.state::<index::NoteIndex>().with(&root, |snapshot| {
-            with_index(&app.state::<VaultIndex>(), &document, |files| {
+            with_index(&app.state::<VaultIndex>(), root.clone(), |files| {
                 network::around(&files.root, &files.links, snapshot, &document)
             })
-        })?
+        })
     })
     .await
     .ok()
@@ -932,14 +1041,17 @@ async fn read_network(app: tauri::AppHandle, document: String) -> network::Netwo
     .unwrap_or_default()
 }
 
-/// Every tag in the vault, most-used first, with the notes carrying each.
+/// Every tag in the vault the window is looking at, most-used first, with the
+/// notes carrying each.
 ///
-/// From the index, on the same terms as the network. Empty when the document is
-/// not in a vault (decision 2026-09-05).
+/// From the index, on the same terms as the network. Empty for a lone note
+/// with no folder open (decision 2026-09-05).
 #[tauri::command]
-async fn read_tags(app: tauri::AppHandle, document: String) -> Vec<tags::Tag> {
+async fn read_tags(app: tauri::AppHandle, document: Option<String>) -> Vec<tags::Tag> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = root::for_vault(Path::new(&document))?;
+        let root = app
+            .state::<session::Kept>()
+            .in_front(document.as_deref().map(Path::new))?;
         app.state::<index::NoteIndex>()
             .with(&root, |snapshot| tags::read(&root, snapshot))
     })
@@ -976,7 +1088,7 @@ impl From<replace::ReplaceError> for CommandError {
 
 fn not_in_a_vault() -> CommandError {
     CommandError {
-        message: "this note is not in a vault, so there is no vault to search".into(),
+        message: "there is no vault or folder open to search".into(),
         read_only: false,
     }
 }
@@ -990,20 +1102,23 @@ fn stopped(what: &str, error: impl std::fmt::Display) -> CommandError {
     }
 }
 
-/// Searches the text of every note in the document's vault.
+/// Searches the text of every note in the vault the window is looking at.
 ///
 /// `null` when a newer search overtook this one — the window drops the answer
 /// rather than showing results for what was typed a keystroke ago.
 #[tauri::command]
 async fn search_vault(
     app: tauri::AppHandle,
-    document: String,
+    document: Option<String>,
     query: search::Query,
 ) -> Result<Option<search::Found>, CommandError> {
     let counter = app.state::<Searches>().0.clone();
     let mine = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
     tauri::async_runtime::spawn_blocking(move || {
-        let root = root::for_vault(Path::new(&document)).ok_or_else(not_in_a_vault)?;
+        let root = app
+            .state::<session::Kept>()
+            .in_front(document.as_deref().map(Path::new))
+            .ok_or_else(not_in_a_vault)?;
         let matcher = search::matcher(&query)?;
         let keys = app
             .state::<index::NoteIndex>()
@@ -1021,12 +1136,15 @@ async fn search_vault(
 #[tauri::command]
 async fn plan_replace(
     app: tauri::AppHandle,
-    document: String,
+    document: Option<String>,
     query: search::Query,
     replacement: String,
 ) -> Result<replace::Plan, CommandError> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = root::for_vault(Path::new(&document)).ok_or_else(not_in_a_vault)?;
+        let root = app
+            .state::<session::Kept>()
+            .in_front(document.as_deref().map(Path::new))
+            .ok_or_else(not_in_a_vault)?;
         let Some(matcher) = search::matcher(&query)? else {
             return Ok(replace::Plan::default());
         };
@@ -1102,6 +1220,7 @@ static LAST_REPLACE: std::sync::Mutex<Option<replace::Applied>> = std::sync::Mut
 #[tauri::command]
 fn plan_rename(
     state: tauri::State<'_, VaultIndex>,
+    kept: tauri::State<'_, session::Kept>,
     path: String,
     name: String,
 ) -> Result<rename::Plan, CommandError> {
@@ -1116,13 +1235,13 @@ fn plan_rename(
     })?;
     let to = parent.join(name.trim());
 
-    with_index(&state, &from, |index| {
-        rename::plan(&index.config, &index.links, &index.root, &from, &to)
-    })
-    .ok_or_else(|| CommandError {
+    let root = kept.vault_for(&from).ok_or_else(|| CommandError {
         message: "this file is not in a vault, so there are no links to follow".into(),
         read_only: false,
-    })
+    })?;
+    Ok(with_index(&state, root, |index| {
+        rename::plan(&index.config, &index.links, &index.root, &from, &to)
+    }))
 }
 
 /// Performs a plan: moves the file, then rewrites the links.
@@ -1204,11 +1323,15 @@ impl From<rename::RenameError> for CommandError {
 #[tauri::command]
 fn complete_wikilink(
     state: tauri::State<'_, VaultIndex>,
+    kept: tauri::State<'_, session::Kept>,
     document: String,
     query: String,
 ) -> Vec<WikilinkCompletion> {
     let document = PathBuf::from(document);
-    with_index(&state, &document, |index| {
+    let Some(root) = kept.vault_for(&document) else {
+        return Vec::new();
+    };
+    with_index(&state, root, |index| {
         quick::search(&index.picker, &query)
             .into_iter()
             .filter_map(|hit| {
@@ -1234,7 +1357,6 @@ fn complete_wikilink(
             })
             .collect()
     })
-    .unwrap_or_default()
 }
 
 /// One note offered while a wikilink is being typed.
@@ -1290,7 +1412,8 @@ pub struct NotePeek {
 #[tauri::command]
 fn obsidian_url(document: String) -> Option<String> {
     let document = PathBuf::from(document);
-    let root = root::for_vault(&document)?;
+    // Obsidian's own vaults only: a folder opened here is not one it knows.
+    let root = root::for_obsidian(&document)?;
     obsidian::open_url(&root, &document)
 }
 
@@ -1333,6 +1456,15 @@ pub fn run() {
     // separation is the only arrangement that survives being the second launch.
     if invocation.wait {
         let code = match asked.as_deref() {
+            // A folder has no tab to close, so whoever waited on it would wait
+            // until the waiter gave up on its own.
+            Some(path) if path.is_dir() => {
+                eprintln!(
+                    "scheda --wait waits for a file, and {} is a folder",
+                    path.display()
+                );
+                1
+            }
             Some(path) => wait::run_as_waiter(path),
             // Nothing to wait for. Opening a window would be reasonable, but
             // the caller is blocked on this process and would stay blocked
@@ -1353,9 +1485,13 @@ pub fn run() {
     // last closed, read here for the same reason: the restored window should
     // show its text in the first frame, not a blank one that fills a moment
     // later. The rest of the session waits until after that frame.
-    let front = match asked {
-        Some(path) => Some(path),
-        None => session::load().front_file(),
+    //
+    // A launch with a folder reads nothing here: there is no text to show
+    // first, and what is in front is the folder (`setup` below).
+    let (front, folder) = match asked {
+        Some(path) if path.is_dir() => (None, Some(path)),
+        Some(path) => (Some(path), None),
+        None => (session::load().front_file(), None),
     };
     let preloaded = front
         .as_deref()
@@ -1388,33 +1524,13 @@ pub fn run() {
             let path = handover
                 .file
                 .map(|path| root::from_outside(&path, Path::new(&cwd)))
-                .filter(|path| path.is_file());
+                .filter(|path| path.exists());
             let Some(path) = path else {
                 // A bare second launch means "show me the window I have".
                 focus_main_window(app);
                 return;
             };
-
-            // The core reads it, the way it reads the first one — the webview
-            // is handed text, never a path to open for itself (ADR 0001).
-            let handed = match document::read(&path) {
-                Ok(doc) => {
-                    let mut file = OpenFile::new(path.clone(), doc);
-                    // The sentinel, not the command line: whoever is waiting
-                    // started this launch without the flag.
-                    file.awaited = wait::is_awaited(&path);
-                    Handed::File { file }
-                }
-                Err(error) => {
-                    // Unreadable. Anybody blocked on it is let go now rather
-                    // than left waiting for a tab that will never exist.
-                    let _ = wait::release(&path);
-                    Handed::Failed {
-                        message: error.to_string(),
-                    }
-                }
-            };
-            deliver(app, handed);
+            deliver(app, receive(&app.state::<session::Kept>(), &path));
             focus_main_window(app);
         }))
         .plugin(
@@ -1439,7 +1555,15 @@ pub fn run() {
         .manage(index::NoteIndex::new(index::directory()))
         .manage(Searches::default())
         .manage(quicknote::Held::default())
-        .setup(|app| {
+        .manage(session::Kept::new())
+        .setup(move |app| {
+            // The folder the launch named waits with the second launches'
+            // handovers until the window listens: the shell that shows it
+            // loads after the first frame.
+            if let Some(folder) = folder.as_deref() {
+                let handed = receive(&app.state::<session::Kept>(), folder);
+                deliver(app.handle(), handed);
+            }
             // After the window, like everything that is not the text. A key
             // another program holds is not a reason to fail a launch; the
             // settings screen says what happened.
@@ -1460,6 +1584,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             take_preloaded,
             take_handovers,
+            open_folder,
+            close_folder,
+            open_dropped,
             open_file,
             save_file,
             reread_file,
@@ -1514,11 +1641,10 @@ pub fn run() {
         .expect("scheda failed to start");
 }
 
-/// The event a second launch uses to hand its file to the running window.
-const OPEN_FILE_EVENT: &str = "scheda://open-file";
-
-/// The event for a second launch whose file could not be read.
-const OPEN_FAILED_EVENT: &str = "scheda://open-failed";
+/// The event a second launch uses to hand its file or folder to the running
+/// window — one event for every kind, so a window that listens to it cannot
+/// be listening to one kind and not another.
+const HANDED_EVENT: &str = "scheda://handed";
 
 /// The event for a file the core wrote on the window's behalf from somewhere
 /// else — a quick note — so a tab showing it can catch up.

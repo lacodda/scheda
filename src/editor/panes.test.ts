@@ -259,6 +259,35 @@ describe('a session', () => {
     expect(editor.active().path).toBe('/a.md')
   })
 
+  it('puts a blank back in front when no file was in front', () => {
+    // A blank is never kept in the session, so `active: null` is what a
+    // window with a blank in front - the folder's empty window - writes.
+    const editor = mount(null)
+    const placeholder = editor.active().id
+    editor.restore(
+      [
+        { file: file('/notes/a.md', 'a\n'), draft: null, pinned: false, anchor: 0, head: 0, top: 0 },
+        { file: file('/notes/b.md', 'b\n'), draft: null, pinned: false, anchor: 0, head: 0, top: 0 },
+      ],
+      { active: null, beside: null, focused: 0 },
+      false,
+    )
+    expect(pathsOf(editor)).toEqual(['/notes/a.md', '/notes/b.md', null])
+    expect(editor.active().id).toBe(placeholder)
+    expect(editor.active().path).toBeNull()
+  })
+
+  it('makes a blank for the front when the window has none to give', () => {
+    const editor = mount(file('/a.md', 'a\n'))
+    editor.restore(
+      [{ file: file('/b.md', 'b\n'), draft: null, pinned: false, anchor: 0, head: 0, top: 0 }],
+      { active: null, beside: null, focused: 0 },
+      false,
+    )
+    expect(pathsOf(editor)).toEqual(['/b.md', '/a.md', null])
+    expect(editor.active().path).toBeNull()
+  })
+
   it('holds a caret from a file that has since grown shorter inside it', () => {
     const editor = mount(null)
     editor.restore(

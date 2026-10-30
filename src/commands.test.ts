@@ -69,6 +69,8 @@ const SHIPPED = [
   'panel.tree', 'panel.outline', 'panel.network', 'panel.tags', 'search.vault', 'search.replace', 'fold.section',
   'unfold.section', 'fold.all', 'unfold.all', 'quick.note', 'settings.open', 'theme.system', 'theme.light',
   'theme.dark', 'autosave.toggle',
+  // 0.19
+  'file.openFolder', 'file.closeFolder',
 ]
 
 describe('the ids of the commands', () => {

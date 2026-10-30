@@ -2,7 +2,7 @@
 title: Replace a word across a vault
 description: Change a word, a name or a pattern in every note at once, narrowed to the notes you mean, with every change ticked off before it is written.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 A project was renamed, a person changed their name, a tag grew a better
