@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.19.0] - 2026-10-30
+
+### Bug Fixes
+- Take a path from outside as it was given
+
+### Features
+- Open a folder as a vault
+
 ## [0.18.0] - 2026-10-25
 
 ### Bug Fixes

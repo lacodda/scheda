@@ -59,7 +59,7 @@ appears under *Open with*, and making it the default stays your choice.
 
 ## Status
 
-v0.18.0. Everything above works on Windows, where every release is run live
+v0.19.0. Everything above works on Windows, where every release is run live
 before it ships; the macOS and Linux builds come out of the same CI. What scheda
 keeps is in frozen, numbered formats, and each release is checked against a
 5000-note vault, byte for byte. [CHANGELOG](https://github.com/lacodda/scheda/blob/main/CHANGELOG.md).
