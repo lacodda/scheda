@@ -225,7 +225,8 @@ pub fn release(document: &Path) -> io::Result<usize> {
 /// for hours and exit immediately, or it may be the window itself and run until
 /// somebody closes it. Neither is the question. The question is when the *tab*
 /// closes, and the sentinel is what answers it.
-pub fn run_as_waiter(document: &Path) -> i32 {
+pub fn run_as_waiter(place: &Place) -> i32 {
+    let document = place.path.as_path();
     let Ok(exe) = std::env::current_exe() else {
         eprintln!("scheda cannot find its own executable");
         return 1;
@@ -237,7 +238,10 @@ pub fn run_as_waiter(document: &Path) -> i32 {
 
     // Without `--wait`: the child opens the file and gets on with it. Passing
     // the flag on would make it spawn a waiter of its own, for ever.
-    match std::process::Command::new(exe).arg(document).spawn() {
+    match std::process::Command::new(exe)
+        .arg(place.argument())
+        .spawn()
+    {
         Ok(_) => {}
         Err(error) => {
             eprintln!("scheda could not start: {error}");
@@ -257,6 +261,59 @@ pub struct Invocation {
     pub file: Option<PathBuf>,
     /// Whether the process should live until the tab is closed.
     pub wait: bool,
+}
+
+/// Where the command line asked to be taken: a path, and a line in it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Place {
+    /// The path, made absolute against the directory it was typed in.
+    pub path: PathBuf,
+    /// The line, counted from 1, when the argument named one.
+    pub line: Option<u32>,
+}
+
+impl Place {
+    /// Reads the file argument as a place: `note.md`, or `note.md:12`.
+    ///
+    /// The whole argument is a path if something is there. `:12` can be part of
+    /// a file's name outside Windows, and a file that exists is what was meant;
+    /// only an argument that names nothing is looked at for a line. Which makes
+    /// `cwd` part of the answer, and so this is not a job for `parse`: a second
+    /// launch has to answer it against the directory it was typed in.
+    pub fn of(argument: &Path, cwd: &Path) -> Self {
+        let whole = crate::root::from_outside(argument, cwd);
+        if !whole.exists()
+            && let Some((path, line)) = split_line(argument)
+        {
+            return Self {
+                path: crate::root::from_outside(&path, cwd),
+                line: Some(line),
+            };
+        }
+        Self {
+            path: whole,
+            line: None,
+        }
+    }
+
+    /// The place as a file argument, for a scheda started from this one.
+    fn argument(&self) -> std::ffi::OsString {
+        let mut argument = self.path.clone().into_os_string();
+        if let Some(line) = self.line {
+            argument.push(format!(":{line}"));
+        }
+        argument
+    }
+}
+
+/// `note.md:12` as `note.md` and `12`. Nothing else has a line: a drive's colon
+/// has a path after it, and a colon with no path before it names no file.
+fn split_line(argument: &Path) -> Option<(PathBuf, u32)> {
+    let (path, line) = argument.to_str()?.rsplit_once(':')?;
+    if path.is_empty() || !line.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    Some((PathBuf::from(path), line.parse().ok()?))
 }
 
 /// Reads the arguments scheda understands.
@@ -327,6 +384,70 @@ mod tests {
         // would make `--wait` ambiguous about which tab it is waiting for.
         let parsed = parse(args(&["one.md", "two.md"]));
         assert_eq!(parsed.file, Some(PathBuf::from("one.md")));
+    }
+
+    #[test]
+    fn a_path_with_nothing_after_it_has_no_line() {
+        let place = Place::of(Path::new("note.md"), Path::new("/vault"));
+        assert_eq!(place.line, None);
+        assert!(place.path.ends_with("note.md"));
+    }
+
+    #[test]
+    fn a_path_that_names_nothing_is_read_for_a_line() {
+        let place = Place::of(Path::new("note.md:12"), Path::new("/vault"));
+        assert_eq!(place.line, Some(12));
+        assert!(place.path.ends_with("note.md"), "{:?}", place.path);
+    }
+
+    #[test]
+    fn only_digits_after_the_colon_are_a_line() {
+        for argument in [
+            "note.md:",
+            "note.md:12a",
+            "note.md:-1",
+            "note.md:99999999999",
+        ] {
+            let place = Place::of(Path::new(argument), Path::new("/vault"));
+            assert_eq!(place.line, None, "{argument}");
+        }
+    }
+
+    #[test]
+    fn a_colon_with_no_path_before_it_is_no_line() {
+        assert_eq!(split_line(Path::new(":12")), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_drive_is_not_a_line_and_a_line_after_it_is() {
+        let drive = Place::of(Path::new(r"C:\no\such\note.md"), Path::new(r"C:\"));
+        assert_eq!(drive.line, None);
+        assert_eq!(drive.path, PathBuf::from(r"C:\no\such\note.md"));
+
+        let line = Place::of(Path::new(r"C:\no\such\note.md:7"), Path::new(r"C:\"));
+        assert_eq!(line.line, Some(7));
+        assert_eq!(line.path, PathBuf::from(r"C:\no\such\note.md"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_whose_name_ends_in_a_number_is_that_file() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        std::fs::write(directory.path().join("note.md:12"), b"").expect("the file");
+        let place = Place::of(Path::new("note.md:12"), directory.path());
+        assert_eq!(place.line, None);
+        assert!(place.path.ends_with("note.md:12"));
+    }
+
+    #[test]
+    fn a_place_goes_back_to_the_argument_it_came_from() {
+        // A waiter starts the window with the place it was given: the line must
+        // reach the window, and the sentinel is named after the path alone.
+        let place = Place::of(Path::new("note.md:12"), Path::new("/vault"));
+        assert!(place.argument().to_string_lossy().ends_with("note.md:12"));
+        let bare = Place::of(Path::new("note.md"), Path::new("/vault"));
+        assert!(bare.argument().to_string_lossy().ends_with("note.md"));
     }
 
     #[test]

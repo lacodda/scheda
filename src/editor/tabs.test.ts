@@ -80,6 +80,34 @@ describe('tabs', () => {
     expect(editor.view.state.doc.toString()).toBe('a\nedit in a')
   })
 
+  it('opens at the line a file arrives with', () => {
+    const lines = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')
+    const editor = mount({ ...file('/a.md', lines), line: 12 })
+    expect(editor.view.state.doc.lineAt(editor.view.state.selection.main.head).number).toBe(12)
+
+    // A second launch, with a new tab and with the tab already open.
+    editor.adopt({ ...file('/b.md', lines), line: 20 })
+    expect(editor.active().path).toBe('/b.md')
+    expect(editor.view.state.doc.lineAt(editor.view.state.selection.main.head).number).toBe(20)
+    editor.adopt({ ...file('/a.md', lines), line: 3 })
+    expect(editor.active().path).toBe('/a.md')
+    expect(editor.view.state.doc.lineAt(editor.view.state.selection.main.head).number).toBe(3)
+  })
+
+  it('holds the line to the document, which may have changed since it was named', () => {
+    const editor = mount({ ...file('/a.md', 'one\ntwo'), line: 99 })
+    expect(editor.view.state.selection.main.head).toBe(4)
+    editor.adopt({ ...file('/a.md', 'one\ntwo'), line: 0 })
+    expect(editor.view.state.selection.main.head).toBe(0)
+  })
+
+  it('leaves the caret alone when a file names no line', () => {
+    const editor = mount(file('/a.md', 'one\ntwo'))
+    editor.view.dispatch({ selection: { anchor: 5 } })
+    editor.adopt(file('/a.md', 'one\ntwo'))
+    expect(editor.view.state.selection.main.head).toBe(5)
+  })
+
   it('reuses an untouched blank tab rather than leaving it behind', () => {
     const editor = mount(null)
     editor.adopt(file('/a.md', 'a\n'))

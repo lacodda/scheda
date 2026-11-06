@@ -14,6 +14,8 @@ export interface DocumentShape {
 }
 
 export interface OpenFile {
+  /** The line to go to as the tab opens, counted from 1: `scheda note.md:12`. */
+  line?: number | null
   path: string
   text: string
   shape: DocumentShape

@@ -62,6 +62,9 @@ pub struct OpenFile {
     /// `scheda --wait`. The tab carries the flag and lets the waiter go when it
     /// closes; a tab without it is an ordinary tab.
     pub awaited: bool,
+    /// The line the command line asked for, counted from 1: `scheda note.md:12`.
+    /// Said once, for the tab to go to as it opens.
+    pub line: Option<u32>,
 }
 
 impl OpenFile {
@@ -72,6 +75,7 @@ impl OpenFile {
             shape: doc.shape,
             read_only: false,
             awaited: false,
+            line: None,
         }
     }
 }
@@ -142,7 +146,7 @@ impl Folder {
 /// One door for every way a path arrives, so a folder dropped on the window,
 /// named on the command line and handed over by a second launch is the same
 /// folder opened the same way.
-fn receive(kept: &session::Kept, path: &Path) -> Handed {
+fn receive(kept: &session::Kept, path: &Path, line: Option<u32>) -> Handed {
     if path.is_dir() {
         // A session that cannot be written loses the folder at the next
         // launch, not now: the core holds it either way.
@@ -159,6 +163,7 @@ fn receive(kept: &session::Kept, path: &Path) -> Handed {
             // The sentinel, not the command line: whoever is waiting started
             // this launch without the flag.
             file.awaited = wait::is_awaited(path);
+            file.line = line;
             Handed::File { file }
         }
         Err(error) => {
@@ -200,7 +205,7 @@ fn close_folder(kept: tauri::State<'_, session::Kept>) {
 /// file opens in a tab.
 #[tauri::command]
 fn open_dropped(kept: tauri::State<'_, session::Kept>, path: String) -> Handed {
-    receive(&kept, Path::new(&path))
+    receive(&kept, Path::new(&path), None)
 }
 
 /// The window listens for handovers from now on, and takes those that came
@@ -1432,6 +1437,13 @@ fn release_waiter(path: String) -> Result<(), CommandError> {
 }
 
 pub fn run() {
+    // What a release is proven by (`release.toml`): the program saying what it
+    // is, from the program itself. It opens nothing, and costs a launch nothing.
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("scheda {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     startup::mark_process_start();
 
     // The installer calls these; they do their work and exit without ever
@@ -1445,9 +1457,9 @@ pub fn run() {
     let invocation = wait::parse(std::env::args().skip(1));
     // Resolved before anything is derived from it: the caller may have typed a
     // relative path, and the window compares paths with the tree's.
-    let asked = invocation.file.as_deref().map(|path| {
+    let asked = invocation.file.as_deref().map(|argument| {
         let cwd = std::env::current_dir().unwrap_or_default();
-        root::from_outside(path, &cwd)
+        wait::Place::of(argument, &cwd)
     });
 
     // `--wait` puts this process in a different job entirely: it starts a
@@ -1455,17 +1467,17 @@ pub fn run() {
     // to close. It never builds a window of its own — see `wait` for why that
     // separation is the only arrangement that survives being the second launch.
     if invocation.wait {
-        let code = match asked.as_deref() {
+        let code = match &asked {
             // A folder has no tab to close, so whoever waited on it would wait
             // until the waiter gave up on its own.
-            Some(path) if path.is_dir() => {
+            Some(place) if place.path.is_dir() => {
                 eprintln!(
                     "scheda --wait waits for a file, and {} is a folder",
-                    path.display()
+                    place.path.display()
                 );
                 1
             }
-            Some(path) => wait::run_as_waiter(path),
+            Some(place) => wait::run_as_waiter(place),
             // Nothing to wait for. Opening a window would be reasonable, but
             // the caller is blocked on this process and would stay blocked
             // until somebody closed it — for a file they never named.
@@ -1488,10 +1500,10 @@ pub fn run() {
     //
     // A launch with a folder reads nothing here: there is no text to show
     // first, and what is in front is the folder (`setup` below).
-    let (front, folder) = match asked {
-        Some(path) if path.is_dir() => (None, Some(path)),
-        Some(path) => (Some(path), None),
-        None => (session::load().front_file(), None),
+    let (front, folder, line) = match asked {
+        Some(place) if place.path.is_dir() => (None, Some(place.path), None),
+        Some(place) => (Some(place.path), None, place.line),
+        None => (session::load().front_file(), None, None),
     };
     let preloaded = front
         .as_deref()
@@ -1503,6 +1515,7 @@ pub fn run() {
                 // process that is waiting started this one *without* the flag,
                 // so the sentinel is the only evidence a promise was made.
                 file.awaited = wait::is_awaited(path);
+                file.line = line;
                 Some(file)
             }
             // A file we cannot decode still opens — read-only, with its bytes
@@ -1521,16 +1534,17 @@ pub fn run() {
 
             // Relative to where the second launch was typed, not to where
             // this one was.
-            let path = handover
+            let place = handover
                 .file
-                .map(|path| root::from_outside(&path, Path::new(&cwd)))
-                .filter(|path| path.exists());
-            let Some(path) = path else {
+                .map(|argument| wait::Place::of(&argument, Path::new(&cwd)))
+                .filter(|place| place.path.exists());
+            let Some(place) = place else {
                 // A bare second launch means "show me the window I have".
                 focus_main_window(app);
                 return;
             };
-            deliver(app, receive(&app.state::<session::Kept>(), &path));
+            let handed = receive(&app.state::<session::Kept>(), &place.path, place.line);
+            deliver(app, handed);
             focus_main_window(app);
         }))
         .plugin(
@@ -1561,7 +1575,7 @@ pub fn run() {
             // handovers until the window listens: the shell that shows it
             // loads after the first frame.
             if let Some(folder) = folder.as_deref() {
-                let handed = receive(&app.state::<session::Kept>(), folder);
+                let handed = receive(&app.state::<session::Kept>(), folder, None);
                 deliver(app.handle(), handed);
             }
             // After the window, like everything that is not the text. A key

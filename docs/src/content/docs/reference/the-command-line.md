@@ -7,6 +7,7 @@ scheda takes one file or folder to open, and one flag.
 
 ```sh
 scheda notes.md
+scheda notes.md:12
 scheda ~/notes
 scheda --wait notes.md
 ```
@@ -19,6 +20,17 @@ A relative path is taken from the directory you typed it in.
 A second launch hands its file or folder to the window you already have rather
 than opening another one, so `scheda` from a terminal behaves like
 double-clicking a file.
+
+## `FILE:LINE`
+
+`scheda notes.md:12` opens the file with the caret at the start of line 12 and
+that line in the middle of the pane, from the first launch and from a second one
+alike. Lines count from 1; a line past the end of the file is its last. `--wait`
+waits on the file, whichever line it was opened at.
+
+This is what a program that found something in a note hands to the editor. A file
+whose name really does end in `:12` is that file: the number is read as a line
+only when nothing is there under the whole name.
 
 ## `--wait`
 
@@ -53,6 +65,12 @@ The installer puts scheda in `%LOCALAPPDATA%\scheda` and leaves `PATH` alone,
 so a shell reaches it by that path - `& "$env:LOCALAPPDATA\scheda\scheda.exe" --wait notes.md`
 in PowerShell. In Git Bash, give the file a path in the form `C:/…` rather than
 `/c/…`, the way every Windows program expects.
+
+## `--version`
+
+Prints `scheda` and its version, and exits without opening a window. scheda is a
+windowed program on Windows, so a shell shows the answer only through a pipe:
+`scheda --version | Out-String`.
 
 ## Flags you will not need
 

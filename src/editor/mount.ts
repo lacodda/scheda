@@ -187,6 +187,18 @@ export interface EditorHandle {
   configure: (options: Partial<WindowOptions>) => void
 }
 
+/** Takes a view to a line: the caret at its start and the line in the middle of
+ *  the pane. Counted from 1 and held to the document, since whoever named the
+ *  line read the note a moment ago at best. */
+function goToLine(view: EditorView, line: number) {
+  const { doc } = view.state
+  const at = doc.line(Math.min(Math.max(line, 1), doc.lines)).from
+  view.dispatch({
+    selection: { anchor: at },
+    effects: EditorView.scrollIntoView(at, { y: 'center' }),
+  })
+}
+
 export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHandle {
   const host = document.createElement('div')
   host.className = 'editor-host'
@@ -500,8 +512,9 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
   // ------------------------------------------------------------------ start
 
   const first = addTab(file)
-  makePane(first)
+  const firstPane = makePane(first)
   remember(first.id)
+  if (file?.line != null) goToLine(firstPane.view, file.line)
 
   const byId = (id?: number): Tab | undefined => (id === undefined ? active() : tabById(id))
 
@@ -516,6 +529,43 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
     const length = state.doc.length
     const clamp = (at: number) => Math.min(Math.max(at, 0), length)
     return EditorSelection.single(clamp(anchor), clamp(head))
+  }
+
+  /** Puts a file the core has read in front: its tab if it has one, the blank in
+   *  front if that is free, a new one otherwise. */
+  function take(next: OpenFile) {
+    const existing = tabs.find((tab) => tab.path !== null && samePath(tab.path, next.path))
+    if (existing) {
+      // Somebody ran `scheda --wait` on a file this window already had open.
+      // The tab is the one that has to release them, so it takes on the
+      // promise rather than leaving a process blocked on a tab that will
+      // never know about it.
+      if (next.awaited) existing.awaited = true
+      show(existing)
+      return
+    }
+    // An untouched blank tab in front is a placeholder, not work: reuse it
+    // rather than leaving an empty tab behind every time a file is opened -
+    // the one a bare launch shows, and the one a folder is shown over, which
+    // stands among other tabs. A pinned one was kept on purpose.
+    const current = active()
+    const blankAndUnused =
+      current && current.path === null && !current.pinned && !handle.isDirty(current.id)
+    if (blankAndUnused) {
+      // It was empty, so any draft filed for it is empty too — and an empty
+      // draft is never filed. Nothing to discard.
+      current.path = next.path
+      current.shape = next.shape
+      current.readOnly = next.readOnly
+      current.saved = next.text
+      current.awaited = next.awaited ?? false
+      current.state = stateFor(next.text, next.readOnly, next.path)
+      current.top = 0
+      panes[focused].view.setState(current.state)
+      show(current)
+      return
+    }
+    show(addTab(next))
   }
 
   const handle: EditorHandle = {
@@ -548,38 +598,11 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
     },
 
     adopt(next) {
-      const existing = tabs.find((tab) => tab.path !== null && samePath(tab.path, next.path))
-      if (existing) {
-        // Somebody ran `scheda --wait` on a file this window already had open.
-        // The tab is the one that has to release them, so it takes on the
-        // promise rather than leaving a process blocked on a tab that will
-        // never know about it.
-        if (next.awaited) existing.awaited = true
-        show(existing)
-        return
+      take(next)
+      if (next.line != null) {
+        goToLine(panes[focused].view, next.line)
+        notify()
       }
-      // An untouched blank tab in front is a placeholder, not work: reuse it
-      // rather than leaving an empty tab behind every time a file is opened -
-      // the one a bare launch shows, and the one a folder is shown over, which
-      // stands among other tabs. A pinned one was kept on purpose.
-      const current = active()
-      const blankAndUnused =
-        current && current.path === null && !current.pinned && !handle.isDirty(current.id)
-      if (blankAndUnused) {
-        // It was empty, so any draft filed for it is empty too — and an empty
-        // draft is never filed. Nothing to discard.
-        current.path = next.path
-        current.shape = next.shape
-        current.readOnly = next.readOnly
-        current.saved = next.text
-        current.awaited = next.awaited ?? false
-        current.state = stateFor(next.text, next.readOnly, next.path)
-        current.top = 0
-        panes[focused].view.setState(current.state)
-        show(current)
-        return
-      }
-      show(addTab(next))
     },
 
     openBlank() {
