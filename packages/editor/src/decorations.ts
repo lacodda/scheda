@@ -279,7 +279,18 @@ function build(view: EditorView): DecorationSet {
         }
 
         if (!MARKERS.has(node.name)) return
-        if (activeLines.has(state.doc.lineAt(node.from).number)) return
+        const line = state.doc.lineAt(node.from)
+        if (activeLines.has(line.number)) return
+        if (node.name === 'QuoteMark') {
+          // The space is part of the mark. Left behind, it pushes the first row
+          // of the line one character in from the rows it wraps onto. A line
+          // with nothing after the mark would then hold nothing that takes a
+          // row, so it is told it is empty, and the theme gives it one.
+          const end = state.doc.sliceString(node.to, node.to + 1) === ' ' ? node.to + 1 : node.to
+          marks.push(hidden.range(node.from, end))
+          if (end === line.to) addLineClass(line.number, 'cm-md-quote-empty')
+          return
+        }
         marks.push(hidden.range(node.from, node.to))
       },
     })

@@ -35,6 +35,11 @@ function textsOf(v: EditorView, className: string): string[] {
   return [...v.dom.querySelectorAll(`.${className}`)].map((e) => e.textContent ?? '')
 }
 
+/** The text of every line carrying `className`. */
+function lineTexts(v: EditorView, className: string): string[] {
+  return [...v.dom.querySelectorAll(`.cm-line.${className}`)].map((e) => e.textContent ?? '')
+}
+
 const LINK_DOC = 'See [the tracker](https://example.com/x) for tickets.\nelsewhere\n'
 
 describe('markdown decorations', () => {
@@ -78,6 +83,35 @@ describe('markdown decorations', () => {
   it('shows the whole link source on the line being edited', () => {
     const v = view(LINK_DOC, 5)
     expect(collapsed(v)).toHaveLength(0)
+    v.destroy()
+  })
+
+  it('hides the space after a quote mark along with the mark', () => {
+    // Left behind, the space indents the first row of the line and not the rows
+    // it wraps onto.
+    const v = view('> a quote\n\nelsewhere\n', 20)
+    expect(collapsed(v)).toContain('> ')
+    expect(lineTexts(v, 'cm-md-quote-empty')).toEqual([])
+    v.destroy()
+  })
+
+  it('leaves a space that is no part of a quote mark alone', () => {
+    const v = view('>a quote\n\nelsewhere\n', 19)
+    expect(collapsed(v)).toContain('>')
+    v.destroy()
+  })
+
+  it('shows a quote mark and its space on the line being edited', () => {
+    const v = view('> a quote\n', 4)
+    expect(collapsed(v)).toEqual([])
+    v.destroy()
+  })
+
+  it('says which lines of a quote hold nothing but the mark', () => {
+    const v = view('> one\n>\n> \n> two\n\nelsewhere\n', 25)
+    // The lines with a mark alone, spelled both ways: they keep a row, and a
+    // line with text does not need telling.
+    expect(lineTexts(v, 'cm-md-quote-empty')).toEqual(['>', '> '])
     v.destroy()
   })
 

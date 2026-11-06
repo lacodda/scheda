@@ -69,7 +69,16 @@ const LONG_DOCUMENT = [
   '- [x] a finished task',
   '',
   '> [!warning] Careful',
-  '> the body of the callout',
+  // Long enough to wrap in any column the window allows: the rows of one line
+  // are what the hanging check below compares.
+  `> the body of the callout, ${'and it goes on for long enough to wrap, '.repeat(8)}to its end`,
+  '',
+  // The same, in a quote that names no kind; and the lines of a quote that hold
+  // nothing but the mark, which still have to take a row.
+  `> a plain quote, ${'and it goes on for long enough to wrap, '.repeat(8)}to its end`,
+  '>',
+  '> ',
+  '> after the empty lines',
   '',
   '| a | b |',
   '| --- | --- |',
@@ -254,6 +263,34 @@ const markup = await page.evaluate(() => {
     codeSpans: codeLine ? codeLine.querySelectorAll('span[class]').length : 0,
     listIndent: measure('.cm-md-list-line', ['paddingLeft', 'textIndent']),
     calloutRule: measure('.cm-md-callout-warning', ['borderLeftWidth', 'borderLeftColor']),
+    calloutBody: rowsOf(document.querySelector('.cm-md-callout-warning:not(.cm-md-callout-head)')),
+    quoteBody: rowsOf(document.querySelector('.cm-md-quote-line:not(.cm-md-callout-warning)')),
+    quoteRows: [...document.querySelectorAll('.cm-md-quote-line:not(.cm-md-callout-warning)')].map(
+      (line) => line.getBoundingClientRect().height,
+    ),
+  }
+
+  /** Where the first drawn character of each visual row of a line starts. The
+   *  boxes of a text node will not do: a space left behind by a hidden mark has
+   *  a box, at the left edge, and pushes the character after it to the right
+   *  without moving the box. */
+  function rowsOf(line) {
+    if (!line) return null
+    const rows = new Map()
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      for (let at = 0; at < node.length; at += 1) {
+        if (node.data[at].trim() === '') continue
+        const range = document.createRange()
+        range.setStart(node, at)
+        range.setEnd(node, at + 1)
+        const box = range.getClientRects()[0]
+        if (!box) continue
+        const row = Math.round(box.top)
+        if (!rows.has(row)) rows.set(row, box.left)
+      }
+    }
+    return [...rows.values()]
   }
 })
 
@@ -377,6 +414,27 @@ if (markup.listIndent) {
 } else {
   failures.push('no list line to measure')
 }
+
+// A wrapped line of a quote or a callout starts under its first row. The hidden
+// `> ` is what parted them: its space stayed behind and pushed the first row in.
+for (const [what, rows] of [
+  ['callout', markup.calloutBody],
+  ['quote', markup.quoteBody],
+]) {
+  check(rows !== null && rows.length >= 2, `the ${what} body takes ${rows?.length ?? 0} rows, not enough to compare`)
+  if (rows && rows.length >= 2) {
+    check(
+      Math.abs(rows[0] - rows[1]) < 0.5,
+      `the ${what} body's first row starts at ${rows[0]}px and its second at ${rows[1]}px`,
+    )
+  }
+}
+// A line holding only the mark is an empty line of the quote, and takes a row.
+const quoteRow = Math.min(...markup.quoteRows.filter((height) => height > 0))
+check(
+  markup.quoteRows.length === 4 && markup.quoteRows.slice(1).every((height) => height >= quoteRow),
+  `the lines of the quote are ${markup.quoteRows.join(', ')}px tall: an empty one has collapsed`,
+)
 
 // The callout's rule is what carries its colour.
 if (markup.calloutRule) {

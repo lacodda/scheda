@@ -271,6 +271,9 @@ export const schedaTheme = EditorView.theme({
     color: token('quote-text'),
     fontStyle: 'italic',
   },
+  // A line of a quote with nothing after its hidden mark is the gap between two
+  // paragraphs. A zero-width space keeps the row, at whatever the line height is.
+  '.cm-md-quote-empty::after': { content: '"\\200b"' },
 
   // Callouts. A quote that named its kind: the rule takes the kind's colour and
   // the whole block gets a tint of it, so it reads as a panel without a border
