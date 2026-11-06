@@ -61,6 +61,10 @@ regex = "1"
 # plugin is that whole job on all three and is Tauri's own.
 tauri-plugin-global-shortcut = "2"
 
+# A note's history in git (ADR 0023): read in process, so nothing is started and
+# no `git` has to be installed. The line's own engine, and the whole job.
+furca-core = "0.10"
+
 # File associations are a Windows-shell concern and nothing else needs them.
 [target.'cfg(windows)'.dependencies]
 windows-registry = "0.100"

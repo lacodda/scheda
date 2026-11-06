@@ -1247,6 +1247,239 @@ body {
   font-size: 12px;
 }
 
+/* ------------------------------------------------------------- history -- */
+
+.history-host {
+  display: flex;
+  min-height: 0;
+}
+
+.history {
+  flex: 0 0 auto;
+  width: 21rem;
+  overflow-y: auto;
+  padding: 0.6rem 0 1rem;
+  border-left: 1px solid var(--border);
+  background: var(--status-bg);
+  font-size: 12px;
+}
+
+@media (max-width: 60rem) {
+  .history {
+    width: 45%;
+    min-width: 11rem;
+  }
+}
+
+.history-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0.5rem 0 0.3rem;
+  padding: 0 0.9rem;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.history-count {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.history-list,
+.history-hunk {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-empty,
+.history-note {
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.history-item {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.9rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.history-item:hover,
+.history-item[aria-expanded='true'] {
+  border-left-color: var(--accent);
+  background: var(--hover);
+}
+
+/* The version on screen beside the note: which row it came from. */
+.history-row--showing .history-subject {
+  font-weight: 600;
+}
+
+/* Two lines at most, so that a long subject does not make the list a page. */
+.history-subject {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.history-meta,
+.history-status {
+  display: block;
+  overflow: hidden;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.history-change {
+  padding: 0.2rem 0 0.6rem;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.1rem 0.9rem 0.4rem;
+}
+
+.history-counts {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.history-show {
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: default;
+}
+
+.history-show:hover {
+  background: var(--hover);
+}
+
+.history-hunk + .history-hunk {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+}
+
+/* A line wraps rather than scrolling sideways: this is prose, and a panel with a
+   second scrollbar inside it is two things to steer. Hanging, so that a wrapped
+   line does not read as another line of the change. */
+.history-line {
+  padding: 0 0.9rem 0 1.9rem;
+  color: var(--text);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  text-indent: -1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The kind is said by the mark as well as by the tint, since a tint alone is a
+   difference some people cannot see. The first column is the mark's. */
+.history-line::before {
+  display: inline-block;
+  width: 1rem;
+  text-indent: 0;
+  content: " ";
+}
+
+.history-line--added {
+  background: color-mix(in srgb, var(--callout-success) 16%, transparent);
+}
+
+.history-line--added::before {
+  content: "+";
+}
+
+.history-line--removed {
+  background: color-mix(in srgb, var(--callout-danger) 14%, transparent);
+}
+
+.history-line--removed::before {
+  content: "-";
+}
+
+/* A past version, beside the panes of the tabs (ADR 0023). */
+.past {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+
+.past-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--status-bg);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.past-title {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.past-when {
+  flex: 0 0 auto;
+}
+
+.past-close {
+  margin-left: auto;
+  padding: 0 0.35rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: default;
+}
+
+.past-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.past-text {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
 /* ---------------------------------------------------------------- tags -- */
 
 /* The tags panel is the one sidebar about the VAULT rather than about the open

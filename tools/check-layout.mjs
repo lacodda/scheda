@@ -139,6 +139,51 @@ await page.addInitScript((text) => {
       // reach the panel as a missing shape rather than an empty one, and the
       // failure would be about the stub rather than the page.
       if (command === 'read_network') return { backlinks: [], unresolved: [] }
+      // A note with a past. A subject long enough to wrap, and a line long
+      // enough to, since what a narrow panel does with those is the question.
+      if (command === 'read_history') {
+        return {
+          truncated: true,
+          revisions: [
+            {
+              commit: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
+              subject: `change the plan, ${'and say so at length, '.repeat(8)}to the end`,
+              author: 'A Writer',
+              seconds: 1790000000,
+              path: 'notes/long.md',
+              status: 'modified',
+              from: null,
+            },
+            {
+              commit: '2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c',
+              subject: 'move the plan',
+              author: 'A Writer',
+              seconds: 1780000000,
+              path: 'notes/long.md',
+              status: 'renamed',
+              from: 'long.md',
+            },
+          ],
+        }
+      }
+      if (command === 'read_change') {
+        return {
+          added: 2,
+          removed: 1,
+          text: true,
+          cut: true,
+          hunks: [
+            [
+              { kind: 'context', text: 'the line before' },
+              { kind: 'removed', text: 'the line as it was' },
+              { kind: 'added', text: `the line as it is, ${'and it goes on, '.repeat(12)}to the end` },
+              { kind: 'added', text: 'a line more' },
+            ],
+            [{ kind: 'added', text: 'in another place' }],
+          ],
+        }
+      }
+      if (command === 'read_revision') return `# The plan, as it was\n\n${'A sentence of it. '.repeat(60)}\n`
       if (command === 'read_tree') {
         return {
           root: '/vault',
@@ -786,6 +831,73 @@ await page.waitForTimeout(300)
 await auditScene('what links here')
 await page.keyboard.press('Control+Shift+b')
 await page.waitForTimeout(200)
+
+// The history of a note, and a past version beside it. What is measured is what a
+// unit test cannot see: the pane takes its share beside the note rather than over
+// or under it, its text is drawn, and the panel holds long lines by wrapping them.
+await page.keyboard.press('Control+Shift+g')
+await page.waitForSelector('.history-item', { timeout: 2_000 }).catch(() => {
+  failures.push('Ctrl+Shift+G did not open the history panel with its rows')
+})
+await page.click('.history-item')
+await page.waitForSelector('.history-line', { timeout: 2_000 }).catch(() => {
+  failures.push('opening a row of the history drew no lines')
+})
+await page.click('.history-show')
+await page.waitForSelector('.past .cm-content', { timeout: 2_000 }).catch(() => {
+  failures.push('Show this version drew no pane')
+})
+await page.waitForTimeout(150)
+const history = await page.evaluate(() => {
+  const box = (selector) => {
+    const element = document.querySelector(selector)
+    if (!element) return null
+    const rect = element.getBoundingClientRect()
+    return { x: rect.x, y: rect.y, w: rect.width, h: rect.height }
+  }
+  const panel = document.querySelector('.history')
+  return {
+    note: box('.pane:not(.past)'),
+    past: box('.past'),
+    pastText: box('.past .cm-content'),
+    panel: box('.history'),
+    overflow: panel ? panel.scrollWidth - panel.clientWidth : null,
+    reading: document.querySelectorAll('.past .cm-reading').length,
+    heading: document.querySelector('.past .cm-md-h1')?.textContent ?? null,
+    marks: [...document.querySelectorAll('.history-line')].map(
+      (line) => getComputedStyle(line, '::before').content,
+    ),
+  }
+})
+if (history.note && history.past && history.panel) {
+  check(history.note.w >= 200, `the note beside a past version is ${Math.round(history.note.w)}px wide`)
+  check(history.past.w >= 200, `a past version is ${Math.round(history.past.w)}px wide`)
+  check(
+    history.past.x >= history.note.x + history.note.w - 1,
+    'a past version is not beside the note',
+  )
+  check(
+    history.panel.x >= history.past.x + history.past.w - 1,
+    'the history panel is not beside the past version',
+  )
+  check(history.pastText !== null && history.pastText.h > 100, 'the text of a past version is not drawn')
+} else {
+  failures.push(`the history scene is not set: ${JSON.stringify(history)}`)
+}
+check(history.reading === 1, 'a past version is not in reading mode, so it can be typed in')
+check(history.heading !== null, 'a past version is not drawn as the note is')
+check(history.overflow === 0, `the history panel scrolls sideways by ${history.overflow}px`)
+check(
+  ['"-"', '"+"'].every((mark) => history.marks.includes(mark)),
+  `a changed line says what it is only by its tint: ${history.marks.join(' ')}`,
+)
+await auditScene('the history of a note')
+await page.keyboard.press('Escape')
+await page.waitForTimeout(100)
+check((await page.locator('.past').count()) === 0, 'Escape did not close a past version')
+await page.keyboard.press('Control+Shift+g')
+await page.waitForTimeout(200)
+check((await page.locator('.history').count()) === 0, 'Ctrl+Shift+G did not close the history panel')
 
 await page.keyboard.press('Control+,')
 await page.waitForTimeout(400)

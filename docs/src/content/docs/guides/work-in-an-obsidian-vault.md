@@ -28,6 +28,7 @@ Once the vault is open:
 | Jump to a note by name | `Ctrl+P` |
 | See which notes link to this one | `Ctrl+Shift+B` |
 | See every tag | `Ctrl+Shift+T` |
+| See what changed in this note, in a git repository | `Ctrl+Shift+G` |
 | Search every note | `Ctrl+Shift+F` |
 
 `[[links]]` resolve against the whole vault the way Obsidian resolves them, and

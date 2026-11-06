@@ -38,6 +38,8 @@ text is loaded ahead of it - 440 ms from start to the first character, measured.
   vault, read the way Obsidian writes it, and nothing of scheda's left in it.
 - **Renames and replaces you check first.** Every line they would change is
   listed before a byte is written, and one click puts it all back.
+- **What a note used to say.** In a git repository, the commits that changed
+  it, the lines each changed, and the whole note as it was, beside it.
 - **A notepad's habits.** Tabs in the title bar, a split, drafts that outlive
   the window, and `Win+Shift+N` for a quick note from any program.
 - **Every command under one key.** `Ctrl+Shift+P` finds any of them by name,

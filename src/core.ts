@@ -551,6 +551,60 @@ export function readNetwork(document: string): Promise<Network> {
 }
 
 /** One note carrying one tag. */
+/** One commit that changed a note. */
+export interface Revision {
+  commit: string
+  subject: string
+  author: string
+  /** When it was written, in seconds since the epoch. */
+  seconds: number
+  /** The note's path in this commit, from the root of the repository: a rename
+   *  is followed, and this is what its text there is read by. */
+  path: string
+  status: 'added' | 'deleted' | 'modified' | 'renamed' | 'copied'
+  /** Where the note was before, when this commit moved it. */
+  from: string | null
+}
+
+/** The changes a note has been through, newest first. */
+export interface History {
+  revisions: Revision[]
+  /** Whether there is more behind the last one. */
+  truncated: boolean
+}
+
+/** A line of a change, with its neighbours around it. */
+export interface ChangeLine {
+  kind: 'context' | 'removed' | 'added'
+  text: string
+}
+
+/** What one commit did to a note. */
+export interface Change {
+  added: number
+  removed: number
+  /** False when a side is not text, and there are no lines to show. */
+  text: boolean
+  hunks: ChangeLine[][]
+  /** Whether it was too long to list whole. */
+  cut: boolean
+}
+
+/** The commits that changed a note. `null` when it is in no git repository. */
+export function readHistory(document: string): Promise<History | null> {
+  return invoke<History | null>('read_history', { document })
+}
+
+/** What one of those commits did to the note, which was at `path` then. */
+export function readChange(document: string, commit: string, path: string): Promise<Change> {
+  return invoke<Change>('read_change', { document, commit, path })
+}
+
+/** The note's text in one of those commits, where it was at `path`. */
+export function readRevision(document: string, commit: string, path: string): Promise<string> {
+  return invoke<string>('read_revision', { document, commit, path })
+}
+
 export interface Tagged {
   path: string
   relative: string

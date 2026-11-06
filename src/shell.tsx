@@ -57,6 +57,7 @@ import {
   type Block,
 } from '@lacodda/scheda-editor'
 import { FileTree } from './tree'
+import { HistoryPanel } from './history'
 import { NetworkPanel } from './network'
 import { RenamePreview, UndoBar } from './rename'
 import { undoRename, type RenameApplied } from './core'
@@ -1144,6 +1145,16 @@ function SearchHost({ editor }: { editor: EditorHandle }) {
   )
 }
 
+/** The history panel. Mounted only while it is shown: what it holds is about the
+ *  note in front at the moment, and a past version beside the note goes with it. */
+function HistoryHost({ editor }: { editor: EditorHandle }) {
+  const [visible] = usePanel('panel.history')
+  const revision = useVaultWrites()
+  useEditor(editor)
+
+  return visible ? <HistoryPanel editor={editor} revision={revision} /> : null
+}
+
 /** The network panel — mostly about backlinks. */
 function NetworkHost({ editor }: { editor: EditorHandle }) {
   const [visible] = usePanel('panel.network')
@@ -1327,12 +1338,15 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   networkHost.className = 'network-host'
   const tagsHost = document.createElement('div')
   tagsHost.className = 'tags-host'
+  const historyHost = document.createElement('div')
+  historyHost.className = 'history-host'
   const searchHost = document.createElement('div')
   searchHost.className = 'search-host'
   middle.appendChild(treeHost)
   middle.appendChild(searchHost)
   middle.appendChild(editorHost)
   middle.appendChild(tagsHost)
+  middle.appendChild(historyHost)
   middle.appendChild(networkHost)
   middle.appendChild(outlineHost)
 
@@ -1362,6 +1376,11 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   createRoot(tagsHost).render(
     <StrictMode>
       <TagsHost editor={editor} />
+    </StrictMode>,
+  )
+  createRoot(historyHost).render(
+    <StrictMode>
+      <HistoryHost editor={editor} />
     </StrictMode>,
   )
   createRoot(treeHost).render(

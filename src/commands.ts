@@ -70,6 +70,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { id: 'panel.outline', title: 'Panel: Outline', keys: ['Mod+Shift+O'] },
   { id: 'panel.network', title: 'Panel: What links here', keys: ['Mod+Shift+B'] },
   { id: 'panel.tags', title: 'Panel: Tags', keys: ['Mod+Shift+T'] },
+  { id: 'panel.history', title: 'Panel: History of this note', keys: ['Mod+Shift+G'] },
   { id: 'search.vault', title: 'Search: In the vault', keys: ['Mod+Shift+F'] },
   { id: 'search.replace', title: 'Search: Replace in the vault', keys: ['Mod+Shift+H'] },
   { id: 'fold.section', title: 'Fold: This section', keys: ['Mod+{'], scope: 'editor' },

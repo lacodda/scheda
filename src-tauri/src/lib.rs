@@ -9,6 +9,7 @@ pub mod export;
 pub mod files;
 pub mod frontmatter;
 pub mod handover;
+pub mod history;
 pub mod home;
 pub mod inbox;
 pub mod index;
@@ -1073,6 +1074,56 @@ async fn read_tags(app: tauri::AppHandle, document: Option<String>) -> Vec<tags:
 #[derive(Default)]
 struct Searches(std::sync::Arc<std::sync::atomic::AtomicU64>);
 
+impl From<history::HistoryError> for CommandError {
+    fn from(error: history::HistoryError) -> Self {
+        Self {
+            message: error.to_string(),
+            read_only: false,
+        }
+    }
+}
+
+/// Runs a question about a note's history where it cannot hold up the window:
+/// walking commits is the core's slowest kind of reading.
+async fn asking_git<T: Send + 'static>(
+    ask: impl FnOnce() -> Result<T, history::HistoryError> + Send + 'static,
+) -> Result<T, CommandError> {
+    tauri::async_runtime::spawn_blocking(ask)
+        .await
+        .map_err(|error| CommandError {
+            message: error.to_string(),
+            read_only: false,
+        })?
+        .map_err(CommandError::from)
+}
+
+/// The commits that changed a note, newest first. `None` when it is in no
+/// repository, which is an answer rather than a failure (ADR 0023).
+#[tauri::command]
+async fn read_history(document: String) -> Result<Option<history::History>, CommandError> {
+    asking_git(move || history::of(Path::new(&document))).await
+}
+
+/// What one of those commits did to the note, which was at `path` then.
+#[tauri::command]
+async fn read_change(
+    document: String,
+    commit: String,
+    path: String,
+) -> Result<history::Change, CommandError> {
+    asking_git(move || history::change(Path::new(&document), &commit, &path)).await
+}
+
+/// The note's text in one of those commits, where it was at `path`.
+#[tauri::command]
+async fn read_revision(
+    document: String,
+    commit: String,
+    path: String,
+) -> Result<String, CommandError> {
+    asking_git(move || history::text_at(Path::new(&document), &commit, &path)).await
+}
+
 impl From<search::SearchError> for CommandError {
     fn from(error: search::SearchError) -> Self {
         Self {
@@ -1608,6 +1659,9 @@ pub fn run() {
             watch_vault,
             find_files,
             read_network,
+            read_history,
+            read_change,
+            read_revision,
             plan_rename,
             apply_rename,
             undo_rename,

@@ -29,6 +29,7 @@ tree stays on the folder.
 | Search every note | `Ctrl+Shift+F` |
 | See every tag | `Ctrl+Shift+T` |
 | See which notes link to this one | `Ctrl+Shift+B` |
+| See what changed in this note, in a git repository | `Ctrl+Shift+G` |
 
 `[[links]]` resolve against the whole folder, the way Obsidian would resolve
 them in a vault of its own. Following a link to a note that does not exist yet

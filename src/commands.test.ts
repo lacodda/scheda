@@ -71,6 +71,8 @@ const SHIPPED = [
   'theme.dark', 'autosave.toggle',
   // 0.19
   'file.openFolder', 'file.closeFolder',
+  // 0.20
+  'panel.history',
 ]
 
 describe('the ids of the commands', () => {

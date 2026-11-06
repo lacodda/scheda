@@ -162,7 +162,10 @@ fn the_release_carries_what_the_scripts_download() {
         "\"scheda_{version}_amd64.AppImage\"",
         "\"lacodda-scheda-editor-{version}.tgz\"",
     ] {
-        assert!(release.contains(asset), "release.toml does not list {asset}");
+        assert!(
+            release.contains(asset),
+            "release.toml does not list {asset}"
+        );
     }
 }
 
@@ -172,14 +175,24 @@ fn a_scratch_install_leaves_the_path_alone() {
     // PATH entry made on the way would outlive the directory, in the registry of
     // whoever checked a release. So the flag is read before any edit of it.
     let windows = read("tools/install.ps1");
-    let asked = windows.find("if (-not $env:SCHEDA_NO_PATH)").expect("the flag");
+    let asked = windows
+        .find("if (-not $env:SCHEDA_NO_PATH)")
+        .expect("the flag");
     let edited = windows.find("HKCU:\\Environment").expect("the edit");
-    assert!(asked < edited, "install.ps1 edits the PATH before it reads the flag");
+    assert!(
+        asked < edited,
+        "install.ps1 edits the PATH before it reads the flag"
+    );
 
     let unix = read("tools/install.sh");
-    let asked = unix.find("if [ -z \"${SCHEDA_NO_PATH:-}\" ]").expect("the flag");
+    let asked = unix
+        .find("if [ -z \"${SCHEDA_NO_PATH:-}\" ]")
+        .expect("the flag");
     let hint = unix.find("to your PATH").expect("the note");
-    assert!(asked < hint, "install.sh talks about the PATH before it reads the flag");
+    assert!(
+        asked < hint,
+        "install.sh talks about the PATH before it reads the flag"
+    );
 }
 
 #[test]
@@ -188,9 +201,16 @@ fn the_windows_installer_closes_no_window() {
     // file it replaces, and a window may hold unsaved text. The program steps
     // aside first (ADR 0022).
     let windows = read("tools/install.ps1");
-    let aside = windows.find("Move-Item $installed $aside").expect("the step aside");
-    let setup = windows.find("Start-Process -FilePath $setup").expect("the setup");
-    assert!(aside < setup, "install.ps1 runs the setup before the program steps aside");
+    let aside = windows
+        .find("Move-Item $installed $aside")
+        .expect("the step aside");
+    let setup = windows
+        .find("Start-Process -FilePath $setup")
+        .expect("the setup");
+    assert!(
+        aside < setup,
+        "install.ps1 runs the setup before the program steps aside"
+    );
 }
 
 #[test]

@@ -83,6 +83,7 @@ diagram while reading and is code again when you go back — see
 | `Ctrl+Shift+O` | Show or hide the outline |
 | `Ctrl+Shift+B` | Show or hide what links here |
 | `Ctrl+Shift+T` | Show or hide the tags of the vault |
+| `Ctrl+Shift+G` | Show or hide the history of this note |
 | `Ctrl+{` | Fold the section the caret is in — `Ctrl+Shift+[` on a US keyboard |
 | `Ctrl+}` | Unfold it |
 | `Ctrl+Alt+[` / `Ctrl+Alt+]` | Fold or unfold every section |
