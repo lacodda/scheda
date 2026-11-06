@@ -42,5 +42,8 @@ would have to be told apart at each of those places.
 - The panel lists 200 changes and draws 2000 lines of one, and says so past either.
 - The list is re-read when the window comes back, since a commit made in a terminal
   says nothing to the vault.
-- A release grows by what gitoxide weighs, and the launch by nothing: it is linked,
-  and not called until the panel opens.
+- gitoxide has a price even though it is not called until the panel opens. Measured
+  against v0.19.0 on one machine, eight launches of each in turn: the program goes
+  from 14.5 to 18.7 MiB, the installer from 4.5 to 5.7 MiB, and the median first paint
+  from 561 to 580 ms, with the two ranges overlapping (514-579 and 547-593). A larger
+  program takes longer to page in, and nothing here makes that go away.
