@@ -165,6 +165,11 @@ export interface EditorHandle {
   /** Writes every named tab with unsaved changes, if autosave is on, now. For
    *  the window losing focus or closing. Resolves when the writes are done. */
   flushAutosave: () => Promise<void>
+  /** The window is put together and the session is back. A launch that named a
+   *  line is taken to it again: moving the editor into the shell loses the
+   *  scroller's position, and a session bringing the same file back sets its
+   *  caret. */
+  settled: () => void
   /** Called with a tab autosave did not write because its file changed on
    *  disk since the tab last saw it — the question is the shell's to ask. */
   onAutosaveRefused: (handler: ((id: number) => void) | null) => void
@@ -515,6 +520,8 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
   const firstPane = makePane(first)
   remember(first.id)
   if (file?.line != null) goToLine(firstPane.view, file.line)
+  /** The line a launch named, until the window is put together. */
+  let named = file?.line != null ? { tab: first, line: file.line } : null
 
   const byId = (id?: number): Tab | undefined => (id === undefined ? active() : tabById(id))
 
@@ -903,6 +910,16 @@ export function mountEditor(root: HTMLElement, file: OpenFile | null): EditorHan
     async flushAutosave() {
       if (!options.autosave) return
       await Promise.all(tabs.filter((tab) => autosavable(tab) && handle.isDirty(tab.id)).map(autosave))
+    },
+
+    settled() {
+      if (named === null) return
+      const { tab, line } = named
+      named = null
+      const pane = paneShowing(tab.id)
+      if (pane === -1) return
+      goToLine(panes[pane].view, line)
+      notify()
     },
 
     onAutosaveRefused(handler) {

@@ -94,7 +94,7 @@ const LONG_DOCUMENT = [
   ),
 ].join('\n')
 
-await page.addInitScript((text) => {
+const launchWithAFile = (text) => {
   window.__TAURI_INTERNALS__ = {
     invoke: async (command) => {
       if (command === 'plugin:event|listen') return 0
@@ -104,6 +104,7 @@ await page.addInitScript((text) => {
           text,
           shape: { line_ending: 'lf', bom: false },
           readOnly: false,
+          line: window.__launchLine ?? null,
         }
       }
       // Every field the core answers with. A partial answer is not a smaller
@@ -207,7 +208,8 @@ await page.addInitScript((text) => {
       return id
     },
   }
-}, LONG_DOCUMENT)
+}
+await page.addInitScript(launchWithAFile, LONG_DOCUMENT)
 
 const failures = []
 page.on('pageerror', (error) => failures.push(`uncaught: ${error.message}`))
@@ -912,6 +914,39 @@ check((await page.locator('.palette').count()) === 1, 'Ctrl+Shift+P did not open
 await auditScene('the palette')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
+
+// ------------------------------------------------- a launch at a line --
+
+// `scheda notes.md:200`. Far down the note, so that being there is not an accident
+// of the first screen. The status bar reading the line is not enough: the shell
+// moves the editor after the first frame, which sends a scroller back to its top
+// with the caret still where it was.
+const linePage = await browser.newPage({ viewport: { width: 1000, height: 700 } })
+linePage.on('pageerror', (error) => failures.push(`uncaught at a line: ${error.message}`))
+await linePage.addInitScript(() => {
+  window.__launchLine = 200
+})
+await linePage.addInitScript(launchWithAFile, LONG_DOCUMENT)
+await linePage.goto(`http://localhost:${port}/`)
+await linePage.waitForSelector('.status', { timeout: 10_000 })
+await linePage.waitForTimeout(500)
+const atLine = await linePage.evaluate(() => {
+  const scroller = document.querySelector('.cm-scroller').getBoundingClientRect()
+  const line = document.querySelector('.cm-activeLine')?.getBoundingClientRect()
+  return {
+    status: document.querySelector('.status')?.textContent ?? '',
+    inView: line !== undefined && line.top >= scroller.top && line.bottom <= scroller.bottom,
+    middle: line === undefined ? null : Math.abs((line.top + line.bottom) / 2 - (scroller.top + scroller.bottom) / 2),
+    height: scroller.height,
+  }
+})
+await linePage.close()
+check(atLine.status.includes('Ln 200,'), `a launch at line 200 left the caret at: ${atLine.status}`)
+check(atLine.inView, 'a launch at a line has the caret there and the line off the screen')
+check(
+  atLine.middle !== null && atLine.middle < atLine.height / 4,
+  `the line a launch named is ${Math.round(atLine.middle ?? -1)}px from the middle of the pane`,
+)
 
 // ---------------------------------------------------- a folder's window --
 

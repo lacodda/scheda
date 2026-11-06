@@ -94,6 +94,34 @@ describe('tabs', () => {
     expect(editor.view.state.doc.lineAt(editor.view.state.selection.main.head).number).toBe(3)
   })
 
+  it('keeps the line a launch named through a session bringing the same file back', () => {
+    const lines = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')
+    const editor = mount({ ...file('/a.md', lines), line: 12 })
+    editor.restore(
+      [{ file: file('/a.md', ''), draft: null, pinned: false, anchor: 0, head: 0, top: 0 }],
+      { active: 0, beside: null, focused: 0 },
+      false,
+    )
+    editor.settled()
+    expect(editor.view.state.doc.lineAt(editor.view.state.selection.main.head).number).toBe(12)
+  })
+
+  it('takes a launch to its line once, and leaves the caret to the person after', () => {
+    const lines = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')
+    const editor = mount({ ...file('/a.md', lines), line: 12 })
+    editor.settled()
+    editor.view.dispatch({ selection: { anchor: 0 } })
+    editor.settled()
+    expect(editor.view.state.selection.main.head).toBe(0)
+  })
+
+  it('has no line to go back to when the launch named none', () => {
+    const editor = mount(file('/a.md', 'one\ntwo'))
+    editor.view.dispatch({ selection: { anchor: 5 } })
+    editor.settled()
+    expect(editor.view.state.selection.main.head).toBe(5)
+  })
+
   it('holds the line to the document, which may have changed since it was named', () => {
     const editor = mount({ ...file('/a.md', 'one\ntwo'), line: 99 })
     expect(editor.view.state.selection.main.head).toBe(4)

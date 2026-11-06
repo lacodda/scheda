@@ -490,6 +490,7 @@ function Shell({ editor, launchedWith }: { editor: EditorHandle; launchedWith: s
         // An unreadable session is an empty window, not a dialog on startup.
       })
       .finally(() => {
+        editor.settled()
         setRestored(true)
         sessionBack.settle()
       })
@@ -1344,7 +1345,13 @@ export function mountShell(editor: EditorHandle, options: ShellOptions = { launc
   searchHost.className = 'search-host'
   middle.appendChild(treeHost)
   middle.appendChild(searchHost)
+  // Moving an element loses its scroller's position, and a launch that named a
+  // line has one on screen already. Only a frame's worth: `settled` puts it right
+  // for good, in the layout the shell ends up with.
+  const scroller = editorHost.querySelector('.cm-scroller')
+  const top = scroller?.scrollTop ?? 0
   middle.appendChild(editorHost)
+  if (scroller !== null && top > 0) scroller.scrollTop = top
   middle.appendChild(tagsHost)
   middle.appendChild(historyHost)
   middle.appendChild(networkHost)
