@@ -12,22 +12,11 @@ the edit happened is on [The command line](/scheda/reference/the-command-line/#-
 
 ## For git only
 
-On macOS and Linux, where the install script put `scheda` in `~/.local/bin`:
+The install script put `scheda` on the command line, so on every platform:
 
 ```sh
 git config --global core.editor "scheda --wait"
 ```
-
-On Windows, scheda is installed to your account's `AppData\Local` and is not on
-`PATH`, so git is given its whole path. In PowerShell:
-
-```powershell
-$scheda = "$env:LOCALAPPDATA\scheda\scheda.exe" -replace '\\', '/'
-git config --global core.editor "'$scheda' --wait"
-```
-
-The forward slashes and the single quotes are for git, which runs the editor
-through a shell of its own.
 
 ## For every program that reads `$EDITOR`
 
@@ -41,7 +30,7 @@ export VISUAL="scheda --wait"
 On Windows, for the current user, in PowerShell:
 
 ```powershell
-[Environment]::SetEnvironmentVariable('EDITOR', "`"$env:LOCALAPPDATA\scheda\scheda.exe`" --wait", 'User')
+[Environment]::SetEnvironmentVariable('EDITOR', 'scheda --wait', 'User')
 ```
 
 Programs started after that see it; a terminal that was already open does not.

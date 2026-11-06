@@ -53,19 +53,25 @@ esac
 VERSION="${TAG#v}"
 RELEASE="https://github.com/$REPO/releases/download/$TAG"
 
+# SCHEDA_INSTALL_DIR installs a copy apart: the program and `scheda` in that
+# directory, and nothing anywhere else - no launcher entry, no link in your own
+# ~/.local/bin - beside the scheda you use.
+APART="${SCHEDA_INSTALL_DIR:-}"
+
 # An open window may hold text that is not saved yet, and replacing the program
-# under it would mean closing it. That is the person's to do, not ours.
-if pgrep -x scheda >/dev/null 2>&1 || pgrep -f 'scheda\.AppImage' >/dev/null 2>&1; then
+# under it would mean closing it. That is the person's to do, not ours. A copy
+# apart replaces nothing a window is running.
+if [ -z "$APART" ] && { pgrep -x scheda >/dev/null 2>&1 || pgrep -f 'scheda\.AppImage' >/dev/null 2>&1; }; then
     echo "scheda is running - save what is open, close it, and run the installer again" >&2
     exit 1
 fi
 
-BIN_DIR="${SCHEDA_BIN_DIR:-$HOME/.local/bin}"
+BIN_DIR="${APART:-$HOME/.local/bin}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 if [ "$PLATFORM" = "macos" ]; then
-    APPS="${SCHEDA_APPLICATIONS:-$HOME/Applications}"
+    APPS="${APART:-$HOME/Applications}"
     URL="$RELEASE/scheda_${VERSION}_aarch64.app.tar.gz"
     echo "Downloading $URL"
     curl -fsSL "$URL" | tar xz -C "$TMP"
@@ -86,22 +92,24 @@ else
     URL="$RELEASE/scheda_${VERSION}_amd64.AppImage"
     echo "Downloading $URL"
     curl -fsSL -o "$TMP/scheda.AppImage" "$URL"
-    mkdir -p "$DATA/scheda"
-    install -m 755 "$TMP/scheda.AppImage" "$DATA/scheda/scheda.AppImage"
+    PLACE="${APART:-$DATA/scheda}"
+    mkdir -p "$PLACE"
+    install -m 755 "$TMP/scheda.AppImage" "$PLACE/scheda.AppImage"
     # The version the file was downloaded as. An AppImage does not answer for
     # its version without starting, and starting it means a window.
-    printf '%s\n' "$VERSION" > "$DATA/scheda/version"
+    printf '%s\n' "$VERSION" > "$PLACE/version"
     INSTALLED="$VERSION"
-    PROGRAM="$DATA/scheda/scheda.AppImage"
+    PROGRAM="$PLACE/scheda.AppImage"
     WHERE="$PROGRAM"
 
     # A launcher entry, so scheda is in the applications menu and offered in
     # "Open with" for markdown. Offered, not made the default: which editor
     # opens .md is the person's choice (xdg-mime, below).
-    mkdir -p "$DATA/applications" "$DATA/icons/hicolor/128x128/apps"
-    curl -fsSL -o "$DATA/icons/hicolor/128x128/apps/scheda.png" \
-        "https://raw.githubusercontent.com/$REPO/$TAG/src-tauri/icons/128x128.png" || true
-    cat > "$DATA/applications/scheda.desktop" <<EOF
+    if [ -z "$APART" ]; then
+        mkdir -p "$DATA/applications" "$DATA/icons/hicolor/128x128/apps"
+        curl -fsSL -o "$DATA/icons/hicolor/128x128/apps/scheda.png" \
+            "https://raw.githubusercontent.com/$REPO/$TAG/src-tauri/icons/128x128.png" || true
+        cat > "$DATA/applications/scheda.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=scheda
@@ -112,8 +120,9 @@ Terminal=false
 Categories=Utility;TextEditor;
 MimeType=text/markdown;text/x-markdown;
 EOF
-    if command -v update-desktop-database >/dev/null 2>&1; then
-        update-desktop-database "$DATA/applications" >/dev/null 2>&1 || true
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database "$DATA/applications" >/dev/null 2>&1 || true
+        fi
     fi
 fi
 
@@ -128,10 +137,14 @@ mkdir -p "$BIN_DIR"
 ln -sf "$PROGRAM" "$BIN_DIR/scheda"
 echo "Installed scheda $TAG to $WHERE"
 
-case ":$PATH:" in
-    *":$BIN_DIR:"*) ;;
-    *) echo "Note: add $BIN_DIR to your PATH to run scheda from a terminal." ;;
-esac
+# SCHEDA_NO_PATH: an install into a scratch directory, such as
+# `furca release verify --install`, has no business with the PATH.
+if [ -z "${SCHEDA_NO_PATH:-}" ]; then
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) ;;
+        *) echo "Note: add $BIN_DIR to your PATH to run scheda from a terminal." ;;
+    esac
+fi
 if [ "$PLATFORM" = "linux" ]; then
     # Many distributions no longer ship the FUSE 2 library an AppImage mounts
     # itself with. Looked for as a file: `ldconfig` is often outside a user's
@@ -144,5 +157,7 @@ if [ "$PLATFORM" = "linux" ]; then
     if [ -z "$FUSE" ]; then
         echo "Note: scheda needs FUSE 2 to start (Debian/Ubuntu: sudo apt install libfuse2)."
     fi
-    echo "To make scheda the default for markdown: xdg-mime default scheda.desktop text/markdown"
+    if [ -z "$APART" ]; then
+        echo "To make scheda the default for markdown: xdg-mime default scheda.desktop text/markdown"
+    fi
 fi

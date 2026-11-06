@@ -71,16 +71,25 @@ opacity adds itself, with its reason, to the lists in that test.
 
 ## Releases
 
-A tag drafts the release on three platforms (`.github/workflows/release.yml`):
-the Windows NSIS installer, the macOS app and the Linux AppImage - exactly what
-`tools/install.ps1` and `tools/install.sh` download, and nothing beside them -
-plus the editor package's tarball, which is how programs install
-`@lacodda/scheda-editor`. Nothing goes to a registry (ADR 0015).
+A release is made from `release.toml` by [furca's release
+engine](https://lacodda.github.io/furca/reference/release/): `furca release plan`
+says what stands in its way, and `furca release run` bumps, writes the changelog,
+runs the gate, commits, pushes, waits for CI and tags.
 
-The draft is installed and checked on a real machine before it is published.
-Publishing it runs `.github/workflows/install.yml`, which installs the new
-release with the scripts on Windows, macOS and Linux and checks the version
-they installed.
+The tag drafts the release on three platforms (`.github/workflows/release.yml`):
+the Windows NSIS installer and the program's own archive, the macOS app and the
+Linux AppImage - exactly what `tools/install.ps1` and `tools/install.sh` download,
+and nothing beside them - plus the editor package's tarball, which is how programs
+install `@lacodda/scheda-editor`. Nothing goes to a registry (ADR 0015, ADR 0022).
+
+The run stops there, on purpose: `verify` does not pass a page that is still a
+draft. The draft is installed and checked on a real machine, the `### Checked live`
+list its notes end with says what against, and `gh release edit --draft=false`
+publishes it. `furca release resume` then verifies the page, installs the release
+with the script and proves the installed program is the release's own build, by its
+hash, and writes it into the record. Publishing also runs
+`.github/workflows/install.yml`, which installs the new release with the scripts on
+Windows, macOS and Linux and checks the version they installed.
 
 A run of the release build that is not your own scheda - a check before a
 release, the pictures - goes under `SCHEDA_HOME` (ADR 0020), so the settings,

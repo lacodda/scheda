@@ -17,6 +17,10 @@ scheda out of **Open with** and **Default apps** first, removing only its own
 entry from each file type's list; whichever editor opens `.md` after that is
 the one you had chosen before, or Windows asks.
 
+The install script added `%LOCALAPPDATA%\scheda` to your user `PATH`, and that
+entry stays. It does nothing once the directory is gone; it can be taken out under
+**Settings → System → About → Advanced system settings → Environment Variables**.
+
 ## On macOS
 
 Delete the application and the command:

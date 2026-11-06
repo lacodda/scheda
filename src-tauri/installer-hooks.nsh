@@ -19,4 +19,7 @@
   DetailPrint "Removing the markdown registration"
   nsExec::ExecToLog '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister'
   Pop $0
+  ; What the install script moved aside from under an open window (ADR 0022).
+  ; One still running stays, and the folder with it, until the next install.
+  Delete "$INSTDIR\${MAINBINARYNAME}.exe.old-*"
 !macroend

@@ -10,8 +10,7 @@ command with a version in front of it installs that version instead.
 
 ## Update
 
-Close scheda first - the installer refuses to replace a program that has
-unsaved text open in it - and run the install command again.
+Run the install command again.
 
 On Windows, in PowerShell:
 
@@ -19,7 +18,11 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.ps1 | iex
 ```
 
-On macOS or Linux:
+A scheda window that is open stays open, with whatever is unsaved in it, and goes
+on as the version it was; the next launch after you close it is the new one.
+
+On macOS or Linux, close scheda first - the installer refuses to replace a program
+that has unsaved text open in it:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.sh | sh
@@ -41,6 +44,13 @@ curl -fsSL https://raw.githubusercontent.com/lacodda/scheda/main/tools/install.s
 ```
 
 The same works in both directions: newer or older than what is installed.
+
+## Try a copy apart
+
+`SCHEDA_INSTALL_DIR` puts the program in a directory of your choice and nothing
+anywhere else: no entry in **Open with** or in your applications, and the scheda
+you use stays what it was. `SCHEDA_NO_PATH=1` leaves `PATH` out of it as well. With
+[`SCHEDA_HOME`](/scheda/reference/what-scheda-keeps/) it keeps its own settings too.
 
 ## What happens to your settings
 

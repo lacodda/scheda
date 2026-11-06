@@ -49,6 +49,6 @@ with no console attached: anything written to `stdout` goes nowhere, and a
 measurement read from nowhere is not a measurement. In a development build,
 setting the variable to `1` prints to the terminal instead.
 
-`v0.1.0` set the threshold at 500 ms from process start to first character on
+The first release set the threshold at 500 ms from process start to first character on
 the owner's machine, as a gate: missing it meant reconsidering the stack before
 building anything else on top of it.

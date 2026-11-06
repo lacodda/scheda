@@ -34,6 +34,24 @@ jobs:
           (Get-Item $exe).VersionInfo.FileVersion
           # The installer registers the markdown handler through the program.
           if (-not (Test-Path "HKCU:\Software\Classes\lacodda.scheda.markdown")) { throw "scheda is not registered for markdown" }
+          # And the script puts it on the command line, in the registry's own form.
+          $path = (Get-Item "HKCU:\Environment").GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if (-not (($path -split ";") -contains (Split-Path $exe))) { throw "scheda is not on the user PATH: $path" }
+      # A copy apart, the way `furca release verify --install` makes one: the
+      # program, in that directory, and the PATH left as it was. Only for a
+      # release that went out with the program's archive, which the script fetches.
+      - name: Install apart
+        if: github.event_name == 'release'
+        shell: powershell
+        run: |
+          $env:SCHEDA_VERSION = "${{ github.event.release.tag_name }}"
+          $env:SCHEDA_INSTALL_DIR = Join-Path $env:RUNNER_TEMP "scheda-apart"
+          $env:SCHEDA_NO_PATH = "1"
+          Get-Content -Raw tools/install.ps1 | Invoke-Expression
+          $said = & (Join-Path $env:SCHEDA_INSTALL_DIR "scheda.exe") --version | Out-String
+          if ($said.Trim() -ne "scheda $($env:SCHEDA_VERSION.Substring(1))") { throw "the copy apart says: $said" }
+          $path = (Get-Item "HKCU:\Environment").GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          if ($path -like "*scheda-apart*") { throw "an install apart added itself to the PATH: $path" }
 
   unix:
     strategy:
@@ -56,4 +74,14 @@ jobs:
             grep -q '^MimeType=text/markdown;' "$HOME/.local/share/applications/scheda.desktop"
           else
             /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$HOME/Applications/scheda.app/Contents/Info.plist"
+          fi
+      # A copy apart, and nothing of it anywhere else.
+      - name: Install apart
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then export SCHEDA_VERSION="${{ github.event.release.tag_name }}"; fi
+          SCHEDA_INSTALL_DIR="$RUNNER_TEMP/scheda-apart" SCHEDA_NO_PATH=1 sh tools/install.sh
+          test -x "$RUNNER_TEMP/scheda-apart/scheda"
+          if readlink "$HOME/.local/bin/scheda" | grep -q scheda-apart; then
+            echo "an install apart took over the link in ~/.local/bin" >&2
+            exit 1
           fi

@@ -1,0 +1,51 @@
+# How scheda is released: read by furca's release engine (`furca release plan`,
+# `run`, `verify`) and by `lyrn check`, which holds the installers to the release
+# page and, with `--release`, checks what a release put out.
+# Reference: https://lacodda.github.io/furca/reference/release/
+
+[project]
+name = "scheda"
+changelog = "CHANGELOG.md"
+# The window and its core carry one version: the frontend's package, the crate,
+# and the bundle Tauri builds. The editor package goes out with each of them.
+manifests = [
+    "package.json",
+    "packages/editor/package.json",
+    "src-tauri/Cargo.toml",
+    "src-tauri/tauri.conf.json",
+]
+# ADRs record what happened: the versions they name are history.
+as_written = ["docs/adr/"]
+
+# The same steps as CONTRIBUTING's gate. A byte-for-byte check of the owner's own
+# vault is by hand (the release's checklist).
+[gate]
+commands = [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "pnpm lint",
+    "pnpm check:layout",
+    "pnpm check:package",
+    "lyrn check",
+]
+
+[ci]
+provider = "github"
+workflow = "ci.yml"
+publish = "release.yml"
+
+# The files the tag's release page has to carry: what the installers fetch, and
+# the package programs install by URL. Nothing goes to a registry (ADR 0015).
+[page]
+assets = [
+    "scheda_{version}_x64-setup.exe",
+    "scheda-{tag}-x86_64-pc-windows-msvc.zip",
+    "scheda_{version}_aarch64.app.tar.gz",
+    "scheda_{version}_amd64.AppImage",
+    "lacodda-scheda-editor-{version}.tgz",
+]
+
+# scheda is installed for the owner from the release by the scripts in tools/, and
+# proven to be the release's own build.
+[post.install]

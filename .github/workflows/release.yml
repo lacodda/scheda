@@ -51,13 +51,18 @@ jobs:
         id: create
         with:
           script: |
+            const fs = require('node:fs')
             const tag = context.ref.replace('refs/tags/', '')
+            const changes = process.env.NOTES || 'See CHANGELOG.md for what changed.'
+            // The list a release is checked against before it is published,
+            // and ticked as it is: the first box by `furca release`.
+            const checks = fs.readFileSync('.github/release-notes.md', 'utf8')
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
               name: `scheda ${tag}`,
-              body: process.env.NOTES || 'See CHANGELOG.md for what changed.',
+              body: `${changes}\n\n${checks}`,
               draft: true,
               prerelease: false,
             })
@@ -139,3 +144,25 @@ jobs:
         with:
           releaseId: ${{ needs.draft.outputs.release_id }}
           args: --target ${{ matrix.target }}
+      # The program alone, named for its target: an install apart takes it
+      # (SCHEDA_INSTALL_DIR), and it is what `furca release` hashes the installed
+      # program against. The very file the setup carries. ADR 0022.
+      - name: Pack the program
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path src-tauri/target/${{ matrix.target }}/release/scheda.exe -DestinationPath program.zip
+      - uses: actions/github-script@v9
+        if: runner.os == 'Windows'
+        with:
+          script: |
+            const fs = require('node:fs')
+            const tag = context.ref.replace('refs/tags/', '')
+            const data = fs.readFileSync('program.zip')
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.draft.outputs.release_id }},
+              name: `scheda-${tag}-${{ matrix.target }}.zip`,
+              data,
+              headers: { 'content-type': 'application/zip', 'content-length': data.length },
+            })

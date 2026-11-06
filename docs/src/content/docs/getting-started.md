@@ -30,8 +30,9 @@ Run it again to update. It installs for your account only and needs no
 administrator. On Windows it registers scheda as a handler for markdown, so it
 shows up under *Open with*; on Linux it adds scheda to the applications menu with
 the same offer. See [Opening .md with scheda](/scheda/reference/file-associations/)
-for making it the default. On macOS and Linux it also puts `scheda` in
-`~/.local/bin`, for [the command line](/scheda/reference/the-command-line/).
+for making it the default. It also puts `scheda` on
+[the command line](/scheda/reference/the-command-line/): in `~/.local/bin` on
+macOS and Linux, and on Windows by adding its directory to your user `PATH`.
 
 To install a particular release, set `SCHEDA_VERSION` to its tag (`vX.Y.Z`)
 before running the command.

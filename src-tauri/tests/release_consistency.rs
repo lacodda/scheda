@@ -142,6 +142,55 @@ fn the_release_carries_what_the_scripts_download() {
     let unix = read("tools/install.sh");
     assert!(unix.contains("scheda_${VERSION}_aarch64.app.tar.gz"));
     assert!(unix.contains("scheda_${VERSION}_amd64.AppImage"));
+
+    // The program's archive is packed by the release workflow rather than by
+    // Tauri, so nothing above would notice it going: an install apart would
+    // answer 404, and the release could not be proven.
+    let target = "x86_64-pc-windows-msvc";
+    assert!(windows.contains(&format!("$target = \"{target}\"")));
+    assert!(windows.contains("scheda-$tag-$target.zip"));
+    let workflow = read(".github/workflows/release.yml");
+    assert!(workflow.contains("scheda-${tag}-${{ matrix.target }}.zip"));
+    assert!(workflow.contains(&format!("target: {target}")));
+
+    // What `furca release verify` holds the page to is what the scripts fetch.
+    let release = read("release.toml");
+    for asset in [
+        "\"scheda_{version}_x64-setup.exe\"",
+        "\"scheda-{tag}-x86_64-pc-windows-msvc.zip\"",
+        "\"scheda_{version}_aarch64.app.tar.gz\"",
+        "\"scheda_{version}_amd64.AppImage\"",
+        "\"lacodda-scheda-editor-{version}.tgz\"",
+    ] {
+        assert!(release.contains(asset), "release.toml does not list {asset}");
+    }
+}
+
+#[test]
+fn a_scratch_install_leaves_the_path_alone() {
+    // `furca release verify --install` installs into a temporary directory. A
+    // PATH entry made on the way would outlive the directory, in the registry of
+    // whoever checked a release. So the flag is read before any edit of it.
+    let windows = read("tools/install.ps1");
+    let asked = windows.find("if (-not $env:SCHEDA_NO_PATH)").expect("the flag");
+    let edited = windows.find("HKCU:\\Environment").expect("the edit");
+    assert!(asked < edited, "install.ps1 edits the PATH before it reads the flag");
+
+    let unix = read("tools/install.sh");
+    let asked = unix.find("if [ -z \"${SCHEDA_NO_PATH:-}\" ]").expect("the flag");
+    let hint = unix.find("to your PATH").expect("the note");
+    assert!(asked < hint, "install.sh talks about the PATH before it reads the flag");
+}
+
+#[test]
+fn the_windows_installer_closes_no_window() {
+    // The release's own installer, run silently, shuts down whatever holds the
+    // file it replaces, and a window may hold unsaved text. The program steps
+    // aside first (ADR 0022).
+    let windows = read("tools/install.ps1");
+    let aside = windows.find("Move-Item $installed $aside").expect("the step aside");
+    let setup = windows.find("Start-Process -FilePath $setup").expect("the setup");
+    assert!(aside < setup, "install.ps1 runs the setup before the program steps aside");
 }
 
 #[test]
