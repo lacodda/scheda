@@ -146,11 +146,17 @@ jobs:
           args: --target ${{ matrix.target }}
       # The program alone, named for its target: an install apart takes it
       # (SCHEDA_INSTALL_DIR), and it is what `furca release` hashes the installed
-      # program against. The very file the setup carries. ADR 0022.
-      - name: Pack the program
+      # program against. So it is taken from where the setup puts it, not from
+      # target/: Tauri writes the bundle's type into the program it packs, and
+      # the one left in target/ differs from it by those three bytes. ADR 0022.
+      - name: Pack the program the setup installs
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path src-tauri/target/${{ matrix.target }}/release/scheda.exe -DestinationPath program.zip
+        run: |
+          $setup = Get-Item src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
+          $run = Start-Process -FilePath $setup.FullName -ArgumentList "/S", "/CURRENTUSER" -PassThru -Wait
+          if ($run.ExitCode -ne 0) { throw "The setup stopped with code $($run.ExitCode)" }
+          Compress-Archive -Path (Join-Path $env:LOCALAPPDATA "scheda\scheda.exe") -DestinationPath program.zip
       - uses: actions/github-script@v9
         if: runner.os == 'Windows'
         with:

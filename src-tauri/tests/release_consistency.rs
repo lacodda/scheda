@@ -152,6 +152,11 @@ fn the_release_carries_what_the_scripts_download() {
     let workflow = read(".github/workflows/release.yml");
     assert!(workflow.contains("scheda-${tag}-${{ matrix.target }}.zip"));
     assert!(workflow.contains(&format!("target: {target}")));
+    // From where the setup put it: the file in target/ is not the file the setup
+    // installs, by the three bytes of the bundle's type, and the hash would say so
+    // only after the tag.
+    assert!(workflow.contains(r#"Join-Path $env:LOCALAPPDATA "scheda\scheda.exe""#));
+    assert!(!workflow.contains("release/scheda.exe"));
 
     // What `furca release verify` holds the page to is what the scripts fetch.
     let release = read("release.toml");

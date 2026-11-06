@@ -37,7 +37,10 @@ release carried no archive, only the setup.
   puts the same file it always fetches in that directory, with no launcher entry.
 - **The release carries the program's archive on Windows**,
   `scheda-vX.Y.Z-x86_64-pc-windows-msvc.zip`: the same bytes the setup installs, so
-  the engine's `build` check means what it says.
+  the engine's `build` check means what it says. The workflow takes it from where
+  the setup puts it on the runner, because Tauri writes the bundle's type into the
+  program it packs, and the file left in `target/` differs from it by those three
+  bytes.
 - **The AppImage and the macOS app keep their names.** The script from `main` also
   installs older tags (`SCHEDA_VERSION`), and in the hours between a push and a
   published release it installs the previous one; renaming them to carry the target
