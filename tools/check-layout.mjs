@@ -493,14 +493,26 @@ if (markup.calloutRule) {
   failures.push('no callout line to measure')
 }
 
-// The two scrollbars, each in a browser that draws it. The browser under every
-// other check here has its bars hidden by the test harness, which says nothing
-// about either. What takes width takes it from the text, so these are numbers.
-for (const [what, args, expected] of [
-  ['the strip of a WebView without the flag', [], { overlay: false, width: 10 }],
-  ['the bar the engine draws', ['--enable-features=OverlayScrollbar'], { overlay: true, width: 0 }],
+// The two scrollbars, each in a browser that gives it. A bar that takes width is
+// what a browser draws with nothing asked of it, once the test harness is told
+// not to hide its bars. A bar that takes none is what the harness gives by hiding
+// them, on every platform; the flag itself only works on the one the release is
+// checked on, and has to be measured there too. What takes width takes it from
+// the text, so these are numbers.
+for (const [what, launch, expected] of [
+  ['the strip of a WebView without the flag', { ignoreDefaultArgs: ['--hide-scrollbars'] }, { overlay: false, width: 10 }],
+  ['a bar that takes no width', {}, { overlay: true, width: 0 }],
+  ...(process.platform === 'win32'
+    ? [
+        [
+          'the bar the engine draws',
+          { ignoreDefaultArgs: ['--hide-scrollbars'], args: ['--enable-features=OverlayScrollbar'] },
+          { overlay: true, width: 0 },
+        ],
+      ]
+    : []),
 ]) {
-  const barBrowser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'], args })
+  const barBrowser = await chromium.launch(launch)
   const barPage = await barBrowser.newPage()
   await barPage.goto(`http://localhost:${port}/`)
   const bar = await barPage.evaluate(() => {
