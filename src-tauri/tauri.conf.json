@@ -19,7 +19,8 @@
         "minHeight": 320,
         "dragDropEnabled": true,
         "decorations": false,
-        "shadow": true
+        "shadow": true,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=OverlayScrollbar"
       }
     ],
     "security": {

@@ -446,6 +446,39 @@ if (markup.calloutRule) {
   failures.push('no callout line to measure')
 }
 
+// The two scrollbars, each in a browser that draws it. The browser under every
+// other check here has its bars hidden by the test harness, which says nothing
+// about either. What takes width takes it from the text, so these are numbers.
+for (const [what, args, expected] of [
+  ['the strip of a WebView without the flag', [], { overlay: false, width: 10 }],
+  ['the bar the engine draws', ['--enable-features=OverlayScrollbar'], { overlay: true, width: 0 }],
+]) {
+  const barBrowser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'], args })
+  const barPage = await barBrowser.newPage()
+  await barPage.goto(`http://localhost:${port}/`)
+  const bar = await barPage.evaluate(() => {
+    const box = document.createElement('div')
+    box.style.cssText = 'position:fixed;width:100px;height:100px;overflow:scroll'
+    document.body.append(box)
+    const width = box.offsetWidth - box.clientWidth
+    box.remove()
+    return {
+      overlay: document.documentElement.dataset.scrollbars === 'overlay',
+      width,
+      colour: getComputedStyle(document.documentElement).scrollbarColor,
+    }
+  })
+  await barBrowser.close()
+  check(bar.overlay === expected.overlay, `${what}: the root says overlay is ${bar.overlay}`)
+  check(bar.width === expected.width, `${what} takes ${bar.width}px, expected ${expected.width}px`)
+  // Setting the colour is what makes Chromium ignore `::-webkit-scrollbar`, so
+  // set without the overlay it would be a stock bar, arrows and all.
+  check(
+    (bar.colour !== 'auto') === expected.overlay,
+    `${what}: scrollbar-color is ${bar.colour}`,
+  )
+}
+
 // Reading mode, driven by the real keyboard in a real browser. The unit tests
 // dispatch the effect directly; this is the only place the binding itself is
 // exercised, and a binding that never fires is a feature nobody can reach.

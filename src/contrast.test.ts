@@ -257,7 +257,8 @@ const STEP = 1.1
 const HOVER: Record<string, string> = {
   '.window-button--close:hover': "the system's own red for closing a window",
   '.tree-menu button:disabled:hover': 'a disabled control answers no pointer',
-  '*::-webkit-scrollbar-thumb:hover, *::-webkit-scrollbar-thumb:active': "a scrollbar thumb's darker step, not a row",
+  ":where(:root:not([data-scrollbars='overlay']) *)::-webkit-scrollbar-thumb:hover, :where(:root:not([data-scrollbars='overlay']) *)::-webkit-scrollbar-thumb:active":
+    "a scrollbar thumb's darker step, not a row",
 }
 
 /** Every token the window's own sheet writes text in: what can stand in a row

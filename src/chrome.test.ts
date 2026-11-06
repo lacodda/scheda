@@ -18,8 +18,8 @@
 //
 // So this reads dowel's own `theme.css` out of `node_modules` and scheda's
 // `styles.css` off disk, and fails when a number in one is not the number in
-// the other. `dowel-ui` is a devDependency for exactly this: scheda ships none
-// of its code, it only has to keep agreeing with it.
+// the other. Of `dowel-ui` scheda ships one function (`overlayScrollbars`); for
+// the rest, it only has to keep agreeing with it.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'

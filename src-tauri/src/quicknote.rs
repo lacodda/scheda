@@ -19,6 +19,29 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 /// The window's label, and the name its capability file grants to.
 pub const LABEL: &str = "quick";
 
+/// Gives a window made in code the browser arguments of the one in the
+/// configuration.
+///
+/// On Windows every webview of a data folder shares one browser process, and one
+/// asking for other arguments than the process was started with does not come up
+/// at all: the quick note would refuse to open, on that platform alone. So the
+/// configuration stays the only place they are written.
+fn with_the_windows_browser<'a>(
+    app: &AppHandle,
+    builder: WebviewWindowBuilder<'a, tauri::Wry, AppHandle>,
+) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
+    let arguments = app
+        .config()
+        .app
+        .windows
+        .first()
+        .and_then(|window| window.additional_browser_args.as_deref());
+    match arguments {
+        Some(arguments) => builder.additional_browser_args(arguments),
+        None => builder,
+    }
+}
+
 /// What the key is, and whether the system gave it to us.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Status {
@@ -105,17 +128,20 @@ pub fn status(app: &AppHandle) -> Status {
 pub fn show(app: &AppHandle) -> tauri::Result<()> {
     let window = match app.get_webview_window(LABEL) {
         Some(window) => window,
-        None => WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("quick.html".into()))
-            .title("Quick note")
-            .inner_size(560.0, 168.0)
-            .resizable(false)
-            .decorations(false)
-            .shadow(true)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .center()
-            .visible(false)
-            .build()?,
+        None => with_the_windows_browser(
+            app,
+            WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("quick.html".into())),
+        )
+        .title("Quick note")
+        .inner_size(560.0, 168.0)
+        .resizable(false)
+        .decorations(false)
+        .shadow(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .center()
+        .visible(false)
+        .build()?,
     };
     window.show()?;
     window.unminimize()?;

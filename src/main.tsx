@@ -6,12 +6,17 @@
 // theme provider in front of that. React mounts the shell *after* the first
 // character is on screen, because nothing in the shell is worth a frame of the
 // text.
+import { overlayScrollbars } from 'dowel-ui'
 import { reportFirstPaint, takePreloaded, type OpenFile } from './core'
 import { mountEditor } from './editor/mount'
 import './scrollbar.css'
 import './styles.css'
 
 const root = document.getElementById('root')!
+
+// Before anything can scroll: `scrollbar.css` asks the root which bar it is
+// styling, and a bar drawn under the wrong answer takes width for one frame.
+overlayScrollbars()
 
 // A released build has no console. An error in the shell would otherwise show
 // up only as something quietly missing from the window — which is exactly how
