@@ -8,6 +8,21 @@ last release, which follow [Conventional Commits](https://www.conventionalcommit
 $ git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md
 ```
 
+## [0.20.0] - 2026-11-06
+
+### Bug Fixes
+- Start a wrapped line of a quote under its first row
+- Keep the line a launch named while the window comes together
+
+### Documentation
+- Say what gitoxide costs a launch, as measured
+
+### Features
+- Open a file at a line, and say the version
+- Draw the engine's overlay scrollbar
+- Leave an open window alone, and let a release be proven
+- Show what git remembers of the note in front
+
 ## [0.19.0] - 2026-10-30
 
 ### Bug Fixes
