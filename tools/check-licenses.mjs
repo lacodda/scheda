@@ -38,9 +38,9 @@ const ALLOWED = new Set([
  * a package the build no longer has fails too, so the list never reads as an
  * exception that still exists. */
 const ONE_BY_ONE = {
-  'elkjs@0.9.3':
-    "EPL-2.0, whose copyleft stops at the module, as MPL-2.0's does: it is mermaid's " +
-    'diagram layout, built in unmodified, and its source is public',
+  'elkjs@0.12.1':
+    "EPL-2.0 of its EPL-2.0 OR GPL-3.0-or-later, whose copyleft stops at the module, as MPL-2.0's does: " +
+    "it is mermaid's diagram layout, built in unmodified, and its source is public",
   'khroma@2.1.0': 'MIT, by the license file it ships; its package.json names no license',
 }
 
