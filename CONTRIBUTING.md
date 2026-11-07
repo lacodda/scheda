@@ -95,12 +95,16 @@ A run of the release build that is not your own scheda - a check before a
 release, the pictures - goes under `SCHEDA_HOME` (ADR 0020), so the settings,
 the session, the drafts and the index of the scheda you live in are neither
 read nor written. The README's pictures are taken that way, from the release
-build, on the sample vault in `tools/demo-vault`:
+build, on the sample vault in `tools/demo-vault` - the installed release's own
+program, or one you built:
 
 ```sh
-pnpm tauri build --no-bundle
-node tools/shoot.mjs        # writes assets/screenshot.png and screenshot-dark.png
+node tools/shoot.mjs "$LOCALAPPDATA/scheda/scheda.exe"   # the installed release
+pnpm tauri build --no-bundle && node tools/shoot.mjs     # or a build of the tree
 ```
+
+Either writes `assets/screenshot.png` and `screenshot-dark.png`, and refuses a
+program whose version is not the one `package.json` names.
 
 ## Architecture decisions
 

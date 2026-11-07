@@ -1,7 +1,10 @@
 // The README's pictures, taken from the release build rather than drawn.
 //
-//   pnpm tauri build --no-bundle
-//   node tools/shoot.mjs
+//   node tools/shoot.mjs [PROGRAM]
+//
+// PROGRAM is the scheda.exe to take them from: the one a release installed
+// (%LOCALAPPDATA%\scheda\scheda.exe), which is the release's own build, or by
+// default the one `pnpm tauri build --no-bundle` leaves in src-tauri/target.
 //
 // The build is started on a copy of `tools/demo-vault`, with `SCHEDA_HOME` and
 // the webview's own profile in a directory of this run, so the scheda someone
@@ -21,7 +24,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const exe = join(root, 'src-tauri', 'target', 'release', 'scheda.exe')
+const exe = process.argv[2] ?? join(root, 'src-tauri', 'target', 'release', 'scheda.exe')
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
 
 /** The size of the window in the pictures, in CSS pixels, and how dense. */
@@ -36,12 +39,12 @@ function fail(message) {
 }
 
 if (process.platform !== 'win32') fail('the pictures are taken on Windows')
-if (!existsSync(exe)) fail(`no release build at ${exe} - run \`pnpm tauri build --no-bundle\` first`)
+if (!existsSync(exe)) fail(`no release build at ${exe} - name an installed one, or run \`pnpm tauri build --no-bundle\` first`)
 // The pictures belong to the version the README names.
 const built = execFileSync('powershell', ['-NoProfile', '-Command', `(Get-Item '${exe}').VersionInfo.FileVersion`])
   .toString()
   .trim()
-if (built !== version) fail(`the release build is ${built}, package.json says ${version} - build again`)
+if (built !== version) fail(`the release build is ${built}, package.json says ${version} - install or build ${version}`)
 // A scheda already running would take the file into its own window: one
 // instance per machine is what the program promises.
 const running = execFileSync('tasklist', ['/FI', 'IMAGENAME eq scheda.exe', '/NH']).toString()
