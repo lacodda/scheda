@@ -1,6 +1,9 @@
 # 0022 — An install leaves the open window alone
 
-Accepted, 2026-11-06. Amends ADR 0015.
+Accepted, 2026-11-06. Amends ADR 0015. The first consequence below no longer
+holds since 2026-11-07: `[post.install.files]` in `release.toml` names the
+AppImage and the app's archive as the files that hold the program, and the
+engine's `build` proof holds on macOS and Linux as well.
 
 ## Context
 
