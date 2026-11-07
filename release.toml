@@ -45,3 +45,11 @@ assets = [
 # scheda is installed for the owner from the release by the scripts in tools/, and
 # proven to be the release's own build.
 [post.install]
+
+# The desktop files of Linux and macOS name no target, and renaming them would
+# break the installer on main for older tags: the table says which file holds
+# the program there. The AppImage is the program itself; the macOS archive
+# holds it inside scheda.app. Windows goes by its archive, whose name says.
+[post.install.files]
+x86_64-unknown-linux-gnu = "scheda_{version}_amd64.AppImage"
+aarch64-apple-darwin = "scheda_{version}_aarch64.app.tar.gz"
