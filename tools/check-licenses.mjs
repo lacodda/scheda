@@ -33,10 +33,11 @@ const ALLOWED = new Set([
   'Zlib',
 ])
 
-/** Packages accepted one by one, by name and version, each with its reason. A
- * new version is a new decision: the reason was read for this one. An entry for
- * a package the build no longer has fails too, so the list never reads as an
- * exception that still exists. */
+/** Packages accepted one by one, by name and version, each with its reason:
+ *   'some-package@1.2.3': 'MIT, by the license file it ships; its package.json names none',
+ * A new version is a new decision: the reason was read for this one. An entry
+ * for a package the build no longer has fails too, so the list never reads as
+ * an exception that still exists. */
 const ONE_BY_ONE = {
   'elkjs@0.12.1':
     "EPL-2.0 of its EPL-2.0 OR GPL-3.0-or-later, whose copyleft stops at the module, as MPL-2.0's does: " +
